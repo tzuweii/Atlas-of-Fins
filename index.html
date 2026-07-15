@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#102d3d">
+  <meta name="description" content="Atlas of Fins — 在寧靜海灣釣魚、完成圖鑑，打造溫暖的海上小屋。">
+  <title>Atlas of Fins｜鰭之圖鑑</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <noscript>請啟用 JavaScript 來遊玩 Atlas of Fins。</noscript>
+  <div id="app" class="app" data-time="dawn" data-weather="sunny">
+    <section id="title-screen" class="title-screen" aria-label="主選單">
+      <div class="title-sky">
+        <span class="title-cloud cloud-a"></span>
+        <span class="title-cloud cloud-b"></span>
+        <span class="title-bird">⌁</span>
+      </div>
+      <div class="title-card glass-panel">
+        <div class="title-mark" aria-hidden="true"><span>◜</span><b>◉</b><span>◝</span></div>
+        <p class="eyebrow">A COZY FISHING JOURNEY</p>
+        <h1>Atlas <i>of</i> Fins</h1>
+        <p class="title-zh">鰭之圖鑑</p>
+        <p class="title-copy">海洋帶來未知，船上的燈始終為你亮著。</p>
+        <div class="title-actions">
+          <button id="continue-button" class="primary-button" type="button">繼續航程</button>
+          <button id="new-game-button" class="secondary-button" type="button">展開新旅程</button>
+        </div>
+        <button id="title-settings-button" class="text-button" type="button">聲音設定</button>
+      </div>
+      <div class="title-boat" aria-hidden="true">
+        <span class="title-sail"></span><span class="title-hull"></span><span class="title-light"></span>
+      </div>
+      <div class="title-water" aria-hidden="true"><span></span><span></span><span></span></div>
+    </section>
+
+    <main id="game-shell" class="game-shell is-hidden">
+      <header class="topbar">
+        <div class="brand-mini"><span class="brand-fish">◉</span><div><b>ATLAS OF FINS</b><small>寧靜海灣</small></div></div>
+        <div class="world-status" aria-label="世界狀態">
+          <button id="time-chip" class="status-chip" type="button" title="在船屋睡覺可切換時段"><span id="time-icon">◒</span><span><small>時刻</small><b id="time-label">清晨</b></span></button>
+          <div class="status-chip"><span id="weather-icon">☀</span><span><small>天氣</small><b id="weather-label">晴朗</b></span></div>
+          <div class="status-chip money-chip"><span>●</span><span><small>持有金幣</small><b id="money-label">0</b></span></div>
+        </div>
+        <div class="top-actions">
+          <button id="sound-button" class="icon-button" type="button" aria-label="切換聲音" title="切換聲音">♪</button>
+          <button id="save-button" class="icon-button" type="button" aria-label="儲存遊戲" title="儲存遊戲">◇</button>
+          <button id="menu-button" class="icon-button" type="button" aria-label="返回主選單" title="返回主選單">☰</button>
+        </div>
+      </header>
+
+      <section id="world-scene" class="world-scene" aria-label="寧靜海灣景色">
+        <div class="sky-layer">
+          <div class="sun-moon"></div>
+          <div class="cloud cloud-one"></div><div class="cloud cloud-two"></div>
+          <div class="stars">·　✦　·　　　　·　　✧　·</div>
+          <div class="far-island island-one"></div><div class="far-island island-two"></div>
+          <div class="lighthouse"><i></i><b></b></div>
+        </div>
+        <div id="rain-layer" class="rain-layer" aria-hidden="true"></div>
+        <div class="sea-layer"><div class="wave-lines"></div><div class="buoy">◆<i></i></div></div>
+        <div class="boat-scene">
+          <div class="mast"></div><div class="sail"><span id="sail-emblem">◌</span></div>
+          <div class="cabin"><span class="window-glow"></span><span class="roof-line"></span></div>
+          <div class="deck-character"><span class="head"></span><span class="body"></span><span class="rod-line"></span></div>
+          <div class="boat-hull"><span class="hull-stripe"></span></div>
+          <div class="boat-reflection"></div>
+        </div>
+        <div id="scene-caption" class="scene-caption"><span>近岸淺水區</span><small>海風輕輕掠過船舷</small></div>
+      </section>
+
+      <section id="content-panel" class="content-panel" aria-live="polite"></section>
+
+      <nav class="main-nav" aria-label="主要功能">
+        <button class="nav-button is-active" data-view="fishing" type="button"><span>⌁</span><b>去釣魚</b></button>
+        <button class="nav-button" data-view="journal" type="button"><span>▤</span><b>魚類圖鑑</b><i id="journal-badge">0/20</i></button>
+        <button class="nav-button" data-view="catch" type="button"><span>◫</span><b>今日漁獲</b><i id="catch-badge">0</i></button>
+        <button class="nav-button" data-view="shop" type="button"><span>♜</span><b>海灣商店</b></button>
+        <button class="nav-button" data-view="home" type="button"><span>⌂</span><b>我的船屋</b></button>
+      </nav>
+    </main>
+
+    <div id="modal-root"></div>
+    <div id="toast-root" class="toast-root" aria-live="assertive"></div>
+    <div id="tutorial" class="tutorial is-hidden" aria-live="polite"></div>
+  </div>
+  <script type="module" src="src/game.js"></script>
+</body>
+</html>
