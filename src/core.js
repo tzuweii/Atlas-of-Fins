@@ -1,8 +1,10 @@
-import { ACHIEVEMENTS, AQUARIUM_DECORATIONS, BAITS, FISH, FURNITURE, MILESTONES, QUEST_TEMPLATES, RARITY, RODS, SPOTS, TIMES } from "./data.js";
+import { ACHIEVEMENTS, AQUARIUM_DECORATIONS, BAITS, BAY_EVENTS, FISH, FURNITURE, MILESTONES, QUEST_TEMPLATES, RARITY, RODS, SPOTS, TIMES } from "./data.js";
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 export const SAVE_KEY = "atlas-of-fins.save";
 export const BACKUP_KEY = "atlas-of-fins.backup";
+export const DEV_SAVE_KEY = "atlas-of-fins.dev-save";
+export const DEV_BACKUP_KEY = "atlas-of-fins.dev-backup";
 export const DEFAULT_TITLE = "海灣旅人";
 
 export const FAMILIARITY_LEVELS = [
@@ -76,6 +78,118 @@ function migrateDiscovery(raw) {
   };
 }
 
+function migrateBayEventHistory(raw) {
+  const history = raw && typeof raw === "object" ? raw : {};
+  return Object.fromEntries(Object.entries(history)
+    .filter(([eventId, entry]) => isKnownId(BAY_EVENTS, eventId) && entry && typeof entry === "object")
+    .map(([eventId, entry]) => [eventId, {
+      completions: Math.max(0, Math.floor(Number(entry.completions) || 0)),
+      firstCompletedAt: safeDate(entry.firstCompletedAt),
+      lastCompletedDay: Number.isFinite(Number(entry.lastCompletedDay)) ? Math.max(1, Math.floor(Number(entry.lastCompletedDay))) : null
+    }])
+    .filter(([, entry]) => entry.completions > 0));
+}
+
+function migrateBayEvent(raw, day) {
+  const scheduled = getScheduledBayEvent(day);
+  const persisted = raw && typeof raw === "object" && Number(raw.day) === day
+    ? BAY_EVENTS.find(event => event.id === raw.eventId)
+    : null;
+  const event = persisted || scheduled;
+  if (!event) return null;
+  const base = createBayEventState(day, event.id);
+  if (!persisted) return base;
+  const progress = Math.min(event.goal, Math.max(0, Math.floor(Number(raw.progress) || 0)));
+  return {
+    ...base,
+    progress,
+    completedAt: progress >= event.goal ? safeDate(raw.completedAt) : null,
+    rewardLabel: progress >= event.goal && typeof raw.rewardLabel === "string" ? raw.rewardLabel : null
+  };
+}
+
+export function getScheduledBayEvent(day) {
+  const safeDay = Math.max(1, Math.floor(Number(day) || 1));
+  if (!BAY_EVENTS.length || safeDay % 2 === 0) return null;
+  return BAY_EVENTS[Math.floor((safeDay - 1) / 2) % BAY_EVENTS.length] || null;
+}
+
+export function createBayEventState(day, eventId = null) {
+  const safeDay = Math.max(1, Math.floor(Number(day) || 1));
+  const event = eventId ? BAY_EVENTS.find(item => item.id === eventId) : getScheduledBayEvent(safeDay);
+  return event ? {
+    instanceId: `${safeDay}-${event.id}`,
+    eventId: event.id,
+    day: safeDay,
+    progress: 0,
+    completedAt: null,
+    rewardLabel: null
+  } : null;
+}
+
+export function getActiveBayEvent(state) {
+  if (!state?.bayEvent || Number(state.bayEvent.day) !== Number(state.day)) return null;
+  return BAY_EVENTS.find(event => event.id === state.bayEvent.eventId) || null;
+}
+
+function bayEventSpotIds(event) {
+  return Array.isArray(event?.spotIds) ? event.spotIds : event?.spotId ? [event.spotId] : [];
+}
+
+export function isBayEventConditionActive(state, event = getActiveBayEvent(state)) {
+  if (!event) return false;
+  const timeId = TIMES[state.timeIndex]?.id || "dawn";
+  const correctTime = !Array.isArray(event.timeIds) || !event.timeIds.length || event.timeIds.includes(timeId);
+  const correctWeather = !Array.isArray(event.weatherIds) || !event.weatherIds.length || event.weatherIds.includes(state.weather);
+  return correctTime && correctWeather;
+}
+
+export function applyBayEventWorldConditions(state) {
+  const event = getActiveBayEvent(state);
+  if (event?.forceWeather && ["sunny", "rain"].includes(event.forceWeather)) state.weather = event.forceWeather;
+  return event;
+}
+
+export function getBayEventHint(state) {
+  const event = getActiveBayEvent(state);
+  if (!event) return null;
+  const progress = Math.min(event.goal, Math.max(0, Math.floor(Number(state.bayEvent.progress) || 0)));
+  if (!state.bayEvent.completedAt && !isBayEventConditionActive(state, event)) return event.inactiveHint || event.description;
+  return event.hints[Math.min(progress, event.hints.length - 1)] || event.description;
+}
+
+export function updateBayEventProgress(state, caught, completedAt = new Date().toISOString()) {
+  const event = getActiveBayEvent(state);
+  const current = state?.bayEvent;
+  if (!event || !current || current.completedAt) return { updated: false, event };
+  const context = normalizeCatchContext(caught?.context);
+  const correctTime = !Array.isArray(event.timeIds) || !event.timeIds.length || event.timeIds.includes(context.timeId);
+  const correctWeather = !Array.isArray(event.weatherIds) || !event.weatherIds.length || event.weatherIds.includes(context.weather);
+  if (context.day !== state.day || !bayEventSpotIds(event).includes(context.spotId) || !correctTime || !correctWeather || !event.fishIds.includes(caught?.fishId)) {
+    return { updated: false, event };
+  }
+  current.progress = Math.min(event.goal, Math.max(0, Math.floor(Number(current.progress) || 0)) + 1);
+  if (current.progress < event.goal) return { updated: true, completed: false, event, progress: current.progress };
+
+  if (!state.bayEventHistory || typeof state.bayEventHistory !== "object") state.bayEventHistory = {};
+  const prior = state.bayEventHistory[event.id];
+  const firstCompletion = !prior?.completions;
+  const reward = firstCompletion ? event.firstReward : event.repeatReward;
+  current.completedAt = safeDate(completedAt) || new Date().toISOString();
+  current.rewardLabel = reward.label;
+  state.bayEventHistory[event.id] = {
+    completions: (prior?.completions || 0) + 1,
+    firstCompletedAt: prior?.firstCompletedAt || current.completedAt,
+    lastCompletedDay: state.day
+  };
+  if (reward.type === "coins") state.money += reward.amount;
+  if (reward.type === "title") {
+    if (!Array.isArray(state.unlockedTitles)) state.unlockedTitles = [DEFAULT_TITLE];
+    if (!state.unlockedTitles.includes(reward.value)) state.unlockedTitles.push(reward.value);
+  }
+  return { updated: true, completed: true, firstCompletion, event, progress: current.progress, reward };
+}
+
 export function createInitialState() {
   return {
     version: SAVE_VERSION,
@@ -103,6 +217,8 @@ export function createInitialState() {
     tutorialStep: 0,
     currentQuests: createDailyQuests(1),
     questHistory: {},
+    bayEvent: createBayEventState(1),
+    bayEventHistory: {},
     totalSold: 0,
     totalCaught: 0,
     recordCatches: 0,
@@ -110,6 +226,78 @@ export function createInitialState() {
     settings: { sound: true, reducedMotion: false },
     lastSavedAt: null
   };
+}
+
+export function createDeveloperState() {
+  const state = createInitialState();
+  const caughtAt = new Date().toISOString();
+  const specimen = (fish, index, location) => ({
+    uid: `developer-${location}-${fish.id}`,
+    fishId: fish.id,
+    length: fish.maxLength,
+    weight: fish.maxWeight,
+    sizeTier: "record",
+    variant: index % 2 === 0 ? "shimmer" : "normal",
+    price: Math.round(fish.basePrice * RARITY[fish.rarity].multiplier * 1.7 * (index % 2 === 0 ? SHIMMER_CONFIG.priceMultiplier : 1)),
+    caughtAt,
+    context: {
+      spotId: fish.spots[0],
+      timeId: fish.times[0],
+      weather: fish.weather === "any" ? "sunny" : fish.weather,
+      baitId: fish.baits[0],
+      rodId: "farcast",
+      day: 99
+    }
+  });
+
+  state.developerMode = true;
+  state.money = 999999;
+  state.day = 99;
+  state.timeIndex = 3;
+  state.bayEvent = createBayEventState(state.day);
+  state.ownedRods = RODS.map(item => item.id);
+  state.equippedRod = "farcast";
+  state.baitAmounts = objectFrom(BAITS, 999);
+  state.equippedBait = "glow";
+  state.ownedFurniture = FURNITURE.map(item => item.id);
+  state.placedFurniture = Object.fromEntries(Object.keys(state.placedFurniture).map(slot => {
+    const item = FURNITURE.findLast(entry => entry.slot === slot);
+    return [slot, item?.id || null];
+  }));
+  state.discovered = Object.fromEntries(FISH.map(fish => [fish.id, {
+    count: 10,
+    firstCaught: caughtAt,
+    lastCaught: caughtAt,
+    bestLength: fish.maxLength,
+    bestWeight: fish.maxWeight,
+    spots: [...fish.spots],
+    times: [...fish.times],
+    weathers: fish.weather === "any" ? ["sunny", "rain"] : [fish.weather],
+    caughtShimmer: true,
+    shimmerCount: 1,
+    shimmerPity: 0
+  }]));
+  state.catchInventory = FISH.slice(5).map((fish, index) => specimen(fish, index + 5, "inventory"));
+  state.aquarium = { fish: FISH.slice(0, 5).map((fish, index) => specimen(fish, index, "aquarium")) };
+  state.completedMilestones = MILESTONES.map(item => item.count);
+  state.completedTutorial = true;
+  state.tutorialStep = 6;
+  state.currentQuests = createDailyQuests(state.day).map(quest => ({ ...quest, progress: quest.goal }));
+  state.totalCaught = FISH.length * 10;
+  state.totalSold = 10000;
+  state.recordCatches = FISH.length;
+  state.achievements = Object.fromEntries(ACHIEVEMENTS.map(item => [item.id, { completedAt: caughtAt, claimed: false }]));
+  state.unlockedTitles = [...new Set([
+    DEFAULT_TITLE,
+    ...ACHIEVEMENTS.filter(item => item.reward.type === "title").map(item => item.reward.value),
+    ...BAY_EVENTS.filter(item => item.firstReward.type === "title").map(item => item.firstReward.value)
+  ])];
+  state.equippedTitle = state.unlockedTitles.at(-1);
+  state.unlockedAquariumDecor = AQUARIUM_DECORATIONS.map(item => item.id);
+  state.aquariumDecoration = state.unlockedAquariumDecor[0] || null;
+  state.selectedSpot = "deep";
+  state.settings.sound = false;
+  return state;
 }
 
 export function createDailyQuests(day) {
@@ -124,6 +312,9 @@ export function migrateState(raw) {
   const base = createInitialState();
   if (!raw || typeof raw !== "object") return base;
   const merged = { ...base, ...raw, version: SAVE_VERSION };
+  merged.day = Math.max(1, Math.floor(Number(merged.day) || 1));
+  merged.timeIndex = Math.min(TIMES.length - 1, Math.max(0, Math.floor(Number(merged.timeIndex) || 0)));
+  merged.weather = ["sunny", "rain"].includes(merged.weather) ? merged.weather : base.weather;
   merged.baitAmounts = { ...base.baitAmounts, ...(raw.baitAmounts || {}) };
   merged.placedFurniture = { ...base.placedFurniture, ...(raw.placedFurniture || {}) };
   merged.settings = { ...base.settings, ...(raw.settings || {}) };
@@ -153,7 +344,14 @@ export function migrateState(raw) {
   merged.achievements = Object.fromEntries(Object.entries(raw.achievements && typeof raw.achievements === "object" ? raw.achievements : {})
     .filter(([id, entry]) => ACHIEVEMENTS.some(item => item.id === id) && entry && typeof entry === "object")
     .map(([id, entry]) => [id, { completedAt: safeDate(entry.completedAt) || new Date().toISOString(), claimed: Boolean(entry.claimed) }]));
-  const validTitles = new Set([DEFAULT_TITLE, ...ACHIEVEMENTS.filter(item => item.reward.type === "title").map(item => item.reward.value)]);
+  merged.bayEventHistory = migrateBayEventHistory(raw.bayEventHistory);
+  merged.bayEvent = migrateBayEvent(raw.bayEvent, merged.day);
+  applyBayEventWorldConditions(merged);
+  const validTitles = new Set([
+    DEFAULT_TITLE,
+    ...ACHIEVEMENTS.filter(item => item.reward.type === "title").map(item => item.reward.value),
+    ...BAY_EVENTS.filter(item => item.firstReward.type === "title").map(item => item.firstReward.value)
+  ]);
   const validDecor = new Set(AQUARIUM_DECORATIONS.map(item => item.id));
   merged.unlockedTitles = [...new Set([DEFAULT_TITLE, ...(Array.isArray(raw.unlockedTitles) ? raw.unlockedTitles.filter(title => validTitles.has(title)) : [])])];
   merged.unlockedAquariumDecor = [...new Set(Array.isArray(raw.unlockedAquariumDecor) ? raw.unlockedAquariumDecor.filter(id => validDecor.has(id)) : [])];
@@ -161,6 +359,10 @@ export function migrateState(raw) {
     if (!merged.achievements[achievement.id]?.claimed) continue;
     if (achievement.reward.type === "title" && !merged.unlockedTitles.includes(achievement.reward.value)) merged.unlockedTitles.push(achievement.reward.value);
     if (achievement.reward.type === "aquariumDecor" && !merged.unlockedAquariumDecor.includes(achievement.reward.value)) merged.unlockedAquariumDecor.push(achievement.reward.value);
+  }
+  for (const event of BAY_EVENTS) {
+    if (!merged.bayEventHistory[event.id]?.completions || event.firstReward.type !== "title") continue;
+    if (!merged.unlockedTitles.includes(event.firstReward.value)) merged.unlockedTitles.push(event.firstReward.value);
   }
   merged.equippedTitle = merged.unlockedTitles.includes(raw.equippedTitle) ? raw.equippedTitle : base.equippedTitle;
   merged.aquariumDecoration = merged.unlockedAquariumDecor.includes(raw.aquariumDecoration) ? raw.aquariumDecoration : null;
@@ -285,6 +487,10 @@ export function fishWeight(fish, state, spotId = state.selectedSpot, baitId = st
   if (bait.tags.some(tag => fish.tags.includes(tag) || tag === fish.rarity || tag === spotId)) weight *= 1.45;
   if (fish.rarity !== "common") weight *= 1 + rod.rareBonus;
   if (state.discovered[fish.id]?.count >= 4) weight *= 0.86;
+  const bayEvent = getActiveBayEvent(state);
+  if (bayEvent && isBayEventConditionActive(state, bayEvent) && bayEventSpotIds(bayEvent).includes(spotId) && bayEvent.fishIds.includes(fish.id)) {
+    weight *= bayEvent.fishWeightMultiplier;
+  }
   return Math.max(0, weight);
 }
 
@@ -380,6 +586,7 @@ export function recordCatch(state, caught, baitId = state.equippedBait) {
   if (isNew) state.money += 35 + ({ common: 0, uncommon: 30, rare: 100 }[fish.rarity]);
   if (isFirstShimmer) state.money += SHIMMER_CONFIG.researchReward;
   updateQuestProgress(state, { type: "catch", fish, caught, baitId: context.baitId || baitId });
+  const bayEventUpdate = updateBayEventProgress(state, caught);
   const completedAchievements = evaluateAchievements(state);
   return {
     isNew,
@@ -388,6 +595,7 @@ export function recordCatch(state, caught, baitId = state.equippedBait) {
     isWeightRecord,
     familiarity,
     familiarityChanged: familiarity.id !== priorFamiliarity.id,
+    bayEventUpdate,
     completedAchievements,
     record: state.discovered[caught.fishId]
   };
@@ -526,6 +734,8 @@ export function advanceTime(state, random = Math.random) {
     state.day += 1;
     state.weather = random() < .35 ? "rain" : "sunny";
     state.currentQuests = createDailyQuests(state.day);
+    state.bayEvent = createBayEventState(state.day);
+    applyBayEventWorldConditions(state);
   }
 }
 

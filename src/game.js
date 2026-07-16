@@ -1,10 +1,10 @@
 import { ACHIEVEMENTS, BAITS, FISH, FURNITURE, MILESTONES, RARITY, RODS, SPOTS, TIMES } from "./data.js";
 import {
-  BACKUP_KEY, SAVE_KEY, advanceTime, applyMilestones, baitById, buyBait, buyFurniture, buyRod,
-  chooseFish, claimAchievement, claimQuest, createInitialState, discoveredCount, equipTitle, fishById,
-  furnitureById, generateCatch, getAchievementProgress, getAquariumCapacity, getFamiliarity,
+  BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, SAVE_KEY, advanceTime, applyMilestones, baitById, buyBait, buyFurniture, buyRod,
+  chooseFish, claimAchievement, claimQuest, createDeveloperState, createInitialState, discoveredCount, equipTitle, fishById,
+  furnitureById, generateCatch, getAchievementProgress, getActiveBayEvent, getAquariumCapacity, getBayEventHint, getFamiliarity,
   getTensionConfig, getUnclaimedAchievementCount, isUnlocked, migrateState, moveCatchToAquarium,
-  recordCatch, removeFishFromAquarium, replaceAquariumFish, rodById, sellCatches,
+  isBayEventConditionActive, recordCatch, removeFishFromAquarium, replaceAquariumFish, rodById, sellCatches,
   setAquariumDecoration, swapAquariumFish
 } from "./core.js";
 
@@ -19,6 +19,7 @@ const tutorialEl = $("#tutorial");
 
 let state = createInitialState();
 let currentView = "fishing";
+let activeSaveMode = "normal";
 let journalFilter = "all";
 let selectedJournalFish = null;
 let shopTab = "rods";
@@ -65,31 +66,46 @@ class Sound {
 }
 const sound = new Sound();
 
-function hasSave() { return Boolean(localStorage.getItem(SAVE_KEY) || localStorage.getItem(BACKUP_KEY)); }
+const DEVELOPER_PASSWORD = "atlas-dev";
+
+function saveKeys(mode = activeSaveMode) {
+  return mode === "developer" ? [DEV_SAVE_KEY, DEV_BACKUP_KEY] : [SAVE_KEY, BACKUP_KEY];
+}
+function hasSave(mode = "normal") {
+  const [primaryKey, backupKey] = saveKeys(mode);
+  return Boolean(localStorage.getItem(primaryKey) || localStorage.getItem(backupKey));
+}
 function saveGame(showToast = false) {
   try {
-    const previous = localStorage.getItem(SAVE_KEY);
-    if (previous) localStorage.setItem(BACKUP_KEY, previous);
+    const [primaryKey, backupKey] = saveKeys();
+    const previous = localStorage.getItem(primaryKey);
+    if (previous) localStorage.setItem(backupKey, previous);
     state.lastSavedAt = new Date().toISOString();
-    localStorage.setItem(SAVE_KEY, JSON.stringify(state));
-    if (showToast) toast("航海日誌已妥善收好");
+    localStorage.setItem(primaryKey, JSON.stringify(state));
+    if (showToast) toast(activeSaveMode === "developer" ? "開發者測試紀錄已儲存" : "航海日誌已妥善收好");
   } catch { if (showToast) toast("無法使用本機存檔，請檢查瀏覽器設定"); }
 }
 function loadGame() {
-  for (const key of [SAVE_KEY, BACKUP_KEY]) {
+  for (const key of saveKeys()) {
     try { const raw = localStorage.getItem(key); if (raw) return migrateState(JSON.parse(raw)); } catch { /* try backup */ }
   }
-  return createInitialState();
+  return activeSaveMode === "developer" ? createDeveloperState() : createInitialState();
 }
 
-function startGame(isNew = false) {
+function startGame(isNew = false, mode = "normal") {
+  activeSaveMode = mode;
   if (isNew) {
-    state = createInitialState();
-    localStorage.removeItem(SAVE_KEY); localStorage.removeItem(BACKUP_KEY);
+    state = mode === "developer" ? createDeveloperState() : createInitialState();
+    const [primaryKey, backupKey] = saveKeys();
+    localStorage.removeItem(primaryKey); localStorage.removeItem(backupKey);
     saveGame();
-  } else state = loadGame();
+  } else {
+    state = loadGame();
+    if (!hasSave(mode)) saveGame();
+  }
   titleScreen.classList.add("is-hidden");
   gameShell.classList.remove("is-hidden");
+  app.classList.toggle("is-developer-mode", mode === "developer");
   currentView = "fishing";
   syncWorld(); render(); updateTutorial(); sound.startAmbient();
 }
@@ -107,9 +123,11 @@ function syncWorld() {
   $("#catch-badge").textContent = state.catchInventory.length;
   $("#sound-button").textContent = state.settings.sound ? "♪" : "×";
   $("#sail-emblem").textContent = state.completedMilestones.includes(20) ? "✦" : "◌";
-  $(".brand-mini small").textContent = state.equippedTitle;
+  $(".brand-mini small").textContent = activeSaveMode === "developer" ? `開發者模式 · ${state.equippedTitle}` : state.equippedTitle;
   const spot = SPOTS.find(item => item.id === state.selectedSpot) || SPOTS[0];
-  $("#scene-caption").innerHTML = `<span>${spot.name}</span><small>${time.line}</small>`;
+  const bayEvent = getActiveBayEvent(state);
+  app.dataset.bayEvent = bayEvent?.id || "";
+  $("#scene-caption").innerHTML = `<span>${spot.name}</span><small>${time.line}</small>${bayEvent ? `<em>${bayEvent.icon} ${bayEvent.name}</em>` : ""}`;
 }
 
 function render() {
@@ -139,8 +157,26 @@ function renderFishing() {
       }).join("")}</div>
       <div class="loadout"><label><span class="section-label">魚竿</span><span class="select-wrap"><select data-action="equip-rod" ${fishing.phase !== "idle" ? "disabled" : ""}>${state.ownedRods.map(id => { const item=rodById(id); return `<option value="${id}" ${id===state.equippedRod?"selected":""}>${item.name}</option>`}).join("")}</select></span><div class="bait-stock">安全區寬度 ${Math.round(rod.tolerance*100)}%</div></label>
       <label><span class="section-label">魚餌</span><span class="select-wrap"><select data-action="equip-bait" ${fishing.phase !== "idle" ? "disabled" : ""}>${BAITS.filter(item=>isUnlocked(item,state)).map(item=>`<option value="${item.id}" ${item.id===state.equippedBait?"selected":""}>${item.name} × ${state.baitAmounts[item.id]||0}</option>`).join("")}</select></span><div class="bait-stock">${bait.description}</div></label></div>${fishArea}
-    </div>${renderQuests()}</div>`;
+    </div><div class="fishing-side">${renderBayEvent()}${renderQuests()}</div></div>`;
   if (fishing.phase === "reeling") bindReelButton();
+}
+
+function renderBayEvent() {
+  const event = getActiveBayEvent(state);
+  if (!event) return `<aside class="card bay-event-card is-quiet" data-bay-event="quiet"><span class="section-label">今日海況</span><h3>潮聲平穩</h3><p>今天沒有特殊海灣事件。照自己的步調選擇釣點，或整理尚未完成的收藏目標。</p><span class="bay-event-status">平靜日</span></aside>`;
+  const current = state.bayEvent;
+  const progress = Math.min(event.goal, Math.max(0, Number(current.progress) || 0));
+  const complete = Boolean(current.completedAt);
+  const activeNow = isBayEventConditionActive(state, event);
+  const spots = (event.spotIds || [event.spotId]).map(id => SPOTS.find(item => item.id === id)?.name).filter(Boolean).join("／");
+  const times = (event.timeIds || []).map(id => TIMES.find(item => item.id === id)?.name).filter(Boolean).join("／") || "全天";
+  const weathers = (event.weatherIds || []).map(id => ({sunny:"晴朗",rain:"細雨"})[id]).filter(Boolean).join("／");
+  const conditions = [times, weathers].filter(Boolean).join(" · ");
+  const targets = event.fishIds.map(id => fishById(id)?.name).filter(Boolean).join("、");
+  const firstCompleted = Boolean(state.bayEventHistory?.[event.id]?.completions);
+  const reward = complete ? current.rewardLabel : (firstCompleted ? event.repeatReward.label : event.firstReward.label);
+  const status = complete ? `已完成 · ${current.rewardLabel}` : `${activeNow ? "目前生效" : `${conditions}生效`} · 獎勵 ${reward}`;
+  return `<aside class="card bay-event-card ${complete ? "is-complete" : ""} ${!complete&&!activeNow ? "is-inactive" : ""}" data-bay-event="${event.id}"><div class="bay-event-heading"><span>${event.icon}</span><div><span class="section-label">海灣事件 · 第 ${state.day} 日</span><h3>${event.name}</h3></div></div><p>${event.description}</p><div class="bay-event-effect"><small>魚群變化 · ${conditions}</small><b>${spots || "指定釣點"} · ${targets}權重 ×${event.fishWeightMultiplier}</b></div><div class="bay-event-objective"><div><span>${complete ? "✓ " : ""}${event.objective}</span><b>${progress} / ${event.goal}</b></div><div class="progress-track"><i style="width:${Math.min(100, progress / event.goal * 100)}%"></i></div><p>${getBayEventHint(state)}</p></div><span class="bay-event-status">${status}</span></aside>`;
 }
 
 function renderQuests() {
@@ -177,9 +213,9 @@ function currentCatchContext() {
 function castLine() {
   if (fishing.phase !== "idle" || !state.baitAmounts[state.equippedBait]) return;
   state.baitAmounts[state.equippedBait]--;
+  if (!state.completedTutorial && state.tutorialStep < 1) state.tutorialStep = 1;
   fishing.phase = "waiting"; fishing.fish = chooseFish(state); fishing.context = currentCatchContext(); fishing.progress = 0; fishing.tension = .36; fishing.danger = 0;
-  sound.play("cast"); saveGame(); renderFishing();
-  if (!state.completedTutorial && state.tutorialStep < 1) { state.tutorialStep = 1; updateTutorial(); }
+  sound.play("cast"); saveGame(); renderFishing(); updateTutorial();
   const bait = baitById(state.equippedBait);
   fishing.timer = setTimeout(() => { fishing.phase="hooked"; sound.play("hook"); renderFishing(); }, 1400 + Math.random()*1800*bait.bite);
 }
@@ -233,6 +269,7 @@ function completeCatch() {
   if (!state.completedTutorial && state.tutorialStep < 2) state.tutorialStep=2;
   saveGame(); syncWorld(); showCatchModal(fishing.fish,caught,result,milestones); updateTutorial();
   notifyCompletedAchievements(result.completedAchievements);
+  if(result.bayEventUpdate?.completed) setTimeout(()=>toast(`事件完成「${result.bayEventUpdate.event.name}」：${result.bayEventUpdate.reward.label}`,"gold"),420);
 }
 
 function resetFishing() { clearFishing(); fishing.phase="idle"; renderFishing(); }
@@ -244,7 +281,9 @@ function showCatchModal(fish,caught,result,milestones) {
   const familiarityText=result.familiarity.nextCount?`${result.record.count} / ${result.familiarity.nextCount}`:"已精通";
   const ribbon=isShimmer?'<span class="new-ribbon is-shimmer">✦ 閃光個體</span>':result.isNew?'<span class="new-ribbon">NEW · 圖鑑新增</span>':`<span class="new-ribbon">${RARITY[fish.rarity].name}</span>`;
   const rewards=[result.isNew?"首次發現獎勵已收入錢袋":null,result.isFirstShimmer?"首次閃光研究獎勵 75 金幣":null].filter(Boolean).join(" · ");
-  modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal catch-modal ${isShimmer?"is-shimmer":""}"><div class="catch-hero">${fishArt(fish,false,caught.variant)}</div>${ribbon}<h2>${fish.name}</h2><p class="catch-subtitle">${fish.english}</p><p class="modal-copy">${fish.short}</p><div class="catch-stats"><div><small>體長</small><b>${caught.length} cm</b></div><div><small>重量</small><b>${caught.weight} kg</b></div><div><small>售價</small><b>${caught.price} 金幣</b></div></div>${tags?`<div class="record-tag">✦ ${tags}</div>`:""}<div class="catch-familiarity ${result.familiarityChanged?"is-level-up":""}"><span>${result.familiarityChanged?"熟悉度提升":"圖鑑熟悉度"}</span><b>${result.familiarity.name}</b><small>${familiarityText}</small></div>${rewards?`<p class="record-tag">${rewards}</p>`:""}<div class="modal-actions"><button class="soft-button" data-action="modal-journal" data-id="${fish.id}">查看圖鑑</button><button class="primary-button" data-action="close-catch">收進漁獲箱</button></div></div></div>`;
+  const eventUpdate=result.bayEventUpdate;
+  const eventFeedback=eventUpdate?.updated?`<div class="catch-event ${eventUpdate.completed?"is-complete":""}"><span>${eventUpdate.completed?"事件完成":"海灣事件進度"}</span><b>${eventUpdate.event.name} · ${eventUpdate.progress} / ${eventUpdate.event.goal}</b><small>${eventUpdate.completed?`獲得 ${eventUpdate.reward.label}`:getBayEventHint(state)}</small></div>`:"";
+  modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal catch-modal ${isShimmer?"is-shimmer":""}"><div class="catch-hero">${fishArt(fish,false,caught.variant)}</div>${ribbon}<h2>${fish.name}</h2><p class="catch-subtitle">${fish.english}</p><p class="modal-copy">${fish.short}</p><div class="catch-stats"><div><small>體長</small><b>${caught.length} cm</b></div><div><small>重量</small><b>${caught.weight} kg</b></div><div><small>售價</small><b>${caught.price} 金幣</b></div></div>${tags?`<div class="record-tag">✦ ${tags}</div>`:""}<div class="catch-familiarity ${result.familiarityChanged?"is-level-up":""}"><span>${result.familiarityChanged?"熟悉度提升":"圖鑑熟悉度"}</span><b>${result.familiarity.name}</b><small>${familiarityText}</small></div>${eventFeedback}${rewards?`<p class="record-tag">${rewards}</p>`:""}<div class="modal-actions"><button class="soft-button" data-action="modal-journal" data-id="${fish.id}">查看圖鑑</button><button class="primary-button" data-action="close-catch">收進漁獲箱</button></div></div></div>`;
   for(const milestone of milestones) {
     const aquariumReward=({5:"海灣觀察箱 3 格",10:"水族箱擴建至 5 格",15:"水族箱擴建至 8 格",20:"完成型展示箱 10 格"})[milestone.count];
     setTimeout(()=>toast(`里程碑「${milestone.name}」完成：${milestone.reward}${aquariumReward?` · ${aquariumReward}`:""}`,"gold"),500);
@@ -418,7 +457,9 @@ function showSlotModal(slot){
 }
 
 function sleep() {
+  const previousDay=state.day;
   advanceTime(state); sound.play("sleep"); saveGame(); syncWorld(); toast(`睡醒時已是${TIMES[state.timeIndex].name}${state.timeIndex===0?`，第 ${state.day} 日`:""}`);
+  if(state.day!==previousDay){const event=getActiveBayEvent(state);setTimeout(()=>toast(event?`新的海況：${event.name}`:"今天的海灣潮聲平穩",event?"gold":""),360);}
   if(!state.completedTutorial&&state.tutorialStep>=5){state.completedTutorial=true;state.tutorialStep=6;saveGame();toast("教學完成。接下來，照自己的步調探索海灣吧！","gold");}
   renderHome(); updateTutorial();
 }
@@ -426,8 +467,8 @@ function sleep() {
 function updateTutorial() {
   if(state.completedTutorial){tutorialEl.classList.add("is-hidden");return;}
   const messages=[
-    "清晨好。先看看暖燈與海面，準備好後，在下方選擇「去釣魚」。",
-    "已使用免費麵包糰。魚上鉤後，按住收線讓進度前進；張力太高時放開。",
+    "清晨好。先看看暖燈與海面，準備好後，點一下下方的「去釣魚」。<button class=\"tutorial-action\" data-action=\"tutorial-go-fishing\" type=\"button\">前往去釣魚</button>",
+    "接著按下「拋下魚線」。魚上鉤後，按住收線讓進度前進；張力太高時放開。",
     "第一條魚已登錄！打開「魚類圖鑑」，看看剛認識的新朋友。",
     "接著到「今日漁獲」把魚販售，為下一趟航程準備金幣。",
     "前往「海灣商店」補充任一種魚餌。商品永遠不會限時消失。",
@@ -440,10 +481,13 @@ function updateTutorial() {
 function setView(view) {
   if(view!=="fishing"&&fishing.phase!=="idle"){clearFishing(); fishing.phase="idle"; toast("已替你收好魚線");}
   currentView=view;
+  let tutorialAdvanced=false;
   if(!state.completedTutorial){
-    if(view==="journal"&&state.tutorialStep===2)state.tutorialStep=3;
-    if(view==="catch"&&state.tutorialStep===2)state.tutorialStep=3;
+    if(view==="fishing"&&state.tutorialStep===0){state.tutorialStep=1;tutorialAdvanced=true;}
+    if(view==="journal"&&state.tutorialStep===2){state.tutorialStep=3;tutorialAdvanced=true;}
+    if(view==="catch"&&state.tutorialStep===2){state.tutorialStep=3;tutorialAdvanced=true;}
   }
+  if(tutorialAdvanced)saveGame();
   render();updateTutorial();window.scrollTo({top:0,behavior:"smooth"});
 }
 
@@ -466,6 +510,10 @@ function notifyCompletedAchievements(achievements=[]) {
 
 function showSettings() {
   modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal"><h2>聲音與旅程</h2><p class="modal-copy">所有音效皆由瀏覽器即時合成，不使用外部音訊素材。</p><div class="settings-row"><span>操作與捕獲音效</span><button class="toggle ${state.settings.sound?"is-on":""}" data-action="toggle-sound"><i></i></button></div><div class="modal-actions"><button class="soft-button" data-action="close-modal">關閉</button></div></div></div>`;
+}
+function showDeveloperLogin(error = "") {
+  modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal developer-modal"><span class="section-label">測試工具</span><h2>開發者模式</h2><p class="modal-copy">使用獨立測試存檔進入全解鎖旅程，不會覆蓋一般航程。</p><form id="developer-login-form" class="developer-form"><label for="developer-password">開發者密碼</label><input id="developer-password" name="password" type="password" autocomplete="off" required autofocus aria-describedby="developer-login-error"><p id="developer-login-error" class="developer-error" aria-live="polite">${error}</p><div class="modal-actions"><button class="soft-button" data-action="close-modal" type="button">取消</button><button class="primary-button" type="submit">進入測試旅程</button></div></form></div></div>`;
+  $("#developer-password")?.focus();
 }
 function showMainMenuConfirm() {
   saveGame();modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal"><h2>回到主選單？</h2><p class="modal-copy">目前進度已自動儲存。海灣會在這裡等你回來。</p><div class="modal-actions"><button class="soft-button" data-action="close-modal">繼續遊玩</button><button class="primary-button" data-action="to-title">回到主選單</button></div></div></div>`;
@@ -530,9 +578,20 @@ document.addEventListener("click", event => {
   if(action==="modal-place"){modalRoot.innerHTML="";placeFurniture(id);}
   if(action==="sleep")sleep();
   if(action==="dismiss-tutorial")tutorialEl.classList.add("is-hidden");
+  if(action==="tutorial-go-fishing")setView("fishing");
   if(action==="toggle-sound"){state.settings.sound=!state.settings.sound;saveGame();showSettings();syncWorld();if(state.settings.sound){sound.play("coin");sound.startAmbient();}else sound.stopAmbient();}
   if(action==="close-modal")modalRoot.innerHTML="";
-  if(action==="to-title"){clearFishing();sound.stopAmbient();modalRoot.innerHTML="";gameShell.classList.add("is-hidden");titleScreen.classList.remove("is-hidden");$("#continue-button").disabled=!hasSave();}
+  if(action==="to-title"){clearFishing();sound.stopAmbient();modalRoot.innerHTML="";gameShell.classList.add("is-hidden");titleScreen.classList.remove("is-hidden");app.classList.remove("is-developer-mode");$("#continue-button").disabled=!hasSave("normal");}
+});
+
+document.addEventListener("submit",event=>{
+  if(event.target.id!=="developer-login-form")return;
+  event.preventDefault();
+  const password=new FormData(event.target).get("password");
+  if(password!==DEVELOPER_PASSWORD){showDeveloperLogin("密碼不正確，請再試一次。");return;}
+  modalRoot.innerHTML="";
+  startGame(false,"developer");
+  toast("開發者模式已啟用：全部內容與測試資源已解鎖","gold");
 });
 
 content.addEventListener("change",event=>{
@@ -547,10 +606,11 @@ document.addEventListener("keyup",event=>{if(event.code==="Space"){fishing.held=
 window.addEventListener("pointerup",()=>{fishing.held=false;$("#reel-button")?.classList.remove("is-held");});
 
 $$(".nav-button").forEach(button=>button.addEventListener("click",()=>setView(button.dataset.view)));
-$("#continue-button").addEventListener("click",()=>startGame(false));
+$("#continue-button").addEventListener("click",()=>startGame(false,"normal"));
 $("#new-game-button").addEventListener("click",()=>{
-  if(hasSave()) modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal"><h2>展開新旅程？</h2><p class="modal-copy">這會替換目前的航海紀錄與備份存檔。</p><div class="modal-actions"><button class="soft-button" data-action="close-modal">取消</button><button id="confirm-new" class="danger-button">開始新遊戲</button></div></div></div>`,$("#confirm-new").addEventListener("click",()=>{modalRoot.innerHTML="";startGame(true)}); else startGame(true);
+  if(hasSave("normal")) modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal"><h2>展開新旅程？</h2><p class="modal-copy">這會替換目前的航海紀錄與備份存檔。</p><div class="modal-actions"><button class="soft-button" data-action="close-modal">取消</button><button id="confirm-new" class="danger-button">開始新遊戲</button></div></div></div>`,$("#confirm-new").addEventListener("click",()=>{modalRoot.innerHTML="";startGame(true,"normal")}); else startGame(true,"normal");
 });
+$("#developer-mode-button").addEventListener("click",()=>showDeveloperLogin());
 $("#title-settings-button").addEventListener("click",showSettings);
 $("#sound-button").addEventListener("click",()=>{state.settings.sound=!state.settings.sound;saveGame();syncWorld();if(state.settings.sound){sound.play("coin");sound.startAmbient();}else sound.stopAmbient();});
 $("#save-button").addEventListener("click",()=>saveGame(true));

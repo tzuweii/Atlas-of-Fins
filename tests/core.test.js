@@ -1,17 +1,222 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ACHIEVEMENTS, FISH } from "../src/data.js";
+import { ACHIEVEMENTS, BAITS, BAY_EVENTS, FISH, FURNITURE, RODS } from "../src/data.js";
 import {
   SAVE_VERSION, SHIMMER_CONFIG, advanceTime, applyMilestones, buyBait, buyRod, chooseFish, claimAchievement,
-  createInitialState, equipTitle, evaluateAchievements, fishWeight, generateCatch, getAchievementProgress,
-  getAquariumCapacity, getFamiliarity, getUnclaimedAchievementCount, migrateState, moveCatchToAquarium,
+  createBayEventState, createDeveloperState, createInitialState, equipTitle, evaluateAchievements, fishWeight, generateCatch, getAchievementProgress,
+  getActiveBayEvent, getAquariumCapacity, getFamiliarity, getScheduledBayEvent, getUnclaimedAchievementCount, migrateState, moveCatchToAquarium,
   recordCatch, removeFishFromAquarium, replaceAquariumFish, rollVariant, sellCatches,
-  setAquariumDecoration, swapAquariumFish
+  setAquariumDecoration, swapAquariumFish, updateBayEventProgress
 } from "../src/core.js";
 
 test("MVP contains exactly twenty distinct fish", () => {
   assert.equal(FISH.length, 20);
   assert.equal(new Set(FISH.map(fish => fish.id)).size, 20);
+});
+
+test("developer state unlocks all content without using the normal progression", () => {
+  const state = createDeveloperState();
+  assert.equal(state.developerMode, true);
+  assert.equal(state.completedTutorial, true);
+  assert.equal(state.money, 999999);
+  assert.deepEqual(state.ownedRods, RODS.map(item => item.id));
+  assert.deepEqual(state.ownedFurniture, FURNITURE.map(item => item.id));
+  assert.ok(BAITS.every(item => state.baitAmounts[item.id] === 999));
+  assert.equal(Object.keys(state.discovered).length, FISH.length);
+  assert.ok(Object.values(state.discovered).every(record => record.count >= 10 && record.caughtShimmer));
+  assert.equal(getAquariumCapacity(state), 10);
+  assert.equal(state.catchInventory.length + state.aquarium.fish.length, FISH.length);
+  assert.equal(Object.keys(state.achievements).length, ACHIEVEMENTS.length);
+});
+
+test("bay event catalog and daily schedule are deterministic", () => {
+  assert.equal(BAY_EVENTS.length, 3);
+  assert.equal(new Set(BAY_EVENTS.map(event => event.id)).size, BAY_EVENTS.length);
+  assert.equal(getScheduledBayEvent(1)?.id, "silver_tide");
+  assert.equal(getScheduledBayEvent(2), null);
+  assert.equal(getScheduledBayEvent(3)?.id, "moonlit_tide");
+  assert.equal(getScheduledBayEvent(4), null);
+  assert.equal(getScheduledBayEvent(5)?.id, "rain_drift");
+  assert.equal(getScheduledBayEvent(6), null);
+  assert.equal(getScheduledBayEvent(7)?.id, "silver_tide");
+
+  const state = createInitialState();
+  assert.equal(getActiveBayEvent(state)?.id, "silver_tide");
+  for (let index = 0; index < 4; index++) advanceTime(state, () => 1);
+  assert.equal(state.day, 2);
+  assert.equal(state.bayEvent, null);
+  for (let index = 0; index < 4; index++) advanceTime(state, () => 1);
+  assert.equal(state.day, 3);
+  assert.equal(state.bayEvent.instanceId, "3-moonlit_tide");
+  for (let index = 0; index < 8; index++) advanceTime(state, () => 1);
+  assert.equal(state.day, 5);
+  assert.equal(state.bayEvent.instanceId, "5-rain_drift");
+  assert.equal(state.weather, "rain");
+});
+
+test("silver tide only boosts its target fish at the shore", () => {
+  const state = createInitialState();
+  const quietState = { ...state, bayEvent: null };
+  const sardine = FISH.find(fish => fish.id === "sardine");
+  const anchovy = FISH.find(fish => fish.id === "anchovy");
+  const mackerel = FISH.find(fish => fish.id === "mackerel");
+  assert.equal(fishWeight(sardine, state, "shore", "bread"), fishWeight(sardine, quietState, "shore", "bread") * 4);
+  assert.equal(fishWeight(anchovy, state, "shore", "bread"), fishWeight(anchovy, quietState, "shore", "bread") * 4);
+  assert.equal(fishWeight(mackerel, state, "shore", "bread"), fishWeight(mackerel, quietState, "shore", "bread"));
+});
+
+test("bay event progress filters catches and grants first and repeat rewards once", () => {
+  const state = createInitialState();
+  const makeCatch = (fishId, spotId = "shore", day = state.day) => generateCatch(
+    FISH.find(fish => fish.id === fishId),
+    { spotId, timeId: "dawn", weather: "sunny", baitId: "bread", rodId: "wood", day },
+    () => .5
+  );
+
+  assert.equal(recordCatch(state, makeCatch("mackerel")).bayEventUpdate.updated, false);
+  assert.equal(recordCatch(state, makeCatch("sardine", "reef")).bayEventUpdate.updated, false);
+  assert.equal(recordCatch(state, makeCatch("sardine", "shore", 2)).bayEventUpdate.updated, false);
+  assert.equal(state.bayEvent.progress, 0);
+
+  assert.deepEqual(recordCatch(state, makeCatch("sardine")).bayEventUpdate.progress, 1);
+  assert.deepEqual(recordCatch(state, makeCatch("anchovy")).bayEventUpdate.progress, 2);
+  const firstCompletion = recordCatch(state, makeCatch("sardine")).bayEventUpdate;
+  assert.equal(firstCompletion.completed, true);
+  assert.equal(firstCompletion.firstCompletion, true);
+  assert.equal(firstCompletion.reward.value, "銀潮見證者");
+  assert.ok(state.unlockedTitles.includes("銀潮見證者"));
+  assert.equal(state.bayEventHistory.silver_tide.completions, 1);
+  assert.equal(updateBayEventProgress(state, makeCatch("sardine")).updated, false);
+
+  state.day = 7;
+  state.bayEvent = createBayEventState(7);
+  const moneyBeforeRepeat = state.money;
+  recordCatch(state, makeCatch("sardine"));
+  recordCatch(state, makeCatch("anchovy"));
+  const repeatCompletion = recordCatch(state, makeCatch("sardine")).bayEventUpdate;
+  assert.equal(repeatCompletion.completed, true);
+  assert.equal(repeatCompletion.firstCompletion, false);
+  assert.equal(repeatCompletion.reward.amount, 60);
+  assert.equal(state.money, moneyBeforeRepeat + 60);
+  assert.equal(state.bayEventHistory.silver_tide.completions, 2);
+});
+
+test("moonlit tide requires night at the reef or deep water", () => {
+  const state = createInitialState();
+  state.day = 3;
+  state.bayEvent = createBayEventState(3);
+  const squid = FISH.find(fish => fish.id === "squid");
+  const quietState = { ...state, bayEvent: null };
+
+  state.timeIndex = 0;
+  quietState.timeIndex = 0;
+  assert.equal(fishWeight(squid, state, "reef", "shrimp"), fishWeight(squid, quietState, "reef", "shrimp"));
+  state.timeIndex = 3;
+  quietState.timeIndex = 3;
+  assert.equal(fishWeight(squid, state, "reef", "shrimp"), fishWeight(squid, quietState, "reef", "shrimp") * 3.5);
+
+  const makeCatch = (spotId, timeId, day = state.day) => generateCatch(
+    squid,
+    { spotId, timeId, weather: "sunny", baitId: "shrimp", rodId: "wood", day },
+    () => .5
+  );
+  assert.equal(recordCatch(state, makeCatch("reef", "dawn")).bayEventUpdate.updated, false);
+  assert.equal(recordCatch(state, makeCatch("shore", "night")).bayEventUpdate.updated, false);
+  assert.equal(state.bayEvent.progress, 0);
+  assert.equal(recordCatch(state, makeCatch("reef", "night")).bayEventUpdate.progress, 1);
+  const completion = recordCatch(state, makeCatch("deep", "night")).bayEventUpdate;
+  assert.equal(completion.completed, true);
+  assert.equal(completion.reward.value, "月潮聆聽者");
+  assert.ok(state.unlockedTitles.includes("月潮聆聽者"));
+  assert.equal(state.bayEventHistory.moonlit_tide.completions, 1);
+
+  state.day = 9;
+  state.bayEvent = createBayEventState(9);
+  const moneyBeforeRepeat = state.money;
+  recordCatch(state, makeCatch("reef", "night"));
+  const repeatCompletion = recordCatch(state, makeCatch("deep", "night")).bayEventUpdate;
+  assert.equal(repeatCompletion.reward.amount, 80);
+  assert.equal(state.money, moneyBeforeRepeat + 80);
+  assert.equal(state.bayEventHistory.moonlit_tide.completions, 2);
+});
+
+test("rain drift forces rain and filters reef catches by weather", () => {
+  const state = createInitialState();
+  state.day = 5;
+  state.timeIndex = 0;
+  state.bayEvent = createBayEventState(5);
+  const blackBream = FISH.find(fish => fish.id === "black_bream");
+  const wrasse = FISH.find(fish => fish.id === "wrasse");
+  const quietState = { ...state, bayEvent: null };
+
+  state.weather = "sunny";
+  quietState.weather = "sunny";
+  assert.equal(fishWeight(blackBream, state, "reef", "shrimp"), fishWeight(blackBream, quietState, "reef", "shrimp"));
+  state.weather = "rain";
+  quietState.weather = "rain";
+  assert.equal(fishWeight(blackBream, state, "reef", "shrimp"), fishWeight(blackBream, quietState, "reef", "shrimp") * 3.2);
+  assert.equal(fishWeight(wrasse, state, "reef", "shrimp"), fishWeight(wrasse, quietState, "reef", "shrimp"));
+
+  const makeCatch = (fishId, spotId, weather, day = state.day) => generateCatch(
+    FISH.find(fish => fish.id === fishId),
+    { spotId, timeId: "dawn", weather, baitId: "shrimp", rodId: "wood", day },
+    () => .5
+  );
+  assert.equal(recordCatch(state, makeCatch("black_bream", "reef", "sunny")).bayEventUpdate.updated, false);
+  assert.equal(recordCatch(state, makeCatch("black_bream", "shore", "rain")).bayEventUpdate.updated, false);
+  assert.equal(recordCatch(state, makeCatch("wrasse", "reef", "rain")).bayEventUpdate.updated, false);
+  assert.equal(state.bayEvent.progress, 0);
+  assert.equal(recordCatch(state, makeCatch("black_bream", "reef", "rain")).bayEventUpdate.progress, 1);
+  const completion = recordCatch(state, makeCatch("scorpionfish", "reef", "rain")).bayEventUpdate;
+  assert.equal(completion.completed, true);
+  assert.equal(completion.reward.value, "雨潮守望者");
+  assert.ok(state.unlockedTitles.includes("雨潮守望者"));
+
+  state.day = 11;
+  state.bayEvent = createBayEventState(11);
+  const moneyBeforeRepeat = state.money;
+  recordCatch(state, makeCatch("black_bream", "reef", "rain"));
+  const repeatCompletion = recordCatch(state, makeCatch("scorpionfish", "reef", "rain")).bayEventUpdate;
+  assert.equal(repeatCompletion.reward.amount, 90);
+  assert.equal(state.money, moneyBeforeRepeat + 90);
+  assert.equal(state.bayEventHistory.rain_drift.completions, 2);
+});
+
+test("v2 saves migrate to v3 event state and restore event titles", () => {
+  const partial = migrateState({
+    version: 2,
+    day: 1,
+    bayEvent: { eventId: "silver_tide", day: 1, progress: 2 }
+  });
+  assert.equal(partial.version, 3);
+  assert.equal(partial.bayEvent.eventId, "silver_tide");
+  assert.equal(partial.bayEvent.progress, 2);
+
+  const alphaOne = migrateState({
+    version: 3,
+    day: 3,
+    bayEvent: { eventId: "silver_tide", day: 3, progress: 2 }
+  });
+  assert.equal(alphaOne.bayEvent.eventId, "silver_tide");
+  assert.equal(alphaOne.bayEvent.progress, 2);
+
+  const completed = migrateState({
+    version: 3,
+    day: 3,
+    bayEventHistory: {
+      silver_tide: { completions: 1, firstCompletedAt: "2026-07-16T00:00:00.000Z", lastCompletedDay: 1 },
+      moonlit_tide: { completions: 1, firstCompletedAt: "2026-07-16T01:00:00.000Z", lastCompletedDay: 3 },
+      rain_drift: { completions: 1, firstCompletedAt: "2026-07-16T02:00:00.000Z", lastCompletedDay: 5 },
+      unknown_event: { completions: 99 }
+    },
+    equippedTitle: "雨潮守望者"
+  });
+  assert.deepEqual(Object.keys(completed.bayEventHistory), ["silver_tide", "moonlit_tide", "rain_drift"]);
+  assert.ok(completed.unlockedTitles.includes("銀潮見證者"));
+  assert.ok(completed.unlockedTitles.includes("月潮聆聽者"));
+  assert.ok(completed.unlockedTitles.includes("雨潮守望者"));
+  assert.equal(completed.equippedTitle, "雨潮守望者");
+  assert.equal(completed.bayEvent.instanceId, "3-moonlit_tide");
 });
 
 test("fish pool respects fishing spot", () => {

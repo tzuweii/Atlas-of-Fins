@@ -81,6 +81,69 @@ export const QUEST_TEMPLATES = [
   { id: "large1", text: "捕獲 1 條大型魚", type: "size", target: "large", goal: 1, reward: 105 }
 ];
 
+export const BAY_EVENTS = [
+  {
+    id: "silver_tide",
+    name: "銀潮靠岸",
+    icon: "✦",
+    description: "成群的銀色小魚沿著潮線靠近淺灘，海面像被晨光輕輕翻動。",
+    spotIds: ["shore"],
+    fishIds: ["sardine", "anchovy"],
+    fishWeightMultiplier: 4,
+    objective: "在近岸捕獲 3 條沙丁魚或鯷魚",
+    goal: 3,
+    hints: [
+      "銀色水紋剛靠近淺灘，麵包糰會是舒服的起點。",
+      "第一束銀光已寫進日誌，再沿著近岸找找。",
+      "魚群正在船邊轉向，再一次相遇就能完成觀察。",
+      "今日銀潮觀察完成。"
+    ],
+    firstReward: { type: "title", value: "銀潮見證者", label: "稱號「銀潮見證者」" },
+    repeatReward: { type: "coins", amount: 60, label: "60 金幣" }
+  },
+  {
+    id: "moonlit_tide",
+    name: "月光潮汐",
+    icon: "☾",
+    description: "月色把礁石與深水之間的潮路照亮，夜行魚群正沿著冷光緩緩上浮。",
+    spotIds: ["reef", "deep"],
+    timeIds: ["night"],
+    fishIds: ["squid", "cutlass", "lantern"],
+    fishWeightMultiplier: 3.5,
+    objective: "夜晚在礁石或深水捕獲 2 條月光訪客",
+    goal: 2,
+    inactiveHint: "月色尚未升起。先回船屋休息到夜晚，再帶著小蝦或發光魚餌出航。",
+    hints: [
+      "潮路已被月光照亮；礁石可尋找小管，深水還有更多夜行身影。",
+      "第一位月光訪客已留下紀錄，再沿著冷色潮光尋找一次。",
+      "今日月光潮汐觀察完成。"
+    ],
+    firstReward: { type: "title", value: "月潮聆聽者", label: "稱號「月潮聆聽者」" },
+    repeatReward: { type: "coins", amount: 80, label: "80 金幣" }
+  },
+  {
+    id: "rain_drift",
+    name: "雨後漂流",
+    icon: "☂",
+    description: "細雨把海草、碎貝與浮木推向礁石邊緣，躲藏其中的魚也跟著漂流帶靠近。",
+    spotIds: ["reef"],
+    weatherIds: ["rain"],
+    forceWeather: "rain",
+    fishIds: ["black_bream", "scorpionfish", "cuttlefish", "sea_eel"],
+    fishWeightMultiplier: 3.2,
+    objective: "細雨時在礁石捕獲 2 條漂流帶訪客",
+    goal: 2,
+    inactiveHint: "雨帶還沒靠近礁石；等細雨落下，再準備小蝦或沙蠶前往礁區。",
+    hints: [
+      "沿著浮木與海草交界拋竿，小蝦或沙蠶容易吸引躲藏其中的魚。",
+      "第一份雨潮紀錄已完成，漂流帶裡還有另一道身影。",
+      "今日雨後漂流觀察完成。"
+    ],
+    firstReward: { type: "title", value: "雨潮守望者", label: "稱號「雨潮守望者」" },
+    repeatReward: { type: "coins", amount: 90, label: "90 金幣" }
+  }
+];
+
 export const MILESTONES = [
   { count: 5, name: "海灣初識", reward: "魚形掛飾", coins: 100 },
   { count: 10, name: "潮汐觀察家", reward: "星藍船燈", coins: 220 },

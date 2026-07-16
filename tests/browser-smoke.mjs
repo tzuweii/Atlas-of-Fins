@@ -23,7 +23,10 @@ ws.addEventListener("message", event => {
     pending.delete(message.id);
     message.error ? reject(new Error(message.error.message)) : resolve(message.result);
   }
-  if (message.method === "Runtime.exceptionThrown") exceptions.push(message.params.exceptionDetails.text);
+  if (message.method === "Runtime.exceptionThrown") {
+    const details = message.params.exceptionDetails;
+    exceptions.push(details.exception?.description || `${details.text} at ${details.url || "unknown"}:${details.lineNumber + 1}`);
+  }
 });
 
 function command(method, params = {}) {
@@ -62,10 +65,42 @@ await waitFor(`document.readyState === "complete"`);
 await evaluate(`localStorage.clear()`);
 assert.equal(await evaluate("document.title"), "Atlas of Fins｜鰭之圖鑑");
 
+await click("#developer-mode-button");
+assert.match(await evaluate("document.querySelector('.developer-modal').innerText"), /開發者模式[\s\S]*獨立測試存檔/);
+await evaluate(`document.querySelector('#developer-password').value = 'wrong-password'; document.querySelector('#developer-login-form').requestSubmit()`);
+assert.match(await evaluate("document.querySelector('#developer-login-error').innerText"), /密碼不正確/);
+await evaluate(`document.querySelector('#developer-password').value = 'atlas-dev'; document.querySelector('#developer-login-form').requestSubmit()`);
+await waitFor(`!document.querySelector("#game-shell").classList.contains("is-hidden")`);
+assert.equal(await evaluate("document.querySelector('#app').classList.contains('is-developer-mode')"), true);
+assert.match(await evaluate("document.querySelector('.brand-mini small').innerText"), /開發者模式/);
+assert.equal(await evaluate("document.querySelectorAll('[data-action=\"equip-rod\"] option').length"), 3);
+assert.equal(await evaluate("document.querySelectorAll('[data-action=\"equip-bait\"] option').length"), 5);
+assert.equal(await evaluate("document.querySelectorAll('.spot-card:disabled').length"), 0);
+assert.equal(await evaluate("document.querySelector('#money-label').innerText.replaceAll(',', '')"), "999999");
+assert.match(await evaluate("document.querySelector('#time-label').innerText"), /夜晚/);
+assert.match(await evaluate("document.querySelector('.bay-event-card[data-bay-event=\"moonlit_tide\"]').innerText"), /月光潮汐[\s\S]*礁石邊緣／海灣深水區[\s\S]*0 \/ 2[\s\S]*目前生效/);
+await click('[data-view="journal"]');
+assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /探索進度[\s\S]*20 \/ 20/);
+assert.equal(await evaluate("document.querySelectorAll('.fish-card').length"), 20);
+assert.equal(await evaluate("document.querySelectorAll('.fish-card.is-unknown').length"), 0);
+assert.equal(await evaluate("localStorage.getItem('atlas-of-fins.save')"), null);
+assert.equal(await evaluate("JSON.parse(localStorage.getItem('atlas-of-fins.dev-save')).developerMode"), true);
+await click("#menu-button");
+await click('[data-action="to-title"]');
+await waitFor(`!document.querySelector("#title-screen").classList.contains("is-hidden")`);
+assert.equal(await evaluate("document.querySelector('#continue-button').disabled"), true);
+
 await click("#new-game-button");
 await waitFor(`!document.querySelector("#game-shell").classList.contains("is-hidden")`);
 assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /去釣魚/);
 assert.equal(await evaluate("document.querySelectorAll('.spot-card').length"), 3);
+assert.match(await evaluate("document.querySelector('.bay-event-card[data-bay-event=\"silver_tide\"]').innerText"), /銀潮靠岸[\s\S]*沙丁魚、鯷魚[\s\S]*0 \/ 3/);
+assert.match(await evaluate("document.querySelector('#scene-caption').innerText"), /銀潮靠岸/);
+assert.match(await evaluate("document.querySelector('#tutorial').innerText"), /航海教學 · 1 \/ 6[\s\S]*去釣魚/);
+assert.equal(await evaluate("Boolean(document.querySelector('[data-action=\\\"tutorial-go-fishing\\\"]'))"), true);
+await click('[data-view="fishing"]');
+assert.match(await evaluate("document.querySelector('#tutorial').innerText"), /航海教學 · 2 \/ 6[\s\S]*拋下魚線/);
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).tutorialStep`), 1);
 
 await evaluate(`Math.random = () => 0`);
 await click('[data-action="cast"]');
@@ -101,6 +136,7 @@ assert.match(await evaluate("document.querySelector('.catch-modal').innerText"),
 assert.match(await evaluate("document.querySelector('.catch-modal').innerText"), /閃光個體/);
 assert.match(await evaluate("document.querySelector('.catch-modal').innerText"), /首次閃光研究獎勵 75 金幣/);
 assert.match(await evaluate("document.querySelector('.catch-modal').innerText"), /熟悉度提升[\s\S]*初次相遇/);
+assert.match(await evaluate("document.querySelector('.catch-modal').innerText"), /海灣事件進度[\s\S]*銀潮靠岸 · 1 \/ 3/);
 
 await click('[data-action="close-catch"]');
 await click('[data-view="journal"]');
@@ -183,7 +219,7 @@ assert.match(await evaluate("document.querySelector('#time-label').innerText"), 
 
 const saved = await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save"))`);
 const savedCatchRecord = Object.values(saved.discovered)[0];
-assert.equal(saved.version, 2);
+assert.equal(saved.version, 3);
 assert.ok(saved.totalCaught >= 1);
 assert.ok(saved.totalSold > 0);
 assert.equal(saved.completedTutorial, true);
@@ -200,6 +236,48 @@ assert.equal(saved.achievements.shimmer_1.claimed, true);
 assert.equal(saved.equippedTitle, "海灣訪客");
 assert.ok(saved.unlockedAquariumDecor.includes("shimmer_specks"));
 assert.equal(saved.aquariumDecoration, "shimmer_specks");
+assert.equal(saved.bayEvent.eventId, "silver_tide");
+assert.equal(saved.bayEvent.progress, 1);
+
+await click("#menu-button");
+await click('[data-action="to-title"]');
+await waitFor(`!document.querySelector("#title-screen").classList.contains("is-hidden")`);
+await evaluate(`(() => { const save = JSON.parse(localStorage.getItem("atlas-of-fins.save")); save.day = 2; save.timeIndex = 0; localStorage.setItem("atlas-of-fins.save", JSON.stringify(save)); })()`);
+await click("#continue-button");
+await waitFor(`!document.querySelector("#game-shell").classList.contains("is-hidden")`);
+assert.match(await evaluate("document.querySelector('.bay-event-card[data-bay-event=\"quiet\"]').innerText"), /潮聲平穩[\s\S]*平靜日/);
+await click("#save-button");
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).bayEvent`), null);
+
+await click("#menu-button");
+await click('[data-action="to-title"]');
+await waitFor(`!document.querySelector("#title-screen").classList.contains("is-hidden")`);
+await evaluate(`(() => { const save = JSON.parse(localStorage.getItem("atlas-of-fins.save")); save.day = 3; save.timeIndex = 0; save.bayEvent = null; localStorage.setItem("atlas-of-fins.save", JSON.stringify(save)); })()`);
+await click("#continue-button");
+await waitFor(`!document.querySelector("#game-shell").classList.contains("is-hidden")`);
+assert.match(await evaluate("document.querySelector('.bay-event-card[data-bay-event=\"moonlit_tide\"]').innerText"), /月光潮汐[\s\S]*月色尚未升起[\s\S]*夜晚生效/);
+assert.equal(await evaluate("document.querySelector('.bay-event-card[data-bay-event=\"moonlit_tide\"]').classList.contains('is-inactive')"), true);
+await click('[data-view="home"]');
+await click('[data-action="sleep"]');
+await click('[data-action="sleep"]');
+await click('[data-action="sleep"]');
+await click('[data-view="fishing"]');
+assert.match(await evaluate("document.querySelector('.bay-event-card[data-bay-event=\"moonlit_tide\"]').innerText"), /月光潮汐[\s\S]*目前生效/);
+assert.equal(await evaluate("document.querySelector('.bay-event-card[data-bay-event=\"moonlit_tide\"]').classList.contains('is-inactive')"), false);
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).timeIndex`), 3);
+
+await click("#menu-button");
+await click('[data-action="to-title"]');
+await waitFor(`!document.querySelector("#title-screen").classList.contains("is-hidden")`);
+await evaluate(`(() => { const save = JSON.parse(localStorage.getItem("atlas-of-fins.save")); save.day = 5; save.timeIndex = 0; save.weather = "sunny"; save.bayEvent = null; localStorage.setItem("atlas-of-fins.save", JSON.stringify(save)); })()`);
+await click("#continue-button");
+await waitFor(`!document.querySelector("#game-shell").classList.contains("is-hidden")`);
+assert.match(await evaluate("document.querySelector('#weather-label').innerText"), /細雨/);
+assert.equal(await evaluate("document.querySelector('#app').dataset.weather"), "rain");
+assert.match(await evaluate("document.querySelector('.bay-event-card[data-bay-event=\"rain_drift\"]').innerText"), /雨後漂流[\s\S]*全天 · 細雨[\s\S]*礁石邊緣[\s\S]*0 \/ 2[\s\S]*目前生效/);
+await click("#save-button");
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).bayEvent.eventId`), "rain_drift");
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).weather`), "rain");
 assert.equal(exceptions.length, 0, `No uncaught browser exceptions: ${exceptions.join(", ")}`);
 
 if (process.env.SCREENSHOT) {
