@@ -2,7 +2,7 @@
 
 根據《療癒釣魚養成遊戲｜初版開發規格書》製作的可玩瀏覽器遊戲，目前版本為 v0.3.0-alpha.4，已完成三個海灣事件與第一輪魚誌擴充。這是一段沒有時間壓力的海灣生活：釣魚、補完圖鑑、販售漁獲、升級釣具，再把簡陋帆船慢慢整理成溫暖的家。
 
-長期方向已確立為療癒單機收藏遊戲，預計沿「真實洋流與魚類、架空港口與人物」的世界航線擴展；世界海圖、新海域、研究航線、自動航行、詩意日誌與進階船屋目前仍在設計階段，尚未出現在可玩版本。
+長期方向已正式定案為療癒單機收藏遊戲：世界地理、港口與人物完全架空，洋流關係與魚類生態參照真實資料；玩家將帶著船屋沿六大海域航行，逐步建立約 100 種魚的世界圖鑑。既有每日三項小目標會保留並加入區域居民委託；世界海圖、新海域、研究航線、潮光、自動日誌與進階船屋目前尚未出現在可玩版本，完整未來規格見 [`docs/FINAL_GAME_DESIGN.md`](docs/FINAL_GAME_DESIGN.md)。
 
 ## 開始遊玩
 
@@ -59,6 +59,8 @@ npm run test:browser
 完整閱讀順序、文件權責與「已完成／已核准／仍提案」的界線，請先看 [`docs/README.md`](docs/README.md)。
 
 - 目前版本、測試與下一步：[`docs/DEVELOPMENT_PROGRESS.md`](docs/DEVELOPMENT_PROGRESS.md)
+- 長期遊戲正式定案：[`docs/FINAL_GAME_DESIGN.md`](docs/FINAL_GAME_DESIGN.md)
+- v0.4 實作拆分：[`docs/V0_4_IMPLEMENTATION_PLAN.md`](docs/V0_4_IMPLEMENTATION_PLAN.md)
 - 長期產品方向與版本路線：[`docs/LONG_TERM_GAME_DESIGN.md`](docs/LONG_TERM_GAME_DESIGN.md)
 - 世界航線與區域資料架構：[`docs/WORLD_ROUTE_SYSTEM_DESIGN.md`](docs/WORLD_ROUTE_SYSTEM_DESIGN.md)
 - 研究、船屋、自動航行與詩意日誌：[`docs/COLLECTION_EXPERIENCE_SYSTEMS.md`](docs/COLLECTION_EXPERIENCE_SYSTEMS.md)
