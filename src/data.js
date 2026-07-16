@@ -87,3 +87,22 @@ export const MILESTONES = [
   { count: 15, name: "深藍收藏家", reward: "圖鑑桌布", coins: 360 },
   { count: 20, name: "鰭之圖鑑完成", reward: "月紗船帆與徽章", coins: 600 }
 ];
+
+export const ACHIEVEMENTS = [
+  { id: "first_catch", name: "海的第一封信", description: "捕獲第一條魚", type: "totalCaught", goal: 1, reward: { type: "coins", amount: 40, label: "40 金幣" } },
+  { id: "species_5", name: "海灣初識", description: "發現 5 種魚", type: "species", goal: 5, reward: { type: "title", value: "海灣訪客", label: "稱號「海灣訪客」" } },
+  { id: "species_10", name: "潮汐觀察家", description: "發現 10 種魚", type: "species", goal: 10, reward: { type: "coins", amount: 120, label: "120 金幣" } },
+  { id: "species_20", name: "鰭之圖鑑", description: "發現全部 20 種魚", type: "species", goal: 20, reward: { type: "title", value: "鰭之記錄者", label: "稱號「鰭之記錄者」" } },
+  { id: "familiar_5", name: "熟悉的身影", description: "5 種魚達到熟悉", type: "familiarSpecies", goal: 5, reward: { type: "coins", amount: 120, label: "120 金幣" } },
+  { id: "mastery_1", name: "一種魚，一片海", description: "任一魚種達到精通", type: "masteredSpecies", goal: 1, reward: { type: "title", value: "耐心觀察者", label: "稱號「耐心觀察者」" } },
+  { id: "mastery_10", name: "海灣研究者", description: "10 種魚達到精通", type: "masteredSpecies", goal: 10, reward: { type: "coins", amount: 240, label: "240 金幣" } },
+  { id: "record_3", name: "尺寸之外", description: "捕獲 3 條紀錄級魚", type: "recordCatches", goal: 3, reward: { type: "coins", amount: 100, label: "100 金幣" } },
+  { id: "shimmer_1", name: "波光留下來了", description: "首次捕獲閃光個體", type: "shimmerSpecies", goal: 1, reward: { type: "aquariumDecor", value: "shimmer_specks", label: "水族箱光點標記" } },
+  { id: "shimmer_5", name: "收集海上的星星", description: "捕獲 5 種不同閃光魚", type: "shimmerSpecies", goal: 5, reward: { type: "title", value: "拾光者", label: "稱號「拾光者」" } },
+  { id: "aquarium_3", name: "小小海灣", description: "水族箱同時展示 3 條魚", type: "aquariumCount", goal: 3, reward: { type: "coins", amount: 80, label: "80 金幣" } },
+  { id: "conditions_4", name: "從晨霧到星光", description: "四個時段都曾成功捕獲魚", type: "uniqueTimes", goal: 4, reward: { type: "coins", amount: 80, label: "80 金幣" } }
+];
+
+export const AQUARIUM_DECORATIONS = [
+  { id: "shimmer_specks", name: "水族箱光點", description: "讓收藏箱浮現柔和的金色光點。" }
+];

@@ -67,6 +67,7 @@ await waitFor(`!document.querySelector("#game-shell").classList.contains("is-hid
 assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /去釣魚/);
 assert.equal(await evaluate("document.querySelectorAll('.spot-card').length"), 3);
 
+await evaluate(`Math.random = () => 0`);
 await click('[data-action="cast"]');
 await waitFor(`Boolean(document.querySelector('[data-action="hook"]'))`, 6000);
 await click('[data-action="hook"]');
@@ -97,10 +98,76 @@ await evaluate(`window.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,
 const finalStage = await evaluate(`({ modal: Boolean(document.querySelector('.catch-modal')), failed: Boolean(document.querySelector('.fishing-result-fail')), text: document.querySelector('#danger-text')?.innerText || '' })`);
 assert.equal(caught, true, `tension minigame can be completed: ${JSON.stringify({ lastReelState, finalStage, exceptions })}`);
 assert.match(await evaluate("document.querySelector('.catch-modal').innerText"), /cm[\s\S]*kg[\s\S]*金幣/);
+assert.match(await evaluate("document.querySelector('.catch-modal').innerText"), /閃光個體/);
+assert.match(await evaluate("document.querySelector('.catch-modal').innerText"), /首次閃光研究獎勵 75 金幣/);
+assert.match(await evaluate("document.querySelector('.catch-modal').innerText"), /熟悉度提升[\s\S]*初次相遇/);
 
 await click('[data-action="close-catch"]');
 await click('[data-view="journal"]');
 assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /探索進度[\s\S]*1 \/ 20/);
+assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /初次相遇[\s\S]*初次：/);
+assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /閃光紀錄 1 次/);
+
+await click("#menu-button");
+await click('[data-action="to-title"]');
+await waitFor(`!document.querySelector("#title-screen").classList.contains("is-hidden")`);
+const unlockedSpecies = await evaluate(`(() => {
+  const save = JSON.parse(localStorage.getItem("atlas-of-fins.save"));
+  const caughtAt = new Date().toISOString();
+  for (const fishId of ["mackerel", "anchovy", "mullet", "milkfish"]) {
+    save.discovered[fishId] = {
+      count: 1, firstCaught: caughtAt, lastCaught: caughtAt, bestLength: 1, bestWeight: 1,
+      spots: [], times: [], weathers: [], caughtShimmer: false, shimmerCount: 0, shimmerPity: 0
+    };
+  }
+  localStorage.setItem("atlas-of-fins.save", JSON.stringify(save));
+  return Object.keys(save.discovered).length;
+})()`);
+assert.equal(unlockedSpecies, 5);
+await click("#continue-button");
+await waitFor(`!document.querySelector("#game-shell").classList.contains("is-hidden")`);
+
+await click('[data-view="journal"]');
+assert.equal(await evaluate("document.querySelector('.achievement-open i')?.innerText"), "3");
+await click('[data-action="show-achievements"]');
+assert.equal(await evaluate("document.querySelectorAll('.achievement-item').length"), 12);
+assert.equal(await evaluate("document.querySelectorAll('.achievement-item.is-complete').length"), 3);
+await click('[data-achievement="first_catch"] [data-action="claim-achievement"]');
+assert.match(await evaluate("document.querySelector('[data-achievement=\"first_catch\"]').innerText"), /已領取/);
+await click('[data-achievement="species_5"] [data-action="claim-achievement"]');
+assert.equal(await evaluate("Boolean(document.querySelector('[data-action=\"equip-title\"][data-id=\"海灣訪客\"]'))"), true);
+await click('[data-action="equip-title"][data-id="海灣訪客"]');
+assert.equal(await evaluate("document.querySelector('.brand-mini small').innerText"), "海灣訪客");
+await click('[data-achievement="shimmer_1"] [data-action="claim-achievement"]');
+assert.equal(await evaluate("document.querySelectorAll('.achievement-claim').length"), 0);
+await click('[data-action="close-modal"]');
+
+await click('[data-view="catch"]');
+assert.equal(await evaluate("document.querySelectorAll('.catch-row').length"), 1);
+assert.equal(await evaluate("document.querySelectorAll('.catch-row.is-shimmer').length"), 1);
+assert.equal(await evaluate("document.querySelectorAll('[data-action=\"move-aquarium\"]').length"), 1);
+await click('[data-action="move-aquarium"]');
+assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /漁獲箱還空著/);
+
+await click('[data-view="home"]');
+assert.match(await evaluate("document.querySelector('.aquarium-heading').innerText"), /1 \/ 3/);
+assert.equal(await evaluate("document.querySelectorAll('.aquarium-slot.has-fish').length"), 1);
+assert.equal(await evaluate("document.querySelector('.aquarium-tank').classList.contains('has-shimmer-specks')"), true);
+await click('[data-action="toggle-aquarium-decor"]');
+assert.equal(await evaluate("document.querySelector('.aquarium-tank').classList.contains('has-shimmer-specks')"), false);
+await click('[data-action="toggle-aquarium-decor"]');
+assert.equal(await evaluate("document.querySelector('.aquarium-tank').classList.contains('has-shimmer-specks')"), true);
+await click('[data-action="aquarium-view"]');
+assert.match(await evaluate("document.querySelector('.specimen-modal').innerText"), /閃光標本[\s\S]*捕獲日期[\s\S]*魚餌/);
+await click('[data-action="close-modal"]');
+await click('[data-action="aquarium-remove"]');
+assert.equal(await evaluate("document.querySelectorAll('.aquarium-slot.has-fish').length"), 0);
+
+await click('[data-action="open-aquarium-add"]');
+assert.equal(await evaluate("document.querySelectorAll('[data-action=\"modal-aquarium-add\"]').length"), 1);
+await click('[data-action="modal-aquarium-add"]');
+assert.equal(await evaluate("document.querySelectorAll('.aquarium-slot.has-fish').length"), 1);
+await click('[data-action="aquarium-remove"]');
 await click('[data-view="catch"]');
 assert.equal(await evaluate("document.querySelectorAll('.catch-row').length"), 1);
 await click('[data-action="sell-all"]');
@@ -115,9 +182,24 @@ await click('[data-action="sleep"]');
 assert.match(await evaluate("document.querySelector('#time-label').innerText"), /白天/);
 
 const saved = await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save"))`);
+const savedCatchRecord = Object.values(saved.discovered)[0];
+assert.equal(saved.version, 2);
 assert.ok(saved.totalCaught >= 1);
 assert.ok(saved.totalSold > 0);
 assert.equal(saved.completedTutorial, true);
+assert.equal(savedCatchRecord.spots.length, 1);
+assert.equal(savedCatchRecord.times.length, 1);
+assert.equal(savedCatchRecord.weathers.length, 1);
+assert.equal(savedCatchRecord.caughtShimmer, true);
+assert.equal(savedCatchRecord.shimmerCount, 1);
+assert.equal(savedCatchRecord.shimmerPity, 0);
+assert.equal(saved.aquarium.fish.length, 0);
+assert.equal(saved.achievements.first_catch.claimed, true);
+assert.equal(saved.achievements.species_5.claimed, true);
+assert.equal(saved.achievements.shimmer_1.claimed, true);
+assert.equal(saved.equippedTitle, "海灣訪客");
+assert.ok(saved.unlockedAquariumDecor.includes("shimmer_specks"));
+assert.equal(saved.aquariumDecoration, "shimmer_specks");
 assert.equal(exceptions.length, 0, `No uncaught browser exceptions: ${exceptions.join(", ")}`);
 
 if (process.env.SCREENSHOT) {
