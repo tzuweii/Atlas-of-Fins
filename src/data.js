@@ -64,7 +64,17 @@ export const FISH = [
   fish("flyingfish", "飛魚", "Flyingfish", "rare", ["deep"], ["dawn","dusk"], "any", ["cutfish","glow"], "rare", [24,45], [.38,1.25], 285, 1.48, "winged", ["#668ead","#d7e3d6"], "寬大胸鰭像一雙薄翼，受驚時會掠過晨昏海面。", "飛魚能以強力尾鰭加速躍出水面，再張開寬大胸鰭滑翔。清晨與黃昏較容易看見牠的剪影。", "飛魚不是拍翅飛行，而是借助起跳速度滑翔，有時能越過相當長的海面。", ["rare","sprint"]),
   fish("lantern", "燈籠魚", "Lanternfish", "uncommon", ["deep"], ["night"], "rain", ["glow"], "sway", [7,15], [.04,.16], 164, 1.3, "glow", ["#263f65","#77e2ca"], "腹側微光像一串沉入海中的星星，只在深夜雨幕間靠近。", "燈籠魚身上具有發光器，平時多在深水活動，夜間可能往上層移動覓食。牠的微光能協助隱蔽輪廓。", "從下方看，腹部發光可以模仿海面微光，讓掠食者不容易發現牠。", ["night","rain","small"]),
   fish("sea_eel", "海鰻", "Sea Eel", "uncommon", ["reef","deep"], ["night"], "rain", ["worm","cutfish"], "endurance", [42,92], [.7,3.2], 152, 1.34, "ribbon", ["#6b7254","#c0aa66"], "長身沿著礁岩陰影緩慢滑行，雨夜才離開熟悉的洞穴。", "海鰻白天多半藏在岩縫裡，入夜後才沿著海底尋找食物。牠的長形身體能自在穿過狹窄空間。", "海鰻游泳時會讓全身形成連續波浪，彷彿一條被海流牽動的緞帶。", ["night","rain","bottom","large"]),
-  fish("ribbon", "月紗皇帶魚", "Moonveil Oarfish", "rare", ["deep"], ["night"], "rain", ["glow"], "rare", [85,168], [3.5,12.6], 520, 1.72, "ribbon", ["#c6d8e8","#d686a0"], "緋紅長鰭拖著月色般的銀白身體，是雨夜最安靜的傳說。", "月紗皇帶魚是海灣水手筆記中的幻想化稀有魚。只在細雨深夜靠近海面，長長背鰭像被潮流梳動的紅紗。", "據說看見牠的人若安靜許願，船燈會在回家的路上比平常更明亮。", ["rare","night","rain","large"])
+  fish("ribbon", "月紗皇帶魚", "Moonveil Oarfish", "rare", ["deep"], ["night"], "rain", ["glow"], "rare", [85,168], [3.5,12.6], 520, 1.72, "ribbon", ["#c6d8e8","#d686a0"], "緋紅長鰭拖著月色般的銀白身體，是雨夜最安靜的傳說。", "月紗皇帶魚是海灣水手筆記中的幻想化稀有魚。只在細雨深夜靠近海面，長長背鰭像被潮流梳動的紅紗。", "據說看見牠的人若安靜許願，船燈會在回家的路上比平常更明亮。", ["rare","night","rain","large"]),
+  fish("horse_mackerel", "竹筴魚", "Japanese Horse Mackerel", "common", ["shore","deep"], ["dusk","night"], "any", ["bread","cutfish"], "sprint", [16,34], [.12,.55], 44, .88, "torpedo", ["#9db9b2","#41677a"], "側線銀光在暮色裡連成一列，魚群總貼著潮路快速轉向。", "竹筴魚會結成整齊魚群追逐小型餌料，黃昏後也常靠近有微光的水面。尾柄附近較硬的稜鱗，讓牠的側線看起來格外俐落。", "竹筴魚側線後段的稜鱗像一排小護甲，摸起來比魚身其他部位更硬。", ["small","sprint","night"]),
+  fish("threadfin_bream", "金線魚", "Golden Threadfin Bream", "common", ["reef","deep"], ["dawn","day"], "sunny", ["shrimp","worm"], "steady", [18,36], [.25,.82], 62, .92, "slender", ["#e6a45b","#f2d979"], "粉金色魚身拖著細長黃線，像晨光在沙地上留下一筆。", "金線魚喜歡在礁石外圍與沙泥底覓食，清晨陽光照進水中時最容易看見牠鮮明的黃色縱帶。", "尾鰭延伸出的細絲會隨游動輕輕擺動，是金線魚最醒目的記號。", ["bottom"]),
+  fish("goatfish", "秋姑魚", "Yellowstripe Goatfish", "common", ["reef"], ["dawn","dusk"], "any", ["shrimp","worm"], "sway", [16,32], [.18,.65], 58, .93, "slender", ["#d9b269","#9b5d4d"], "一對觸鬚輕掃礁沙，黃紅色身影沿著海底耐心搜尋。", "秋姑魚會用下巴的兩根觸鬚翻找藏在沙中的小型生物。牠游得不急，卻能敏銳辨認腳下每一道氣味。", "秋姑魚的觸鬚帶有味覺感受能力，像兩支貼著海床工作的探測器。", ["bottom","reef"]),
+  fish("threeline_grunt", "三線雞魚", "Threeline Grunt", "common", ["shore","reef"], ["day","dusk"], "any", ["bread","shrimp"], "steady", [14,31], [.18,.7], 52, .9, "round", ["#e7d49a","#6e7881"], "三道深色縱線穿過淡金魚身，總在礁影與淺灘之間往返。", "三線雞魚白天常聚在礁石附近，黃昏會沿著淺水帶尋找小型甲殼生物。牠穩定的拉力很適合練習收線節奏。", "雞魚受到驚擾時能藉由體內構造發出低沉聲響，這也是英文 Grunt 名稱的由來。", ["small","reef"]),
+  fish("yellow_boxfish", "黃箱魨", "Yellow Boxfish", "uncommon", ["reef"], ["day"], "sunny", ["shrimp","bread"], "sway", [10,25], [.12,.78], 120, 1.12, "box", ["#edc94f","#554f42"], "亮黃色方形身體點著黑斑，像一只在礁石間漂浮的小箱子。", "黃箱魨以胸鰭細緻調整方向，游速不快卻能靈巧穿過礁縫。幼魚鮮亮的黃黑斑紋在晴朗水域中特別醒目。", "黃箱魨的身體由硬質骨板包覆，只有嘴、魚鰭與尾部能靈活活動。", ["small","reef"]),
+  fish("needlefish", "針魚", "Needlefish", "uncommon", ["shore","deep"], ["dawn","dusk"], "sunny", ["bread","cutfish"], "sprint", [28,68], [.22,1.15], 118, 1.26, "needle", ["#b7d6cf","#4a7f91"], "細長身體貼著水面疾行，尖嘴把晨昏光線劃成一道銀痕。", "針魚多在接近水面的區域追逐小魚，受驚時會突然加速甚至躍離水面。牠的衝刺短促而明確，需要及時放鬆魚線。", "針魚上下顎都向前延伸，形成適合在水面追捕小魚的細長嘴部。", ["sprint","large"]),
+  fish("red_seabream", "真鯛", "Red Seabream", "uncommon", ["reef","deep"], ["dawn","dusk"], "any", ["shrimp","worm"], "endurance", [30,72], [1.1,5.6], 185, 1.36, "flat", ["#d98378","#a74f57"], "淡紅鱗片映著藍色星點，沉穩身影沿礁坡緩緩巡游。", "真鯛常在礁石與較深沙地交界活動，會以強健牙齒取食甲殼與貝類。上鉤後不急著衝刺，而是持續施加厚實拉力。", "真鯛體色會隨棲息深度與光線改變，深水個體通常顯得更鮮紅。", ["bottom","large"]),
+  fish("malabar_grouper", "馬拉巴石斑", "Malabar Grouper", "uncommon", ["reef","deep"], ["dusk","night"], "rain", ["shrimp","cutfish"], "endurance", [42,92], [1.8,9.6], 210, 1.46, "round", ["#6f765d","#3f4b45"], "深褐雲斑藏進雨夜礁影，只在靠近時露出厚實輪廓。", "馬拉巴石斑偏好有洞穴與遮蔽物的礁區。細雨讓海面變暗後，較大的個體會離開藏身處，在礁坡與深水交界巡游。", "石斑魚張口吸食獵物時，口腔會像瞬間張開的水泵，把附近海水一起吸入。", ["bottom","large","night","rain"]),
+  fish("mirror_butterflyfish", "鏡斑蝴蝶魚", "Mirror Butterflyfish", "rare", ["reef"], ["dawn","day"], "sunny", ["shrimp"], "sway", [12,25], [.1,.42], 248, 1.34, "flat", ["#f0c847","#31383f"], "金黃身側托著一面墨色圓斑，轉身時像小鏡子掠過珊瑚。", "鏡斑蝴蝶魚常成對穿梭在結構複雜的礁區，以細小嘴部啄食礁石表面的微小食物。晴朗晨光最能映出牠鮮明的黑黃對比。", "身側的大型黑斑能打亂真正眼睛的位置，讓掠食者不容易判斷牠準備游向哪一邊。", ["rare","small","reef"]),
+  fish("greater_amberjack", "紅甘", "Greater Amberjack", "rare", ["deep"], ["dawn","day"], "any", ["cutfish","glow"], "rare", [55,130], [3.2,18.5], 410, 1.68, "torpedo", ["#8da29b","#c79b4e"], "琥珀色側線穿過厚實銀身，是深水晨光裡強健而從容的旅者。", "紅甘會在深水礁坡與潮流交會處巡游，結實身形能帶來長時間的強勁拉力。牠不常靠岸，是準備充分的釣手才容易遇見的目標。", "紅甘眼部常有一道斜向深色帶，琥珀色側線則讓牠在轉身時格外醒目。", ["rare","large","sprint"])
 ];
 
 export const RARITY = {
@@ -148,14 +158,26 @@ export const MILESTONES = [
   { count: 5, name: "海灣初識", reward: "魚形掛飾", coins: 100 },
   { count: 10, name: "潮汐觀察家", reward: "星藍船燈", coins: 220 },
   { count: 15, name: "深藍收藏家", reward: "圖鑑桌布", coins: 360 },
-  { count: 20, name: "鰭之圖鑑完成", reward: "月紗船帆與徽章", coins: 600 }
+  { count: 20, name: "近海圖鑑成冊", reward: "月紗船帆與徽章", coins: 600 },
+  { count: 25, name: "遠潮新頁", reward: "深藍觀察旗", coins: 800 },
+  { count: 30, name: "鰭之圖鑑完成", reward: "星潮船帆與徽章", coins: 1200 }
+];
+
+export const AQUARIUM_CAPACITY_MILESTONES = [
+  { discoveries: 5, capacity: 3 },
+  { discoveries: 10, capacity: 5 },
+  { discoveries: 15, capacity: 8 },
+  { discoveries: 20, capacity: 10 },
+  { discoveries: 25, capacity: 12 },
+  { discoveries: 30, capacity: 15 }
 ];
 
 export const ACHIEVEMENTS = [
   { id: "first_catch", name: "海的第一封信", description: "捕獲第一條魚", type: "totalCaught", goal: 1, reward: { type: "coins", amount: 40, label: "40 金幣" } },
   { id: "species_5", name: "海灣初識", description: "發現 5 種魚", type: "species", goal: 5, reward: { type: "title", value: "海灣訪客", label: "稱號「海灣訪客」" } },
   { id: "species_10", name: "潮汐觀察家", description: "發現 10 種魚", type: "species", goal: 10, reward: { type: "coins", amount: 120, label: "120 金幣" } },
-  { id: "species_20", name: "鰭之圖鑑", description: "發現全部 20 種魚", type: "species", goal: 20, reward: { type: "title", value: "鰭之記錄者", label: "稱號「鰭之記錄者」" } },
+  { id: "species_20", name: "鰭之圖鑑 · 近海篇", description: "發現 20 種魚", type: "species", goal: 20, reward: { type: "title", value: "鰭之記錄者", label: "稱號「鰭之記錄者」" } },
+  { id: "species_30", name: "鰭之圖鑑", description: "發現全部 30 種魚", type: "species", goal: 30, reward: { type: "title", value: "海灣博物學家", label: "稱號「海灣博物學家」" } },
   { id: "familiar_5", name: "熟悉的身影", description: "5 種魚達到熟悉", type: "familiarSpecies", goal: 5, reward: { type: "coins", amount: 120, label: "120 金幣" } },
   { id: "mastery_1", name: "一種魚，一片海", description: "任一魚種達到精通", type: "masteredSpecies", goal: 1, reward: { type: "title", value: "耐心觀察者", label: "稱號「耐心觀察者」" } },
   { id: "mastery_10", name: "海灣研究者", description: "10 種魚達到精通", type: "masteredSpecies", goal: 10, reward: { type: "coins", amount: 240, label: "240 金幣" } },

@@ -1,6 +1,8 @@
 # Atlas of Fins｜鰭之圖鑑
 
-根據《療癒釣魚養成遊戲｜初版開發規格書》製作的可玩瀏覽器遊戲，目前版本為 v0.3.0-alpha.3，已完成 v0.3「海灣事件與特殊目標」預定的三個事件切片。這是一段沒有時間壓力的海灣生活：釣魚、補完圖鑑、販售漁獲、升級釣具，再把簡陋帆船慢慢整理成溫暖的家。
+根據《療癒釣魚養成遊戲｜初版開發規格書》製作的可玩瀏覽器遊戲，目前版本為 v0.3.0-alpha.4，已完成三個海灣事件與第一輪魚誌擴充。這是一段沒有時間壓力的海灣生活：釣魚、補完圖鑑、販售漁獲、升級釣具，再把簡陋帆船慢慢整理成溫暖的家。
+
+長期方向已確立為療癒單機收藏遊戲，預計沿「真實洋流與魚類、架空港口與人物」的世界航線擴展；世界海圖、新海域、研究航線、自動航行、詩意日誌與進階船屋目前仍在設計階段，尚未出現在可玩版本。
 
 ## 開始遊玩
 
@@ -19,17 +21,17 @@ npm start
 ## 已完成內容
 
 - 按住／放開控制張力的完整釣魚小遊戲，支援滑鼠、觸控與空白鍵
-- 20 種資料驅動魚類、5 種行為模板、3 個釣點
-- 10 常見、7 少見、3 稀有的魚種分布
+- 30 種資料驅動魚類、5 種行為模板、3 個釣點
+- 14 常見、11 少見、5 稀有的魚種分布
 - 3 支魚竿、5 種魚餌，以及釣點／時間／天氣／魚餌加權魚池
 - 捕獲尺寸、重量、個人紀錄、捕獲環境、稀有度與尺寸售價公式
-- 具備初次相遇、生態筆記、熟悉與精通階級的 20 格圖鑑
+- 具備初次相遇、生態筆記、熟悉與精通階級的 30 格圖鑑
 - 具備紀錄級／精通加成與分魚種保底的閃光個體收藏
 - 漁獲販售、釣具／魚餌／家具商店與單一金幣經濟
 - 四時段 20 分鐘日夜循環、床鋪切換時段、晴天與細雨
 - 10 件固定插槽家具與圖鑑里程碑獎勵
-- 隨圖鑑進度擴建、可放入與取回完整標本的船屋水族箱
-- 12 項永久收藏成就、手動領獎、可切換稱號與水族箱拾光裝飾
+- 隨圖鑑進度擴建至 15 格、可放入與取回完整標本的船屋水族箱
+- 13 項永久收藏成就、手動領獎、可切換稱號與水族箱拾光裝飾
 - 每日三項無懲罰委託
 - 決定性航海日事件排程，以及「銀潮靠岸」、「月光潮汐」、「雨後漂流」三個事件
 - 多釣點、限定時段與指定天氣魚池加成，並具備分階段目標、首次稱號與重複完成獎勵
@@ -44,16 +46,21 @@ npm start
 npm test
 ```
 
-瀏覽器端完整流程測試位於 `tests/browser-smoke.mjs`，會驗證開發者模式、海灣事件與平靜日、新遊戲、拋竿、張力捕獲、圖鑑、販售、購買魚餌、船屋睡眠、教學完成、v3 存檔與未捕捉例外。它需搭配已開啟遠端除錯埠 `9223` 的 Chromium 瀏覽器執行：
+瀏覽器端完整流程測試位於 `tests/browser-smoke.mjs`，會驗證開發者模式、30 種魚圖鑑、新 SVG 輪廓、海灣事件與平靜日、新遊戲、拋竿、張力捕獲、販售、購買魚餌、船屋睡眠、教學完成、v3 存檔與未捕捉例外。它需搭配已開啟遠端除錯埠 `9223` 的 Chromium 瀏覽器執行：
 
 ```bash
 npm run test:browser
 ```
 
-第三方素材使用狀態記錄於 `docs/ASSET_LICENSES.md`，MVP 驗收項目位於 `docs/TEST_CHECKLIST.md`。
+第三方素材使用狀態記錄於 [`docs/ASSET_LICENSES.md`](docs/ASSET_LICENSES.md)，回歸驗收項目位於 [`docs/TEST_CHECKLIST.md`](docs/TEST_CHECKLIST.md)。
 
-## 階段設計
+## 專案文件
 
-第二階段 v0.2「收藏航程」的玩法、數值、資料模型與驗收紀錄，請參考 [`docs/PHASE_2_GAME_DESIGN.md`](docs/PHASE_2_GAME_DESIGN.md)。第三階段 v0.3 的事件系統、事件切片與驗收條件，請參考 [`docs/PHASE_3_GAME_DESIGN.md`](docs/PHASE_3_GAME_DESIGN.md)。
+完整閱讀順序、文件權責與「已完成／已核准／仍提案」的界線，請先看 [`docs/README.md`](docs/README.md)。
 
-目前版本、已完成項目、測試狀態與下一階段候選工作，統一記錄於 [`docs/DEVELOPMENT_PROGRESS.md`](docs/DEVELOPMENT_PROGRESS.md)。
+- 目前版本、測試與下一步：[`docs/DEVELOPMENT_PROGRESS.md`](docs/DEVELOPMENT_PROGRESS.md)
+- 長期產品方向與版本路線：[`docs/LONG_TERM_GAME_DESIGN.md`](docs/LONG_TERM_GAME_DESIGN.md)
+- 世界航線與區域資料架構：[`docs/WORLD_ROUTE_SYSTEM_DESIGN.md`](docs/WORLD_ROUTE_SYSTEM_DESIGN.md)
+- 研究、船屋、自動航行與詩意日誌：[`docs/COLLECTION_EXPERIENCE_SYSTEMS.md`](docs/COLLECTION_EXPERIENCE_SYSTEMS.md)
+- 已完成 v0.2／v0.3 規格：[`docs/PHASE_2_GAME_DESIGN.md`](docs/PHASE_2_GAME_DESIGN.md)、[`docs/PHASE_3_GAME_DESIGN.md`](docs/PHASE_3_GAME_DESIGN.md)
+- 10 種新魚設計與驗收：[`docs/FISH_EXPANSION_DESIGN.md`](docs/FISH_EXPANSION_DESIGN.md)

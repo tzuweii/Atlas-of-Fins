@@ -9,9 +9,37 @@ import {
   setAquariumDecoration, swapAquariumFish, updateBayEventProgress
 } from "../src/core.js";
 
-test("MVP contains exactly twenty distinct fish", () => {
-  assert.equal(FISH.length, 20);
-  assert.equal(new Set(FISH.map(fish => fish.id)).size, 20);
+const NEW_FISH_IDS = [
+  "horse_mackerel", "threadfin_bream", "goatfish", "threeline_grunt", "yellow_boxfish",
+  "needlefish", "red_seabream", "malabar_grouper", "mirror_butterflyfish", "greater_amberjack"
+];
+
+test("catalog contains exactly thirty distinct fish", () => {
+  assert.equal(FISH.length, 30);
+  assert.equal(new Set(FISH.map(fish => fish.id)).size, 30);
+  assert.deepEqual(FISH.slice(-10).map(fish => fish.id), NEW_FISH_IDS);
+});
+
+test("ten new fish have balanced rarity, conditions, and catchable weights", () => {
+  const additions = FISH.filter(fish => NEW_FISH_IDS.includes(fish.id));
+  assert.equal(additions.filter(fish => fish.rarity === "common").length, 4);
+  assert.equal(additions.filter(fish => fish.rarity === "uncommon").length, 4);
+  assert.equal(additions.filter(fish => fish.rarity === "rare").length, 2);
+  assert.ok(additions.some(fish => fish.shape === "box"));
+  assert.ok(additions.some(fish => fish.shape === "needle"));
+  assert.ok(additions.some(fish => fish.weather === "rain"));
+  assert.ok(additions.some(fish => fish.spots.includes("shore")));
+  assert.ok(additions.some(fish => fish.spots.includes("reef")));
+  assert.ok(additions.some(fish => fish.spots.includes("deep")));
+
+  for (const fish of additions) {
+    const state = createInitialState();
+    state.bayEvent = null;
+    state.timeIndex = ["dawn", "day", "dusk", "night"].indexOf(fish.times[0]);
+    state.weather = fish.weather === "rain" ? "rain" : "sunny";
+    assert.ok(fishWeight(fish, state, fish.spots[0], fish.baits[0]) > 0, `${fish.name} can enter its intended fish pool`);
+    assert.ok(fish.short.length >= 20 && fish.detail.length >= 40 && fish.fact.length >= 20, `${fish.name} has complete journal writing`);
+  }
 });
 
 test("developer state unlocks all content without using the normal progression", () => {
@@ -24,9 +52,34 @@ test("developer state unlocks all content without using the normal progression",
   assert.ok(BAITS.every(item => state.baitAmounts[item.id] === 999));
   assert.equal(Object.keys(state.discovered).length, FISH.length);
   assert.ok(Object.values(state.discovered).every(record => record.count >= 10 && record.caughtShimmer));
-  assert.equal(getAquariumCapacity(state), 10);
+  assert.equal(getAquariumCapacity(state), 15);
   assert.equal(state.catchInventory.length + state.aquarium.fish.length, FISH.length);
   assert.equal(Object.keys(state.achievements).length, ACHIEVEMENTS.length);
+});
+
+test("existing developer saves backfill newly catalogued fish and collection rewards", () => {
+  const legacy = createDeveloperState();
+  legacy.discovered = Object.fromEntries(Object.entries(legacy.discovered).filter(([fishId]) => !NEW_FISH_IDS.includes(fishId)));
+  legacy.catchInventory = legacy.catchInventory.filter(caught => !NEW_FISH_IDS.includes(caught.fishId));
+  legacy.aquarium.fish = legacy.aquarium.fish.filter(caught => !NEW_FISH_IDS.includes(caught.fishId));
+  legacy.completedMilestones = legacy.completedMilestones.filter(count => count <= 20);
+  delete legacy.achievements.species_30;
+  legacy.unlockedTitles = legacy.unlockedTitles.filter(title => title !== "海灣博物學家");
+  legacy.totalCaught = 200;
+  legacy.recordCatches = 20;
+
+  const upgraded = migrateState(legacy);
+  const heldFishIds = new Set([...upgraded.catchInventory, ...upgraded.aquarium.fish].map(caught => caught.fishId));
+  assert.equal(Object.keys(upgraded.discovered).length, FISH.length);
+  assert.ok(NEW_FISH_IDS.every(fishId => upgraded.discovered[fishId]?.count === 10));
+  assert.ok(NEW_FISH_IDS.every(fishId => heldFishIds.has(fishId)));
+  assert.ok(upgraded.completedMilestones.includes(25));
+  assert.ok(upgraded.completedMilestones.includes(30));
+  assert.ok(upgraded.achievements.species_30);
+  assert.ok(upgraded.unlockedTitles.includes("海灣博物學家"));
+  assert.equal(upgraded.totalCaught, FISH.length * 10);
+  assert.equal(upgraded.recordCatches, FISH.length);
+  assert.equal(getAquariumCapacity(upgraded), 15);
 });
 
 test("bay event catalog and daily schedule are deterministic", () => {
@@ -327,7 +380,7 @@ test("repeat catches aggregate encounter history without duplicates", () => {
 
 test("aquarium capacity follows discovery milestones", () => {
   const state = createInitialState();
-  const expected = new Map([[0, 0], [5, 3], [10, 5], [15, 8], [20, 10]]);
+  const expected = new Map([[0, 0], [5, 3], [10, 5], [15, 8], [20, 10], [25, 12], [30, 15]]);
   for (let count = 0; count <= FISH.length; count++) {
     if (count) state.discovered[FISH[count - 1].id] = { count: 1 };
     if (expected.has(count)) assert.equal(getAquariumCapacity(state), expected.get(count));
@@ -384,10 +437,21 @@ test("save migration returns aquarium overflow to inventory and removes duplicat
   assert.equal(new Set(uids).size, 4);
 });
 
-test("achievement catalog has twelve unique data-driven goals", () => {
-  assert.equal(ACHIEVEMENTS.length, 12);
+test("achievement catalog has thirteen unique data-driven goals", () => {
+  assert.equal(ACHIEVEMENTS.length, 13);
   assert.equal(new Set(ACHIEVEMENTS.map(item => item.id)).size, ACHIEVEMENTS.length);
   assert.ok(ACHIEVEMENTS.every(item => item.goal > 0 && item.reward?.label));
+});
+
+test("thirty-species collection preserves the legacy goal and grants the final title", () => {
+  const state = createInitialState();
+  state.discovered = Object.fromEntries(FISH.map(fish => [fish.id, { count: 1, times: [] }]));
+  const completed = evaluateAchievements(state);
+  assert.ok(completed.some(achievement => achievement.id === "species_20"));
+  assert.ok(completed.some(achievement => achievement.id === "species_30"));
+  assert.equal(getAchievementProgress(state, "species_30").complete, true);
+  assert.equal(claimAchievement(state, "species_30").ok, true);
+  assert.ok(state.unlockedTitles.includes("海灣博物學家"));
 });
 
 test("achievement evaluation backfills progress once without auto-claiming", () => {

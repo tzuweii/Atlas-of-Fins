@@ -1,4 +1,4 @@
-import { ACHIEVEMENTS, AQUARIUM_DECORATIONS, BAITS, BAY_EVENTS, FISH, FURNITURE, MILESTONES, QUEST_TEMPLATES, RARITY, RODS, SPOTS, TIMES } from "./data.js";
+import { ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, AQUARIUM_DECORATIONS, BAITS, BAY_EVENTS, FISH, FURNITURE, MILESTONES, QUEST_TEMPLATES, RARITY, RODS, SPOTS, TIMES } from "./data.js";
 
 export const SAVE_VERSION = 3;
 export const SAVE_KEY = "atlas-of-fins.save";
@@ -300,6 +300,41 @@ export function createDeveloperState() {
   return state;
 }
 
+function migrateDeveloperUnlocks(state, raw) {
+  const full = createDeveloperState();
+  const priorDiscoveries = raw?.discovered && typeof raw.discovered === "object" ? raw.discovered : {};
+  const newlyCataloguedFish = FISH.filter(fish => !Object.hasOwn(priorDiscoveries, fish.id));
+
+  state.developerMode = true;
+  state.money = Math.max(state.money, full.money);
+  state.ownedRods = [...new Set([...(Array.isArray(state.ownedRods) ? state.ownedRods : []), ...full.ownedRods])];
+  state.ownedFurniture = [...new Set([...(Array.isArray(state.ownedFurniture) ? state.ownedFurniture : []), ...full.ownedFurniture])];
+  state.baitAmounts = Object.fromEntries(BAITS.map(bait => [bait.id, Math.max(Number(state.baitAmounts?.[bait.id]) || 0, full.baitAmounts[bait.id])]));
+  state.completedMilestones = [...new Set([...(Array.isArray(state.completedMilestones) ? state.completedMilestones : []), ...full.completedMilestones])];
+  state.completedTutorial = true;
+  state.tutorialStep = 6;
+
+  for (const fish of newlyCataloguedFish) state.discovered[fish.id] = full.discovered[fish.id];
+  const heldFishIds = new Set([...state.catchInventory, ...state.aquarium.fish].map(caught => caught.fishId));
+  const fullSpecimens = [...full.catchInventory, ...full.aquarium.fish];
+  for (const fish of newlyCataloguedFish) {
+    if (heldFishIds.has(fish.id)) continue;
+    const specimen = fullSpecimens.find(caught => caught.fishId === fish.id);
+    if (specimen) state.catchInventory.push(specimen);
+  }
+
+  state.achievements = { ...full.achievements, ...state.achievements };
+  state.unlockedTitles = [...new Set([...full.unlockedTitles, ...(Array.isArray(state.unlockedTitles) ? state.unlockedTitles : [])])];
+  state.unlockedAquariumDecor = [...new Set([...full.unlockedAquariumDecor, ...(Array.isArray(state.unlockedAquariumDecor) ? state.unlockedAquariumDecor : [])])];
+  if (!state.unlockedTitles.includes(state.equippedTitle)) state.equippedTitle = full.equippedTitle;
+  if (!state.unlockedAquariumDecor.includes(state.aquariumDecoration)) state.aquariumDecoration = full.aquariumDecoration;
+  state.totalCaught = Math.max(state.totalCaught, full.totalCaught);
+  state.totalSold = Math.max(state.totalSold, full.totalSold);
+  state.recordCatches = Math.max(state.recordCatches, full.recordCatches);
+  evaluateAchievements(state);
+  return state;
+}
+
 export function createDailyQuests(day) {
   const offset = (day - 1) % QUEST_TEMPLATES.length;
   return [0, 1, 3].map((step, index) => {
@@ -374,7 +409,7 @@ export function migrateState(raw) {
   const heldRecordCatches = [...merged.catchInventory, ...merged.aquarium.fish].filter(caught => caught.sizeTier === "record").length;
   merged.recordCatches = Math.max(Math.floor(nonNegativeNumber(merged.recordCatches)), heldRecordCatches);
   evaluateAchievements(merged);
-  return merged;
+  return merged.developerMode ? migrateDeveloperUnlocks(merged, raw) : merged;
 }
 
 export function discoveredCount(state) {
@@ -383,11 +418,7 @@ export function discoveredCount(state) {
 
 export function getAquariumCapacity(state) {
   const count = discoveredCount(state);
-  if (count >= 20) return 10;
-  if (count >= 15) return 8;
-  if (count >= 10) return 5;
-  if (count >= 5) return 3;
-  return 0;
+  return AQUARIUM_CAPACITY_MILESTONES.findLast(milestone => count >= milestone.discoveries)?.capacity || 0;
 }
 
 export function getFamiliarity(count) {

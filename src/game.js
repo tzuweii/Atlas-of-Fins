@@ -1,4 +1,4 @@
-import { ACHIEVEMENTS, BAITS, FISH, FURNITURE, MILESTONES, RARITY, RODS, SPOTS, TIMES } from "./data.js";
+import { ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, BAITS, FISH, FURNITURE, MILESTONES, RARITY, RODS, SPOTS, TIMES } from "./data.js";
 import {
   BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, SAVE_KEY, advanceTime, applyMilestones, baitById, buyBait, buyFurniture, buyRod,
   chooseFish, claimAchievement, claimQuest, createDeveloperState, createInitialState, discoveredCount, equipTitle, fishById,
@@ -118,11 +118,11 @@ function syncWorld() {
   $("#weather-label").textContent = state.weather === "rain" ? "細雨" : "晴朗";
   $("#money-label").textContent = state.money.toLocaleString("zh-TW");
   const unclaimed=getUnclaimedAchievementCount(state);
-  $("#journal-badge").textContent = `${discoveredCount(state)}/20${unclaimed?` · ${unclaimed}`:""}`;
+  $("#journal-badge").textContent = `${discoveredCount(state)}/${FISH.length}${unclaimed?` · ${unclaimed}`:""}`;
   $("#journal-badge").title = unclaimed?`${unclaimed} 項成就獎勵待領取`:"圖鑑探索進度";
   $("#catch-badge").textContent = state.catchInventory.length;
   $("#sound-button").textContent = state.settings.sound ? "♪" : "×";
-  $("#sail-emblem").textContent = state.completedMilestones.includes(20) ? "✦" : "◌";
+  $("#sail-emblem").textContent = state.completedMilestones.includes(FISH.length) ? "✺" : state.completedMilestones.includes(20) ? "✦" : "◌";
   $(".brand-mini small").textContent = activeSaveMode === "developer" ? `開發者模式 · ${state.equippedTitle}` : state.equippedTitle;
   const spot = SPOTS.find(item => item.id === state.selectedSpot) || SPOTS[0];
   const bayEvent = getActiveBayEvent(state);
@@ -285,14 +285,15 @@ function showCatchModal(fish,caught,result,milestones) {
   const eventFeedback=eventUpdate?.updated?`<div class="catch-event ${eventUpdate.completed?"is-complete":""}"><span>${eventUpdate.completed?"事件完成":"海灣事件進度"}</span><b>${eventUpdate.event.name} · ${eventUpdate.progress} / ${eventUpdate.event.goal}</b><small>${eventUpdate.completed?`獲得 ${eventUpdate.reward.label}`:getBayEventHint(state)}</small></div>`:"";
   modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal catch-modal ${isShimmer?"is-shimmer":""}"><div class="catch-hero">${fishArt(fish,false,caught.variant)}</div>${ribbon}<h2>${fish.name}</h2><p class="catch-subtitle">${fish.english}</p><p class="modal-copy">${fish.short}</p><div class="catch-stats"><div><small>體長</small><b>${caught.length} cm</b></div><div><small>重量</small><b>${caught.weight} kg</b></div><div><small>售價</small><b>${caught.price} 金幣</b></div></div>${tags?`<div class="record-tag">✦ ${tags}</div>`:""}<div class="catch-familiarity ${result.familiarityChanged?"is-level-up":""}"><span>${result.familiarityChanged?"熟悉度提升":"圖鑑熟悉度"}</span><b>${result.familiarity.name}</b><small>${familiarityText}</small></div>${eventFeedback}${rewards?`<p class="record-tag">${rewards}</p>`:""}<div class="modal-actions"><button class="soft-button" data-action="modal-journal" data-id="${fish.id}">查看圖鑑</button><button class="primary-button" data-action="close-catch">收進漁獲箱</button></div></div></div>`;
   for(const milestone of milestones) {
-    const aquariumReward=({5:"海灣觀察箱 3 格",10:"水族箱擴建至 5 格",15:"水族箱擴建至 8 格",20:"完成型展示箱 10 格"})[milestone.count];
+    const aquariumCapacity=AQUARIUM_CAPACITY_MILESTONES.find(item=>item.discoveries===milestone.count)?.capacity;
+    const aquariumReward=aquariumCapacity?`${milestone.count===5?"海灣觀察箱":"水族箱擴建至"} ${aquariumCapacity} 格`:"";
     setTimeout(()=>toast(`里程碑「${milestone.name}」完成：${milestone.reward}${aquariumReward?` · ${aquariumReward}`:""}`,"gold"),500);
   }
 }
 
 function renderJournal() {
   const unclaimed=getUnclaimedAchievementCount(state);
-  const actions=`<div class="journal-heading-actions"><button class="soft-button achievement-open" data-action="show-achievements">收藏成就${unclaimed?`<i>${unclaimed}</i>`:""}</button><div class="completion-ring"><div><small>探索進度</small><b>${discoveredCount(state)} / 20</b></div></div></div>`;
+  const actions=`<div class="journal-heading-actions"><button class="soft-button achievement-open" data-action="show-achievements">收藏成就${unclaimed?`<i>${unclaimed}</i>`:""}</button><div class="completion-ring"><div><small>探索進度</small><b>${discoveredCount(state)} / ${FISH.length}</b></div></div></div>`;
   const filtered=FISH.filter(f=>journalFilter==="all"||f.rarity===journalFilter||f.spots.includes(journalFilter));
   selectedJournalFish ||= (filtered.find(f=>state.discovered[f.id])||filtered[0])?.id;
   if (!filtered.some(f=>f.id===selectedJournalFish)) selectedJournalFish=filtered[0]?.id;
@@ -348,7 +349,9 @@ function fishArt(fish,silhouette=false,variant="normal") {
     cephalopod:`<path class="body" d="M38 54 Q43 18 76 21 Q103 25 105 54 Q101 78 71 75 Q43 76 38 54Z"/><path class="fin" d="M47 32 Q26 39 34 62 Q40 71 50 72Z"/><path class="accent" d="M96 64 Q118 73 110 85 M87 69 Q104 86 94 92 M77 72 Q85 91 74 94" fill="none" stroke="var(--fish-b)" stroke-width="5" stroke-linecap="round"/>`,
     mahi:`<path class="body" d="M19 55 Q33 17 91 30 Q109 34 122 23 L116 52 L125 78 L99 62 Q48 81 19 55Z"/><path class="accent" d="M33 38 Q64 16 100 32 L94 43 Q59 34 32 47Z"/><path class="fin" d="M30 39 Q58 13 101 30 L78 25 L50 25Z"/>`,
     winged:`<path class="body" d="M19 53 Q48 28 92 44 L120 27 L114 52 L122 73 L92 60 Q49 76 19 53Z"/><path class="fin" d="M52 45 Q52 9 97 15 L75 46Z"/><path class="accent" d="M53 58 Q54 89 97 84 L75 58Z"/>`,
-    glow:`<path class="body" d="M21 53 Q44 25 89 35 Q107 38 119 28 L114 51 L122 74 Q105 66 90 69 Q45 82 21 53Z"/><circle class="accent" cx="48" cy="64" r="3"/><circle class="accent" cx="61" cy="67" r="3"/><circle class="accent" cx="74" cy="67" r="3"/>`
+    glow:`<path class="body" d="M21 53 Q44 25 89 35 Q107 38 119 28 L114 51 L122 74 Q105 66 90 69 Q45 82 21 53Z"/><circle class="accent" cx="48" cy="64" r="3"/><circle class="accent" cx="61" cy="67" r="3"/><circle class="accent" cx="74" cy="67" r="3"/>`,
+    box:`<path class="body" d="M25 37 Q29 27 43 25 L88 28 Q103 31 109 43 L109 65 Q101 76 86 78 L43 76 Q28 72 24 59Z"/><path class="accent" d="M109 43 L127 29 L121 52 L128 75 L109 65Z"/><circle class="accent" cx="60" cy="42" r="5"/><circle class="accent" cx="78" cy="61" r="6"/>`,
+    needle:`<path class="body" d="M12 49 L32 45 Q69 35 105 46 L128 31 L120 51 L128 70 L104 56 Q69 65 32 55 L12 57Z"/><path class="accent" d="M12 49 L2 52 L12 57 L38 53Z"/><path class="fin" d="M72 43 L86 31 L94 45Z"/>`
   };
   return `<div class="fish-art ${silhouette?"is-silhouette":""} ${variant==="shimmer"?"is-shimmer":""}" style="--fish-a:${fish.colors[0]};--fish-b:${fish.colors[1]}"><svg class="fish-svg" viewBox="0 0 140 105" aria-hidden="true">${paths[fish.shape]||paths.round}<circle class="eye" cx="40" cy="47" r="2.7"/><path class="shine" d="M42 37 Q58 28 76 32"/></svg></div>`;
 }
@@ -403,8 +406,8 @@ function renderAquariumPanel() {
     const fish=fishById(caught.fishId), isShimmer=caught.variant==="shimmer";
     return `<article class="aquarium-slot has-fish ${isShimmer?"is-shimmer":""}"><button class="aquarium-specimen" data-action="aquarium-view" data-id="${caught.uid}" aria-label="查看${fish.name}標本">${fishArt(fish,false,caught.variant)}<b>${fish.name}</b><small>${caught.length} cm${isShimmer?" · 閃光":""}</small></button><div class="aquarium-controls"><button data-action="aquarium-move" data-id="${index}" data-direction="-1" aria-label="向左移動" ${index===0?"disabled":""}>←</button><button data-action="aquarium-move" data-id="${index}" data-direction="1" aria-label="向右移動" ${index===displayed.length-1?"disabled":""}>→</button><button data-action="aquarium-remove" data-id="${caught.uid}">取回</button></div></article>`;
   }).join("");
-  const next=found<10?10:found<15?15:found<20?20:null;
-  return `<section class="card aquarium-panel"><div class="aquarium-heading"><div><span class="section-label">海灣觀察箱</span><h3>把喜歡的相遇留在船屋</h3><p>標本不需餵食，也不會消失；隨時可以免費取回漁獲箱。</p></div><div class="aquarium-heading-status"><b>${displayed.length} / ${capacity}</b>${decorToggle}</div></div><div class="aquarium-tank ${shimmerSpecksActive?"has-shimmer-specks":""}" style="--aquarium-columns:${Math.min(capacity,5)}">${slots}</div>${next?`<p class="quiet-note">發現 ${next} 種魚後，水族箱將擴建到 ${next===10?5:next===15?8:10} 格。</p>`:`<p class="quiet-note">完成型展示箱已解鎖。</p>`}</section>`;
+  const next=AQUARIUM_CAPACITY_MILESTONES.find(item=>item.discoveries>found);
+  return `<section class="card aquarium-panel"><div class="aquarium-heading"><div><span class="section-label">海灣觀察箱</span><h3>把喜歡的相遇留在船屋</h3><p>標本不需餵食，也不會消失；隨時可以免費取回漁獲箱。</p></div><div class="aquarium-heading-status"><b>${displayed.length} / ${capacity}</b>${decorToggle}</div></div><div class="aquarium-tank ${shimmerSpecksActive?"has-shimmer-specks":""}" style="--aquarium-columns:${Math.min(capacity,5)}">${slots}</div>${next?`<p class="quiet-note">發現 ${next.discoveries} 種魚後，水族箱將擴建到 ${next.capacity} 格。</p>`:`<p class="quiet-note">完成型展示箱已解鎖。</p>`}</section>`;
 }
 
 function showAquariumSelectionModal() {

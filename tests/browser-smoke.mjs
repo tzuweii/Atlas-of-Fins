@@ -80,15 +80,48 @@ assert.equal(await evaluate("document.querySelector('#money-label').innerText.re
 assert.match(await evaluate("document.querySelector('#time-label').innerText"), /夜晚/);
 assert.match(await evaluate("document.querySelector('.bay-event-card[data-bay-event=\"moonlit_tide\"]').innerText"), /月光潮汐[\s\S]*礁石邊緣／海灣深水區[\s\S]*0 \/ 2[\s\S]*目前生效/);
 await click('[data-view="journal"]');
-assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /探索進度[\s\S]*20 \/ 20/);
-assert.equal(await evaluate("document.querySelectorAll('.fish-card').length"), 20);
+assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /探索進度[\s\S]*30 \/ 30/);
+assert.equal(await evaluate("document.querySelectorAll('.fish-card').length"), 30);
 assert.equal(await evaluate("document.querySelectorAll('.fish-card.is-unknown').length"), 0);
+assert.equal(await evaluate("Boolean(document.querySelector('[data-id=\"yellow_boxfish\"] .fish-svg'))"), true);
+assert.equal(await evaluate("Boolean(document.querySelector('[data-id=\"needlefish\"] .fish-svg'))"), true);
 assert.equal(await evaluate("localStorage.getItem('atlas-of-fins.save')"), null);
 assert.equal(await evaluate("JSON.parse(localStorage.getItem('atlas-of-fins.dev-save')).developerMode"), true);
 await click("#menu-button");
 await click('[data-action="to-title"]');
 await waitFor(`!document.querySelector("#title-screen").classList.contains("is-hidden")`);
 assert.equal(await evaluate("document.querySelector('#continue-button').disabled"), true);
+
+const legacyDeveloperSpecies = await evaluate(`(() => {
+  const addedFishIds = ["horse_mackerel", "threadfin_bream", "goatfish", "threeline_grunt", "yellow_boxfish", "needlefish", "red_seabream", "malabar_grouper", "mirror_butterflyfish", "greater_amberjack"];
+  const save = JSON.parse(localStorage.getItem("atlas-of-fins.dev-save"));
+  for (const fishId of addedFishIds) delete save.discovered[fishId];
+  save.catchInventory = save.catchInventory.filter(caught => !addedFishIds.includes(caught.fishId));
+  save.aquarium.fish = save.aquarium.fish.filter(caught => !addedFishIds.includes(caught.fishId));
+  save.completedMilestones = save.completedMilestones.filter(count => count <= 20);
+  delete save.achievements.species_30;
+  save.unlockedTitles = save.unlockedTitles.filter(title => title !== "海灣博物學家");
+  save.totalCaught = 200;
+  save.recordCatches = 20;
+  localStorage.setItem("atlas-of-fins.dev-save", JSON.stringify(save));
+  return Object.keys(save.discovered).length;
+})()`);
+assert.equal(legacyDeveloperSpecies, 20);
+await click("#developer-mode-button");
+await evaluate(`document.querySelector('#developer-password').value = 'atlas-dev'; document.querySelector('#developer-login-form').requestSubmit()`);
+await waitFor(`!document.querySelector("#game-shell").classList.contains("is-hidden")`);
+await click('[data-view="journal"]');
+assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /探索進度[\s\S]*30 \/ 30/);
+assert.equal(await evaluate("document.querySelector('[data-id=\"greater_amberjack\"] b').innerText"), "紅甘");
+await click("#menu-button");
+await click('[data-action="to-title"]');
+await waitFor(`!document.querySelector("#title-screen").classList.contains("is-hidden")`);
+const upgradedDeveloperSave = await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.dev-save"))`);
+assert.equal(Object.keys(upgradedDeveloperSave.discovered).length, 30);
+assert.ok(upgradedDeveloperSave.catchInventory.some(caught => caught.fishId === "greater_amberjack"));
+assert.ok(upgradedDeveloperSave.completedMilestones.includes(30));
+assert.ok(upgradedDeveloperSave.achievements.species_30);
+assert.ok(upgradedDeveloperSave.unlockedTitles.includes("海灣博物學家"));
 
 await click("#new-game-button");
 await waitFor(`!document.querySelector("#game-shell").classList.contains("is-hidden")`);
@@ -140,7 +173,7 @@ assert.match(await evaluate("document.querySelector('.catch-modal').innerText"),
 
 await click('[data-action="close-catch"]');
 await click('[data-view="journal"]');
-assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /探索進度[\s\S]*1 \/ 20/);
+assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /探索進度[\s\S]*1 \/ 30/);
 assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /初次相遇[\s\S]*初次：/);
 assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /閃光紀錄 1 次/);
 
@@ -166,7 +199,7 @@ await waitFor(`!document.querySelector("#game-shell").classList.contains("is-hid
 await click('[data-view="journal"]');
 assert.equal(await evaluate("document.querySelector('.achievement-open i')?.innerText"), "3");
 await click('[data-action="show-achievements"]');
-assert.equal(await evaluate("document.querySelectorAll('.achievement-item').length"), 12);
+assert.equal(await evaluate("document.querySelectorAll('.achievement-item').length"), 13);
 assert.equal(await evaluate("document.querySelectorAll('.achievement-item.is-complete').length"), 3);
 await click('[data-achievement="first_catch"] [data-action="claim-achievement"]');
 assert.match(await evaluate("document.querySelector('[data-achievement=\"first_catch\"]').innerText"), /已領取/);
@@ -288,7 +321,7 @@ if (process.env.SCREENSHOT) {
 console.log(JSON.stringify({
   title: "ok",
   fishing: "caught",
-  journal: `${Object.keys(saved.discovered).length}/20`,
+  journal: `${Object.keys(saved.discovered).length}/30`,
   sold: saved.totalSold,
   time: saved.timeIndex,
   tutorial: saved.completedTutorial,
