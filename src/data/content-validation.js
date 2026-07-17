@@ -2,7 +2,7 @@ const COLLECTION_NAMES = [
   "times", "spots", "rods", "baits", "furniture", "fish", "dailyGoals",
   "events", "achievements", "aquariumDecorations", "regions", "routes", "residents", "commissions",
   "observations", "wonders", "researchNodes", "residentStoryScenes", "chartRegions", "chartRoutes",
-  "tideglowSources", "ships"
+  "tideglowSources", "ships", "shipFurniture", "shipInteriors"
 ];
 
 const WEATHER_IDS = new Set(["sunny", "rain"]);
@@ -10,6 +10,7 @@ const SIZE_TARGETS = new Set(["small", "standard", "large", "record"]);
 const ROUTE_DISTANCE_CLASSES = new Set(["short", "medium", "long"]);
 const SPOT_ACTIVITY_TYPES = new Set(["fishing", "observation"]);
 const FISH_BODY_SHAPES = new Set(["slender", "torpedo", "round", "flat", "spiky", "ribbon", "cephalopod", "mahi", "winged", "glow", "box", "needle"]);
+const SHIP_INTERIOR_SLOT_TYPES = new Set(["sleep", "wall", "table", "light", "corner"]);
 const isChartPosition = value => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100;
 
 const asArray = value => Array.isArray(value) ? value : [];
@@ -331,6 +332,46 @@ export function validateContentCatalog(content = {}) {
     }
     previousShipThreshold = Number(ship?.tideglowRequired) || 0;
     previousShipSpeed = Number(ship?.speedMultiplier) || 0;
+  }
+
+  for (const item of collections.shipFurniture) {
+    requireReference("shipFurniture", item, "shipId", item?.shipId, ids.ships, "船隻");
+    if (!SHIP_INTERIOR_SLOT_TYPES.has(item?.slot)) {
+      addError("invalid-slot", "shipFurniture", item?.id, `shipFurniture[${item?.id || "missing-id"}].slot`, `家具插槽「${String(item?.slot)}」不受支援`);
+    }
+    if (!(Number(item?.price) >= 0)) {
+      addError("invalid-price", "shipFurniture", item?.id, `shipFurniture[${item?.id || "missing-id"}].price`, "船別家具需要非負固定價格");
+    }
+    if (item?.baseItemId) {
+      requireReference("shipFurniture", item, "baseItemId", item.baseItemId, ids.furniture, "基礎家具");
+      const base = collections.furniture.find(entry => entry.id === item.baseItemId);
+      const tier = Number(item.priceTier);
+      const expected = base && tier > 1 ? Math.round(base.price * tier / 10) * 10 : null;
+      if (expected != null && item.price !== expected) {
+        addError("invalid-price-tier", "shipFurniture", item?.id, `shipFurniture[${item.id}].price`, `船別家具價格應依 ${tier.toFixed(2)} 倍四捨五入為 ${expected}`);
+      }
+    }
+  }
+
+  for (const scene of collections.shipInteriors) {
+    requireReference("shipInteriors", scene, "shipId", scene?.shipId, ids.ships, "船隻");
+    const slotIds = Object.keys(scene?.slots && typeof scene.slots === "object" ? scene.slots : {});
+    for (const slotId of SHIP_INTERIOR_SLOT_TYPES) {
+      if (!slotIds.includes(slotId)) {
+        addError("missing-slot", "shipInteriors", scene?.id, `shipInteriors[${scene?.id || "missing-id"}].slots.${slotId}`, `室內場景缺少共通「${slotId}」插槽`);
+        continue;
+      }
+      const slot = scene.slots[slotId];
+      if (![slot?.x, slot?.y, slot?.width, slot?.height].every(value => Number.isFinite(value) && value >= 0 && value <= 100)) {
+        addError("invalid-position", "shipInteriors", scene?.id, `shipInteriors[${scene.id}].slots.${slotId}`, "插槽座標與尺寸必須位於 0～100");
+      }
+    }
+    for (const slotId of slotIds) {
+      if (!SHIP_INTERIOR_SLOT_TYPES.has(slotId)) addError("invalid-slot", "shipInteriors", scene?.id, `shipInteriors[${scene.id}].slots.${slotId}`, `室內場景含有未知插槽「${slotId}」`);
+    }
+    if (!Array.isArray(scene?.fixedStructures) || scene.fixedStructures.length < 4) {
+      addError("missing-fixed-structure", "shipInteriors", scene?.id, `shipInteriors[${scene?.id || "missing-id"}].fixedStructures`, "每艘船都需要固定床台、航圖桌、日誌架與水族箱基座");
+    }
   }
 
   return {

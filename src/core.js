@@ -1,8 +1,8 @@
 import {
   ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, AQUARIUM_DECORATIONS, BAITS, BAY_EVENTS,
   CHENGYE_ID, DAILY_GOAL_TEMPLATES, FISH, FURNITURE, LUMINOUS_ARCHIPELAGO_ID, MILESTONES, RARITY,
-  REGIONS, RODS, ROUTES, SHIPS, SLEEPING_TIDE_BAY_ID, SPOTS, TIDEGLOW_SOURCES, TIMES,
-  getFishHabitat, getRegionFishingSpots, isRegionAvailable
+  REGIONS, RODS, ROUTES, SHIPS, SHIP_FURNITURE, SLEEPING_TIDE_BAY_ID, SPOTS, TIDEGLOW_SOURCES, TIMES,
+  getFishHabitat, getRegionFishingSpots, isRegionAvailable, shipFurnitureById as findShipFurnitureById
 } from "./data.js";
 import {
   BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, DEV_TEMP_SAVE_KEY, SAVE_KEY, SAVE_VERSION, TEMP_SAVE_KEY
@@ -55,10 +55,20 @@ import {
   getShipPurchaseState, normalizeShipsState, purchaseShip as purchaseShipState,
   revealEligibleShips, switchShip as switchShipState
 } from "./systems/ships.js";
+import {
+  SHIP_INTERIOR_VERSION, activeShipFurnitureCatalog, collectInvalidInteriorReferences,
+  developerClearShipFurniture as clearShipFurnitureForDeveloper,
+  developerFillShipFurniture as fillShipFurnitureForDeveloper,
+  developerResetShipSlots as resetShipSlotsForDeveloper,
+  developerSetShipLighting as setShipLightingForDeveloper,
+  grantShipFurniture, placeShipFurniture as placeShipFurnitureState,
+  purchaseShipFurniture, shipInterior, syncLegacyStarterFurniture
+} from "./systems/ship-interiors.js";
 
 export {
   BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, DEV_TEMP_SAVE_KEY, SAVE_KEY, SAVE_VERSION, TEMP_SAVE_KEY,
-  SHIPS, TIDEGLOW_SOURCES, activeShip, activeShipSpeed, createDailyQuests, getShipPurchaseState,
+  SHIPS, SHIP_FURNITURE, TIDEGLOW_SOURCES, activeShip, activeShipSpeed, activeShipFurnitureCatalog,
+  collectInvalidInteriorReferences, createDailyQuests, getShipPurchaseState, shipInterior,
   CHART_VIEW_LIMITS, canBeginChartRoute, createDefaultChartView, createDeveloperWorldState,
   createInitialWorldState, DEVELOPER_TRAVEL_SCALES, FAMILIAR_TRAVEL_DURATION_MS,
   FIRST_TRAVEL_DURATION_MS, getObservationHint, getRegionResearchStatus, getResidentStoryStatus,
@@ -473,6 +483,8 @@ export function createDeveloperState() {
       voyager_study: caughtAt
     }
   });
+  for (const shipId of state.ships.ownedShipIds) fillShipFurnitureForDeveloper(state, shipId);
+  syncLegacyStarterFurniture(state);
   state.observations = createDeveloperObservationState({ day: state.day, observedAt: caughtAt });
   evaluateResearchProgress(state, LUMINOUS_ARCHIPELAGO_ID);
   state.settings.sound = false;
@@ -546,6 +558,11 @@ function migrateDeveloperUnlocks(state, raw) {
     ownedShipIds: [...new Set([...state.ships.ownedShipIds, ...SHIPS.filter(ship => ship.status === "implemented").map(ship => ship.id)])],
     revealedShipIds: SHIPS.map(ship => ship.id)
   });
+  for (const item of SHIP_FURNITURE) grantShipFurniture(state, item.id);
+  for (const shipId of state.ships.ownedShipIds) {
+    if (!raw?.ships?.interiorsByShipId?.[shipId]) fillShipFurnitureForDeveloper(state, shipId);
+  }
+  syncLegacyStarterFurniture(state);
   evaluateResearchProgress(state, LUMINOUS_ARCHIPELAGO_ID);
   evaluateAchievements(state);
   return state;
@@ -691,6 +708,7 @@ export function migrateState(raw) {
   merged.recordCatches = Math.max(Math.floor(nonNegativeNumber(merged.recordCatches)), heldRecordCatches);
   evaluateAchievements(merged);
   revealEligibleShips(merged);
+  syncLegacyStarterFurniture(merged);
   return merged.developerMode ? migrateDeveloperUnlocks(merged, raw) : merged;
 }
 
@@ -716,6 +734,8 @@ export function isCurrentSaveSchema(raw) {
     && raw?.tideglow && Number.isFinite(Number(raw.tideglow.total))
     && raw?.ships && Array.isArray(raw.ships.ownedShipIds)
     && raw.ships.catalogVersion === SHIP_CATALOG_VERSION
+    && raw.ships.interiorVersion === SHIP_INTERIOR_VERSION
+    && raw.ships.ownedShipIds.every(shipId => raw.ships.interiorsByShipId?.[shipId]?.placedFurniture)
     && raw?.journal && Array.isArray(raw.journal.permanentEntries)
     && raw?.autoFishing && typeof raw.autoFishing === "object";
 }
@@ -1143,12 +1163,15 @@ export function buyBait(state, baitId) {
 }
 
 export function buyFurniture(state, furnitureId) {
-  const item = FURNITURE.find(entry => entry.id === furnitureId);
-  if (!item || state.ownedFurniture.includes(furnitureId) || item.milestone || !isUnlocked(item, state) || state.money < item.price) return false;
-  state.money -= item.price;
-  state.ownedFurniture.push(furnitureId);
-  state.placedFurniture[item.slot] = item.id;
-  return true;
+  return purchaseShipFurniture(state, furnitureId).ok;
+}
+
+export function buyShipFurniture(state, furnitureId) {
+  return purchaseShipFurniture(state, furnitureId);
+}
+
+export function placeShipFurniture(state, furnitureId) {
+  return placeShipFurnitureState(state, furnitureId);
 }
 
 export function updateQuestProgress(state, event) {
@@ -1500,7 +1523,7 @@ export function applyMilestones(state) {
       state.completedMilestones.push(milestone.count);
       state.money += milestone.coins;
       const rewardFurniture = FURNITURE.find(item => item.milestone === milestone.count);
-      if (rewardFurniture && !state.ownedFurniture.includes(rewardFurniture.id)) state.ownedFurniture.push(rewardFurniture.id);
+      if (rewardFurniture) grantShipFurniture(state, rewardFurniture.id);
       unlocked.push(milestone);
     }
   }
@@ -1535,4 +1558,20 @@ export function getTensionConfig(fish, rod) {
 export function fishById(id) { return FISH.find(item => item.id === id); }
 export function rodById(id) { return RODS.find(item => item.id === id); }
 export function baitById(id) { return BAITS.find(item => item.id === id); }
-export function furnitureById(id) { return FURNITURE.find(item => item.id === id); }
+export function furnitureById(id) { return findShipFurnitureById(id); }
+
+export function developerFillActiveShipFurniture(state) {
+  return fillShipFurnitureForDeveloper(state);
+}
+
+export function developerClearActiveShipFurniture(state) {
+  return clearShipFurnitureForDeveloper(state);
+}
+
+export function developerResetActiveShipSlots(state) {
+  return resetShipSlotsForDeveloper(state);
+}
+
+export function developerSetActiveShipLighting(state, lightingId) {
+  return setShipLightingForDeveloper(state, lightingId);
+}

@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import {
   ACHIEVEMENTS, AQUARIUM_DECORATIONS, BAITS, BAY_EVENTS, COMMISSION_TEMPLATES, CONTENT_VALIDATION,
   CHART_REGION_POINTS, CHART_ROUTE_PATHS, DAILY_GOAL_TEMPLATES, FISH, FURNITURE, RARITY,
-  REGIONS, RESIDENTS, RODS, ROUTES, SHIPS, SPOTS, TIDEGLOW_SOURCES, TIMES
+  REGIONS, RESIDENTS, RODS, ROUTES, SHIPS, SHIP_FURNITURE, SHIP_INTERIOR_SCENES,
+  SPOTS, TIDEGLOW_SOURCES, TIMES
 } from "../src/data.js";
 import { formatContentValidationErrors, validateContentCatalog } from "../src/data/content-validation.js";
 
@@ -26,7 +27,9 @@ const currentCatalog = () => ({
   chartRegions: structuredClone(CHART_REGION_POINTS),
   chartRoutes: structuredClone(CHART_ROUTE_PATHS),
   tideglowSources: structuredClone(TIDEGLOW_SOURCES),
-  ships: structuredClone(SHIPS)
+  ships: structuredClone(SHIPS),
+  shipFurniture: structuredClone(SHIP_FURNITURE),
+  shipInteriors: structuredClone(SHIP_INTERIOR_SCENES)
 });
 
 test("current content catalog has unique IDs and valid references", () => {
@@ -107,4 +110,18 @@ test("ship catalog validates progression order, permanent prices, and preview bo
   assert.ok(report.errors.some(error => error.code === "invalid-speed"));
   assert.ok(report.errors.some(error => error.code === "invalid-threshold"));
   assert.ok(report.errors.some(error => error.code === "preview-price"));
+});
+
+test("ship interiors validate ship references, common slots, coordinates, and price tiers", () => {
+  const catalog = currentCatalog();
+  catalog.shipFurniture.find(item => item.id === "tidewhisper_woven_quilt").price = 181;
+  catalog.shipFurniture.find(item => item.id === "voyager_reading_lamp").slot = "engine";
+  const scene = catalog.shipInteriors.find(item => item.shipId === "tidewhisper_residence");
+  delete scene.slots.corner;
+  scene.slots.sleep.x = 120;
+  const report = validateContentCatalog(catalog);
+  assert.ok(report.errors.some(error => error.code === "invalid-price-tier"));
+  assert.ok(report.errors.some(error => error.code === "invalid-slot"));
+  assert.ok(report.errors.some(error => error.code === "missing-slot"));
+  assert.ok(report.errors.some(error => error.code === "invalid-position"));
 });

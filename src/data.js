@@ -1,6 +1,10 @@
 import { validateContentCatalog } from "./data/content-validation.js";
 import { TIDEGLOW_SOURCES, tideglowSourceByEventType, tideglowSourceId } from "./data/tideglow.js";
 import { IMPLEMENTED_SHIP_IDS, SHIPS, shipById } from "./data/ships.js";
+import {
+  FURNITURE, SHIP_FURNITURE, SHIP_INTERIOR_SCENES, SHIP_LIGHTING, SHIP_SLOT_TYPES,
+  getShipFurniture, shipFurnitureById, shipInteriorSceneByShipId
+} from "./data/ship-interiors.js";
 import { DAILY_GOAL_TEMPLATES, QUEST_TEMPLATES } from "./data/daily-goals.js";
 import { COMMISSION_TEMPLATES, commissionTemplateById, getResidentCommissionTemplates } from "./data/commissions.js";
 import {
@@ -52,7 +56,9 @@ export {
   isRouteAvailable, regionById, regionSpotById, residentById, routeById,
   chartRegionPointById, chartRoutePathById,
   TIDEGLOW_SOURCES, tideglowSourceByEventType, tideglowSourceId,
-  IMPLEMENTED_SHIP_IDS, SHIPS, shipById
+  IMPLEMENTED_SHIP_IDS, SHIPS, shipById,
+  FURNITURE, SHIP_FURNITURE, SHIP_INTERIOR_SCENES, SHIP_LIGHTING, SHIP_SLOT_TYPES,
+  getShipFurniture, shipFurnitureById, shipInteriorSceneByShipId
 };
 
 export const TIMES = [
@@ -74,19 +80,6 @@ export const BAITS = [
   { id: "worm", name: "沙蠶", icon: "∿", price: 34, amount: 4, bite: 0.94, tags: ["bottom", "night"], description: "適合底棲魚，夜間效果更好。" },
   { id: "cutfish", name: "小魚切片", icon: "◆", price: 56, amount: 3, bite: 1.05, tags: ["large", "sprint"], description: "香氣濃厚，容易吸引大型與衝刺型魚。" },
   { id: "glow", name: "發光魚餌", icon: "✦", price: 98, amount: 3, bite: 1.05, tags: ["rare", "night", "rain"], unlockDiscoveries: 8, description: "在夜晚與雨幕中散發微光，稀有魚權重提高。" }
-];
-
-export const FURNITURE = [
-  { id: "sleeping_bag", name: "基礎睡袋", icon: "▱", price: 0, slot: "sleep", starter: true, description: "陪你開始旅程的舊睡袋，可以安心睡到下一個時段。" },
-  { id: "blanket", name: "厚毛毯", icon: "▥", price: 160, slot: "sleep", description: "把海風吹不走的暖意收進每一針裡。" },
-  { id: "bed", name: "木製床架", icon: "▰", price: 480, slot: "sleep", unlockDiscoveries: 6, description: "穩固的床架，讓船屋真正有了家的模樣。" },
-  { id: "lantern", name: "暖色提燈", icon: "♢", price: 130, slot: "light", description: "像一顆小太陽，在雨夜裡尤其溫暖。" },
-  { id: "bookshelf", name: "小型書架", icon: "▥", price: 320, slot: "wall", unlockDiscoveries: 5, description: "收著潮汐筆記與手繪魚類觀察簿。" },
-  { id: "photos", name: "照片牆", icon: "▦", price: 240, slot: "wall", description: "將航程裡值得記得的片刻留在牆上。" },
-  { id: "tea", name: "茶壺與杯組", icon: "♨", price: 190, slot: "table", description: "一杯熱茶，讓等雨停也成為一件好事。" },
-  { id: "plant", name: "小型盆栽", icon: "♧", price: 210, slot: "corner", description: "耐鹽的小綠意，隨船身輕輕搖晃。" },
-  { id: "fish_charm", name: "魚形掛飾", icon: "><>", price: 0, slot: "wall", milestone: 5, description: "發現五種魚的紀念，海風來時會輕聲相碰。" },
-  { id: "radio", name: "收音機", icon: "▣", price: 580, slot: "table", unlockDiscoveries: 12, description: "播放海灣電台，為獨處的夜晚添一點陪伴。" }
 ];
 
 const fish = (id, name, english, rarity, spots, times, weather, baits, behavior, length, weight, price, difficulty, shape, colors, short, detail, fact, tags = []) => ({
@@ -463,5 +456,7 @@ export const CONTENT_VALIDATION = validateContentCatalog({
   chartRegions: CHART_REGION_POINTS,
   chartRoutes: CHART_ROUTE_PATHS,
   tideglowSources: TIDEGLOW_SOURCES,
-  ships: SHIPS
+  ships: SHIPS,
+  shipFurniture: SHIP_FURNITURE,
+  shipInteriors: SHIP_INTERIOR_SCENES
 });

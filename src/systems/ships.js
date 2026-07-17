@@ -1,4 +1,7 @@
 import { IMPLEMENTED_SHIP_IDS, SHIPS, shipById } from "../data/ships.js";
+import {
+  SHIP_INTERIOR_VERSION, createShipInteriorState, normalizeShipInteriors
+} from "./ship-interiors.js";
 
 export const SHIP_CATALOG_VERSION = 1;
 export const STARTER_SHIP_ID = "drifting_home";
@@ -10,11 +13,12 @@ const safeDate = value => typeof value === "string" && !Number.isNaN(Date.parse(
 export function createShipsState(starterInterior = {}) {
   return {
     catalogVersion: SHIP_CATALOG_VERSION,
+    interiorVersion: SHIP_INTERIOR_VERSION,
     activeShipId: STARTER_SHIP_ID,
     ownedShipIds: [STARTER_SHIP_ID],
     purchasedAtByShipId: {},
     revealedShipIds: [STARTER_SHIP_ID],
-    interiorsByShipId: { [STARTER_SHIP_ID]: starterInterior }
+    interiorsByShipId: { [STARTER_SHIP_ID]: createShipInteriorState(STARTER_SHIP_ID, starterInterior) }
   };
 }
 
@@ -30,14 +34,15 @@ export function normalizeShipsState(raw, { starterInterior = {} } = {}) {
   const interiors = isObject(source.interiorsByShipId) ? source.interiorsByShipId : {};
   const normalized = {
     catalogVersion: SHIP_CATALOG_VERSION,
+    interiorVersion: SHIP_INTERIOR_VERSION,
     activeShipId,
     ownedShipIds,
     purchasedAtByShipId,
     revealedShipIds,
-    interiorsByShipId: {
+    interiorsByShipId: normalizeShipInteriors({
       ...interiors,
-      [STARTER_SHIP_ID]: isObject(interiors[STARTER_SHIP_ID]) ? interiors[STARTER_SHIP_ID] : starterInterior
-    }
+      [STARTER_SHIP_ID]: isObject(interiors[STARTER_SHIP_ID]) ? interiors[STARTER_SHIP_ID] : createShipInteriorState(STARTER_SHIP_ID, starterInterior)
+    }, ownedShipIds)
   };
   const developerSpeedMultiplier = Number(source.developerSpeedMultiplier);
   if (Number.isFinite(developerSpeedMultiplier)) normalized.developerSpeedMultiplier = Math.min(2, Math.max(.5, developerSpeedMultiplier));

@@ -211,3 +211,16 @@ test("Slice A v5 state is backed up byte-for-byte before same-version Slice B no
   assert.equal(result.state.dailyBoard.entries[0].progress, 1);
   assert.ok(result.state.residentCommissions);
 });
+
+test("Slice B v5 save is backed up before same-version Slice C interior normalization", () => {
+  const alpha2 = createInitialState();
+  delete alpha2.ships.interiorVersion;
+  const alpha2Text = JSON.stringify(alpha2);
+  const storage = new MemoryStorage({ [SAVE_KEY]: alpha2Text, [BACKUP_KEY]: "alpha2-recovery" });
+  const result = load(storage);
+  assert.equal(storage.getItem(BACKUP_KEY), alpha2Text);
+  assert.equal(result.migratedFromVersion, 5);
+  assert.equal(result.preserveBackupOnWrite, true);
+  assert.equal(result.state.ships.interiorVersion, 1);
+  assert.deepEqual(result.state.ships.interiorsByShipId.drifting_home.ownedFurnitureIds, ["sleeping_bag"]);
+});
