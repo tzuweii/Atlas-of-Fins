@@ -1,21 +1,22 @@
 import {
   ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, BAITS, CHART_REGION_POINTS, CHART_ROUTE_PATHS,
   COMMISSION_TEMPLATES, CONTENT_VALIDATION, DAILY_GOAL_TEMPLATES, FISH, FURNITURE, MILESTONES,
-  RARITY, RESIDENTS, RODS, SPOTS, TIMES, fishAssetSrcSet, getResidentCommissionTemplates,
-  regionById, resolveFishAsset, residentById, routeById
+  RARITY, RESIDENTS, RODS, SLEEPING_TIDE_BAY_ID, SPOTS, TIMES, fishAssetSrcSet, getResidentCommissionTemplates,
+  getRegionSpots, regionById, resolveFishAsset, residentById, routeById
 } from "./data.js";
 import {
-  BACKUP_KEY, CHART_VIEW_LIMITS, DEV_BACKUP_KEY, DEV_SAVE_KEY, SAVE_KEY, SAVE_VERSION,
+  BACKUP_KEY, CHART_VIEW_LIMITS, DEVELOPER_TRAVEL_SCALES, DEV_BACKUP_KEY, DEV_SAVE_KEY, SAVE_KEY, SAVE_VERSION,
   acceptResidentCommission, advanceTime,
-  applyMilestones, baitById, buyBait, buyFurniture, buyRod, chooseFish, claimAchievement,
+  applyMilestones, baitById, beginRouteTravel, buyBait, buyFurniture, buyRod, chooseFish, claimAchievement,
   claimAllCompletedDailyGoals, claimQuest, createDeveloperState, createInitialState, deliverResidentCommission,
-  developerClearResidentCommissionHistory, developerCompleteDailyGoals, developerCompleteResidentCommission,
-  developerResetDailyBoard, developerSetDailyGoal, developerSetResidentOffer, discoveredCount,
-  dropResidentCommission, equipTitle, fishById,
+  developerArriveTravel, developerClearResidentCommissionHistory, developerCompleteDailyGoals,
+  developerCompleteResidentCommission, developerResetDailyBoard, developerResetRouteState,
+  developerSetDailyGoal, developerSetResidentOffer, developerSetTravelScale, discoveredCount,
+  dockAtDestination, dropResidentCommission, equipTitle, fishById,
   furnitureById, generateCatch, getAchievementProgress, getActiveBayEvent, getAquariumCapacity, getBayEventHint, getFamiliarity,
-  getTensionConfig, getUnclaimedAchievementCount, isUnlocked, migrateState, moveCatchToAquarium,
+  getRouteDurationForState, getTensionConfig, getTravelStatus, getUnclaimedAchievementCount, isUnlocked, migrateState, moveCatchToAquarium,
   isBayEventConditionActive, isCurrentSaveSchema, recordCatch, removeFishFromAquarium, replaceAquariumFish, rodById, sellCatches,
-  normalizeChartView, panChartView, requestChartRoute, setAquariumDecoration, swapAquariumFish,
+  normalizeChartView, panChartView, progressTravel, setAquariumDecoration, swapAquariumFish,
   zoomChartView
 } from "./core.js";
 import { loadStoredState } from "./persistence/migrations.js";
@@ -38,6 +39,8 @@ let selectedJournalFish = null;
 let shopTab = "rods";
 let chartPointer = null;
 let chartSaveTimer = null;
+let travelClockTimer = null;
+let lastPersistedTravelElapsed = 0;
 let preserveBackupOnNextSave = false;
 let shouldRewriteLoadedSave = false;
 let fishing = { phase: "idle", fish: null, caught: null, context: null, timer: null, raf: null, held: false, tension: .38, progress: 0, danger: 0, last: 0 };
@@ -101,6 +104,7 @@ function saveGame(showToast = false) {
     localStorage.setItem(primaryKey, JSON.stringify(state));
     preserveBackupOnNextSave = false;
     shouldRewriteLoadedSave = false;
+    lastPersistedTravelElapsed = getTravelStatus(state.world)?.elapsedMs || 0;
     if (showToast) toast(activeSaveMode === "developer" ? "開發者測試紀錄已儲存" : "航海日誌已妥善收好");
   } catch { if (showToast) toast("無法使用本機存檔，請檢查瀏覽器設定"); }
 }
@@ -138,13 +142,14 @@ function startGame(isNew = false, mode = "normal") {
     saveGame();
   } else {
     state = loadGame();
-    if (!hasSave(mode) || shouldRewriteLoadedSave) saveGame();
+    const travelUpdate = progressTravel(state, Date.now());
+    if (!hasSave(mode) || shouldRewriteLoadedSave || travelUpdate.changed) saveGame();
   }
   titleScreen.classList.add("is-hidden");
   gameShell.classList.remove("is-hidden");
   app.classList.toggle("is-developer-mode", mode === "developer");
   currentView = "fishing";
-  syncWorld(); render(); updateTutorial(); sound.startAmbient();
+  syncTravelClock(); syncWorld(); render(); updateTutorial(); sound.startAmbient();
 }
 
 function syncWorld() {
@@ -165,10 +170,21 @@ function syncWorld() {
   $("#sound-button").textContent = state.settings.sound ? "♪" : "×";
   $("#sail-emblem").textContent = state.completedMilestones.includes(FISH.length) ? "✺" : state.completedMilestones.includes(20) ? "✦" : "◌";
   $(".brand-mini small").textContent = activeSaveMode === "developer" ? `開發者模式 · ${state.equippedTitle}` : state.equippedTitle;
-  const spot = SPOTS.find(item => item.id === state.selectedSpot) || SPOTS[0];
-  const bayEvent = getActiveBayEvent(state);
+  const spot = SPOTS.find(item => item.id === state.selectedSpot && item.regionId === state.world?.currentRegionId);
+  const bayEvent = isDockedAt(state.world?.currentRegionId) ? getActiveBayEvent(state) : null;
   app.dataset.bayEvent = bayEvent?.id || "";
-  $("#scene-caption").innerHTML = `<span>${spot.name}</span><small>${time.line}</small>${bayEvent ? `<em>${bayEvent.icon} ${bayEvent.name}</em>` : ""}`;
+  const travelStatus = getTravelStatus(state.world);
+  const offshoreRegion = state.world?.docking?.status === "offshore" ? regionById(state.world.docking.regionId) : null;
+  const currentRegion = regionById(state.world?.currentRegionId);
+  const sceneTitle = travelStatus
+    ? `航向${regionById(travelStatus.travel.toRegionId)?.name || "遠方海域"}`
+    : offshoreRegion ? `${offshoreRegion.name}外海` : spot?.name || currentRegion?.portName || "船屋甲板";
+  const sceneLine = travelStatus
+    ? `第 ${travelStatus.segment} / ${travelStatus.totalSegments} 段 · ${formatTravelTime(travelStatus.remainingMs)}後抵達外海`
+    : offshoreRegion ? "船已收帆，等待你決定何時停泊。" : time.line;
+  $("#scene-caption").innerHTML = `<span>${sceneTitle}</span><small>${sceneLine}</small>${bayEvent ? `<em>${bayEvent.icon} ${bayEvent.name}</em>` : ""}`;
+  const chartBadge = $("#chart-badge");
+  if (chartBadge) chartBadge.textContent = travelStatus ? `${travelStatus.segment}/${travelStatus.totalSegments}` : offshoreRegion ? "停泊" : "航路";
 }
 
 function render() {
@@ -187,14 +203,88 @@ function panelHeading(title, subtitle, actions = "") {
   return `<div class="panel-heading"><div><h2>${title}</h2><p>${subtitle}</p></div>${actions ? `<div class="panel-heading-actions">${actions}</div>` : ""}</div>`;
 }
 
+function formatTravelTime(milliseconds) {
+  const totalSeconds = Math.max(0, Math.ceil((Number(milliseconds) || 0) / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function formatTravelMinutes(milliseconds) {
+  if ((Number(milliseconds) || 0) < 60000) return "少於 1 分鐘（測試）";
+  const minutes = Math.max(1, Math.round((Number(milliseconds) || 0) / 60000));
+  return `約 ${minutes} 分鐘`;
+}
+
+function refreshTravelIndicators() {
+  const status = getTravelStatus(state.world);
+  if (!status) return;
+  $$('[data-travel-remaining]').forEach(node => { node.textContent = formatTravelTime(status.remainingMs); });
+  $$('[data-travel-segment]').forEach(node => { node.textContent = `${status.segment} / ${status.totalSegments}`; });
+  $$('[data-travel-progress]').forEach(node => { node.style.width = `${Math.min(100, status.progress * 100)}%`; });
+  const ship = $("#chart-ship-marker");
+  if (ship) {
+    const position = chartShipPosition();
+    ship.style.left = `${position.x}%`;
+    ship.style.top = `${position.y}%`;
+  }
+  syncWorld();
+}
+
+function travelClockTick({ forceSave = false } = {}) {
+  const result = progressTravel(state, Date.now());
+  if (!result.ok) return result;
+  if (result.arrived) {
+    saveGame();
+    syncTravelClock();
+    render();
+    toast(`已抵達${regionById(result.destinationId)?.name || "目的地"}外海。想準備好時，再按下停泊。`, "gold");
+    return result;
+  }
+  const status = getTravelStatus(state.world);
+  if (result.changed && (forceSave || Math.abs((status?.elapsedMs || 0) - lastPersistedTravelElapsed) >= 15000)) saveGame();
+  refreshTravelIndicators();
+  return result;
+}
+
+function syncTravelClock() {
+  clearInterval(travelClockTimer);
+  travelClockTimer = null;
+  const status = getTravelStatus(state.world);
+  lastPersistedTravelElapsed = status?.elapsedMs || 0;
+  if (status) travelClockTimer = setInterval(() => travelClockTick(), 1000);
+}
+
+function renderVoyageStateCard() {
+  const status = getTravelStatus(state.world);
+  if (status) {
+    const destination = regionById(status.travel.toRegionId);
+    return `<article class="card voyage-state-card is-traveling"><span class="section-label">航行中 · ${status.route.name}</span><h3>順著暖流前往${destination?.name || "目的地"}</h3><p>船屋、圖鑑與古海圖都能照常查看。航程會依真實經過時間前進，關閉遊戲也沒關係。</p><div class="voyage-time"><b data-travel-remaining>${formatTravelTime(status.remainingMs)}</b><span>第 <i data-travel-segment>${status.segment} / ${status.totalSegments}</i> 段</span></div><div class="progress-track voyage-progress"><i data-travel-progress style="width:${status.progress * 100}%"></i></div><button class="soft-button" data-action="open-chart">在古海圖上查看船位</button></article>`;
+  }
+  if (state.world?.docking?.status === "offshore") {
+    const destination = regionById(state.world.docking.regionId);
+    return `<article class="card voyage-state-card is-offshore"><span class="section-label">已抵達外海</span><h3>${destination?.name || "目的地"}就在前方</h3><p>船已安靜收帆。沒有倒數，也不會自行進港；準備好後再由你決定停泊。</p><button class="primary-button" data-action="dock-arrival">停泊${destination?.portName ? ` · ${destination.portName}` : ""}</button></article>`;
+  }
+  const region = regionById(state.world?.currentRegionId);
+  return `<article class="card voyage-state-card is-port-preview"><span class="section-label">港口外圍調查</span><h3>${region?.name || "這片海域"}的釣點仍在整理</h3><p>正式釣點與區域魚類會在 Slice F 接上。現在可以整理船屋與圖鑑，或從古海圖安全返航。</p><button class="soft-button" data-action="open-chart">查看返航航線</button></article>`;
+}
+
 function renderFishing() {
+  const docked = state.world?.docking?.status === "docked" && state.world.docking.regionId === state.world.currentRegionId;
+  const regionSpots = docked ? getRegionSpots(state.world.currentRegionId) : [];
+  if (!docked || !regionSpots.length) {
+    if (fishing.phase !== "idle") { clearFishing(); fishing.phase = "idle"; }
+    content.innerHTML = `${panelHeading("航程甲板", "遠航期間不必守著畫面。可以關閉遊戲，也可以留在船上整理自己的收藏。")}<div class="fishing-layout"><div>${renderVoyageStateCard()}</div><div class="fishing-side">${renderQuests()}</div></div>`;
+    return;
+  }
+  if (!regionSpots.some(spot => spot.id === state.selectedSpot)) state.selectedSpot = regionSpots[0].id;
   const rod = rodById(state.equippedRod), bait = baitById(state.equippedBait);
   const fishArea = fishing.phase === "idle" ? `
     <div class="cast-area"><p>${state.baitAmounts[state.equippedBait] ? "選好了嗎？海面正在等著你的下一竿。" : "這種魚餌用完了，去商店補充或換一種吧。"}</p>
       <button class="primary-button cast-button" data-action="cast" ${state.baitAmounts[state.equippedBait] ? "" : "disabled"}>拋下魚線</button></div>` : renderFishingStage();
   content.innerHTML = `${panelHeading("去釣魚", "選擇釣點與裝備，放慢呼吸，感受魚線傳來的動靜。")}
     <div class="fishing-layout"><div class="card fishing-main">
-      <span class="section-label">選擇釣點</span><div class="spot-grid">${SPOTS.map(spot => {
+      <span class="section-label">選擇釣點</span><div class="spot-grid">${regionSpots.map(spot => {
         const locked = spot.requires && !state.ownedRods.includes(spot.requires);
         return `<button class="spot-card ${state.selectedSpot === spot.id ? "is-active" : ""}" data-action="spot" data-id="${spot.id}" ${locked || fishing.phase !== "idle" ? "disabled" : ""}><span class="spot-icon">${locked ? "⌑" : spot.icon}</span><b>${spot.name}</b><small>${locked ? "需要強化遠投竿" : spot.hint}</small></button>`;
       }).join("")}</div>
@@ -265,7 +355,9 @@ function renderResidents() {
   const docked = isDockedAt(regionId);
   const body = docked && residents.length
     ? `<div class="resident-grid">${residents.map(residentCard).join("")}</div>`
-    : `<div class="card resident-empty"><span class="resident-icon">⌂</span><h3>先回港停泊</h3><p class="modal-copy">居民只在自己的港口生活，不會跨海追蹤旅程。回到有效港口後再來聊聊吧。</p></div>`;
+    : docked
+      ? `<div class="card resident-empty"><span class="resident-icon">⌂</span><h3>港口居民仍在準備相遇</h3><p class="modal-copy">${regionById(regionId)?.name || "這座港口"}的居民與委託會在 Slice F～G 接上。現在不會從其他海域遠端出現。</p></div>`
+      : `<div class="card resident-empty"><span class="resident-icon">⌂</span><h3>先回港停泊</h3><p class="modal-copy">居民只在自己的港口生活，不會跨海追蹤旅程。回到有效港口後再來聊聊吧。</p></div>`;
   content.innerHTML = `${panelHeading("港口居民", "沒有好感度、連續拜訪或期限。接受後的委託會安靜保留，直到你回來交付或自行放下。")} ${body}`;
 }
 
@@ -274,15 +366,38 @@ function chartTransform(view = state.chartView) {
   return `translate(${normalized.x}%, ${normalized.y}%) scale(${normalized.zoom})`;
 }
 
+function chartShipPosition() {
+  const status = getTravelStatus(state.world);
+  if (status) {
+    const from = CHART_REGION_POINTS.find(point => point.regionId === status.travel.fromRegionId);
+    const to = CHART_REGION_POINTS.find(point => point.regionId === status.travel.toRegionId);
+    const path = CHART_ROUTE_PATHS.find(entry => entry.routeId === status.route.id);
+    if (from && to && path) {
+      const t = status.progress;
+      const inverse = 1 - t;
+      return {
+        x: inverse * inverse * from.x + 2 * inverse * t * path.controlX + t * t * to.x,
+        y: inverse * inverse * from.y + 2 * inverse * t * path.controlY + t * t * to.y
+      };
+    }
+  }
+  const locationId = state.world?.docking?.status === "offshore"
+    ? state.world.docking.regionId
+    : state.world?.currentRegionId;
+  return CHART_REGION_POINTS.find(point => point.regionId === locationId) || CHART_REGION_POINTS[0];
+}
+
 function chartRegionNode(point) {
   const region = regionById(point.regionId);
   if (!region) return "";
-  const current = state.world.currentRegionId === region.id;
+  const current = state.world.docking?.status === "docked" && state.world.docking.regionId === region.id;
+  const offshore = state.world.docking?.status === "offshore" && state.world.docking.regionId === region.id;
+  const destination = state.world.travel?.toRegionId === region.id;
   const visited = state.world.visitedRegionIds.includes(region.id);
-  const preview = region.status !== "available";
-  const statusIcon = current ? "⚓" : visited ? "✓" : "🔒";
-  const statusText = current ? "船隻目前停泊" : visited ? "已到訪" : "尚未開放";
-  return `<div class="chart-region-node ${current ? "is-current" : ""} ${preview ? "is-preview" : ""}" style="left:${point.x}%;top:${point.y}%" role="group" aria-label="${region.name}，${statusText}"><span class="chart-region-marker" aria-hidden="true">${point.marker === "harbor" ? "◉" : "◌"}</span><span class="chart-region-copy"><b>${region.name}</b><small>${statusIcon} ${statusText}</small></span>${preview ? '<i class="chart-mist" aria-hidden="true"></i>' : ""}</div>`;
+  const preview = region.contentStatus === "route-only" && !visited;
+  const statusIcon = current ? "⚓" : offshore ? "◉" : destination ? "➜" : visited ? "✓" : "⌁";
+  const statusText = current ? "船隻目前停泊" : offshore ? "船隻位於外海" : destination ? "目前航行目的地" : visited ? "已到訪" : "航線已開放";
+  return `<div class="chart-region-node ${current || offshore ? "is-current" : ""} ${preview ? "is-preview" : ""}" style="left:${point.x}%;top:${point.y}%" role="group" aria-label="${region.name}，${statusText}"><span class="chart-region-marker" aria-hidden="true">${point.marker === "harbor" ? "◉" : "◌"}</span><span class="chart-region-copy"><b>${region.name}</b><small>${statusIcon} ${statusText}</small></span>${preview ? '<i class="chart-mist" aria-hidden="true"></i>' : ""}</div>`;
 }
 
 function chartRouteMarkup() {
@@ -291,24 +406,55 @@ function chartRouteMarkup() {
     const from = CHART_REGION_POINTS.find(point => point.regionId === route?.fromRegionId);
     const to = CHART_REGION_POINTS.find(point => point.regionId === route?.toRegionId);
     if (!route || !from || !to) return null;
+    const status = getTravelStatus(state.world);
+    const traveling = status?.route.id === route.id;
     const available = route.status === "available" && state.world.unlockedRouteIds.includes(route.id);
+    const familiar = state.world.completedRouteIds.includes(route.id);
     return {
-      path: `<path class="chart-route-path ${available ? "is-available" : "is-preview"}" d="M ${from.x} ${from.y} Q ${path.controlX} ${path.controlY} ${to.x} ${to.y}" vector-effect="non-scaling-stroke"/>`,
-      label: `<div class="chart-route-label ${available ? "is-available" : "is-preview"}" style="left:${(from.x + to.x + path.controlX) / 3}%;top:${(from.y + to.y + path.controlY) / 3}%">${available ? "✓ 可航行" : "🔒 測繪中"}</div>`
+      path: `<path class="chart-route-path ${available ? "is-available" : "is-preview"} ${traveling ? "is-traveling" : ""}" d="M ${from.x} ${from.y} Q ${path.controlX} ${path.controlY} ${to.x} ${to.y}" vector-effect="non-scaling-stroke"/>`,
+      label: `<div class="chart-route-label ${available ? "is-available" : "is-preview"}" style="left:${(from.x + to.x + path.controlX) / 3}%;top:${(from.y + to.y + path.controlY) / 3}%">${traveling ? `航行 ${status.segment}/${status.totalSegments}` : familiar ? "✓ 熟悉航線" : available ? "✓ 可航行" : "🔒 測繪中"}</div>`
     };
   }).filter(Boolean);
   return `<svg class="chart-route-layer" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${entries.map(entry => entry.path).join("")}</svg>${entries.map(entry => entry.label).join("")}`;
 }
 
 function chartDestinationCards() {
+  const travelStatus = getTravelStatus(state.world);
+  if (travelStatus) {
+    const destination = regionById(travelStatus.travel.toRegionId);
+    return `<article class="card chart-route-card is-traveling"><span class="section-label">航行中</span><h3>${travelStatus.route.name}</h3><p>正在前往${destination?.name || "目的地"}。關閉遊戲後，航程仍會依真實經過時間推進。</p><div class="voyage-time"><b data-travel-remaining>${formatTravelTime(travelStatus.remainingMs)}</b><span>第 <i data-travel-segment>${travelStatus.segment} / ${travelStatus.totalSegments}</i> 段</span></div><div class="progress-track voyage-progress"><i data-travel-progress style="width:${travelStatus.progress * 100}%"></i></div></article>`;
+  }
+  if (state.world.docking?.status === "offshore") {
+    const destination = regionById(state.world.docking.regionId);
+    return `<article class="card chart-route-card is-arrived"><span class="section-label">已抵達外海</span><h3>${destination?.name || "目的地"}</h3><p>這裡沒有倒數或懲罰。準備好迎接港口短景時，再按下停泊。</p><button class="primary-button" data-action="dock-arrival">停泊 · ${destination?.portName || "目的港"}</button></article>`;
+  }
   return CHART_ROUTE_PATHS.map(path => {
     const route = routeById(path.routeId);
     if (!route) return "";
+    const connected = route.fromRegionId === state.world.currentRegionId || route.toRegionId === state.world.currentRegionId;
+    if (!connected) return "";
     const destinationId = route.fromRegionId === state.world.currentRegionId ? route.toRegionId : route.fromRegionId;
     const destination = regionById(destinationId);
-    const available = route.status === "available" && state.world.unlockedRouteIds.includes(route.id);
-    return `<article class="card chart-route-card ${available ? "is-available" : "is-preview"}" data-route="${route.id}"><span class="section-label">相鄰航線</span><h3>${route.name}</h3><p>${destination?.name || "未知海域"} · ${route.travelSegments} 段航程</p><div class="chart-route-state"><span aria-hidden="true">${available ? "✓" : "🔒"}</span><b>${available ? "航線已完成測繪" : "航線尚未完成"}</b></div><button class="${available ? "primary-button" : "soft-button"}" data-action="chart-route" data-id="${route.id}" ${available ? "" : "disabled"}>${available ? "準備啟航" : "🔒 尚未完成，無法啟航"}</button></article>`;
+    const available = connected && route.status === "available" && state.world.unlockedRouteIds.includes(route.id);
+    const familiar = state.world.completedRouteIds.includes(route.id);
+    const duration = getRouteDurationForState(state, route.id);
+    return `<article class="card chart-route-card ${available ? "is-available" : "is-preview"}" data-route="${route.id}"><span class="section-label">相鄰航線</span><h3>${route.name}</h3><p>${destination?.name || "未知海域"} · ${route.travelSegments} 段航程 · ${formatTravelMinutes(duration)}</p><div class="chart-route-state"><span aria-hidden="true">${available ? "✓" : "🔒"}</span><b>${available ? familiar ? "熟悉航線，可自由往返" : "首次短程航行已開放" : "目前無法從這裡出發"}</b></div><button class="${available ? "primary-button" : "soft-button"}" data-action="prepare-chart-route" data-id="${route.id}" ${available ? "" : "disabled"}>${available ? `準備前往${destination?.name || "目的地"}` : "目前無法出發"}</button></article>`;
   }).join("");
+}
+
+function chartCurrentCard() {
+  const travelStatus = getTravelStatus(state.world);
+  if (travelStatus) {
+    const from = regionById(travelStatus.travel.fromRegionId);
+    const to = regionById(travelStatus.travel.toRegionId);
+    return `<div class="card chart-current-card"><span class="section-label">目前船位</span><h3>⌁ 暖流航程中</h3><p>${from?.name || "出發地"} → ${to?.name || "目的地"}</p></div>`;
+  }
+  if (state.world.docking?.status === "offshore") {
+    const region = regionById(state.world.docking.regionId);
+    return `<div class="card chart-current-card"><span class="section-label">目前船位</span><h3>◉ ${region?.name || "目的地"}外海</h3><p>已收帆，正在等待手動停泊</p></div>`;
+  }
+  const region = regionById(state.world.currentRegionId);
+  return `<div class="card chart-current-card"><span class="section-label">目前船位</span><h3>⚓ ${region?.name || "眠潮灣"}</h3><p>${region?.portName || "眠潮泊地"} · 已安全停泊</p></div>`;
 }
 
 function applyChartView() {
@@ -363,10 +509,27 @@ function bindChartInteractions() {
 
 function renderChart() {
   state.chartView = normalizeChartView(state.chartView);
-  const currentRegion = regionById(state.world.currentRegionId);
-  const currentPoint = CHART_REGION_POINTS.find(point => point.regionId === state.world.currentRegionId) || CHART_REGION_POINTS[0];
-  content.innerHTML = `${panelHeading("古海圖", "在航圖桌上確認港口、船位與相鄰海流。未完成的航線只會顯示預告，不能建立航行狀態。")}<div class="chart-layout"><section class="card chart-panel"><div class="chart-toolbar" aria-label="海圖操作"><div class="chart-zoom-controls"><button class="soft-button" data-action="chart-zoom" data-direction="-1" aria-label="縮小海圖">−</button><output id="chart-zoom-output" aria-live="polite">${Math.round(state.chartView.zoom * 100)}%</output><button class="soft-button" data-action="chart-zoom" data-direction="1" aria-label="放大海圖">＋</button><button class="soft-button" data-action="chart-reset">回到船位</button></div><div class="chart-pan-controls" aria-label="平移海圖"><button data-action="chart-pan" data-x="0" data-y="-${CHART_VIEW_LIMITS.panStep}" aria-label="向上移動海圖">↑</button><button data-action="chart-pan" data-x="-${CHART_VIEW_LIMITS.panStep}" data-y="0" aria-label="向左移動海圖">←</button><button data-action="chart-pan" data-x="${CHART_VIEW_LIMITS.panStep}" data-y="0" aria-label="向右移動海圖">→</button><button data-action="chart-pan" data-x="0" data-y="${CHART_VIEW_LIMITS.panStep}" aria-label="向下移動海圖">↓</button></div></div><div id="chart-viewport" class="chart-viewport" tabindex="0" role="application" aria-label="可縮放的古海圖。可用方向鍵平移，加號與減號縮放，數字零回到船位。"><div id="chart-stage" class="chart-stage" style="transform:${chartTransform()}"><div class="chart-paper" aria-hidden="true"><i class="chart-land chart-land-bay"></i><i class="chart-land chart-land-islands"></i><i class="chart-compass">✥</i><i class="chart-water-lines"></i></div>${chartRouteMarkup()}${CHART_REGION_POINTS.map(chartRegionNode).join("")}<div class="chart-ship-marker" style="left:${currentPoint.x}%;top:${currentPoint.y}%" role="img" aria-label="船隻目前位於${currentRegion?.name || "眠潮灣"}"><span aria-hidden="true">▰</span><small>我的船</small></div></div></div><p class="chart-help">滑鼠：拖曳／滾輪 · 鍵盤：方向鍵／＋／−／0 · 觸控：單指拖曳與畫面按鈕。海圖不使用快速晃動或大幅視差。</p></section><aside class="chart-side"><div class="card chart-current-card"><span class="section-label">目前船位</span><h3>⚓ ${currentRegion?.name || "眠潮灣"}</h3><p>${currentRegion?.portName || "眠潮泊地"} · 已安全停泊</p></div>${chartDestinationCards()}</aside></div>`;
+  const shipPosition = chartShipPosition();
+  const travelStatus = getTravelStatus(state.world);
+  const chartSubtitle = travelStatus ? "船隻會依真實經過時間沿航線前進；關閉遊戲後，重新開啟仍會回到正確位置。" : state.world.docking?.status === "offshore" ? "船已抵達目的地外海，直到你按下停泊以前都不會自行進港。" : "在航圖桌上確認港口、船位與相鄰海流；已解鎖航線可以安全往返。";
+  content.innerHTML = `${panelHeading("古海圖", chartSubtitle)}<div class="chart-layout"><section class="card chart-panel"><div class="chart-toolbar" aria-label="海圖操作"><div class="chart-zoom-controls"><button class="soft-button" data-action="chart-zoom" data-direction="-1" aria-label="縮小海圖">−</button><output id="chart-zoom-output" aria-live="polite">${Math.round(state.chartView.zoom * 100)}%</output><button class="soft-button" data-action="chart-zoom" data-direction="1" aria-label="放大海圖">＋</button><button class="soft-button" data-action="chart-reset">回到船位</button></div><div class="chart-pan-controls" aria-label="平移海圖"><button data-action="chart-pan" data-x="0" data-y="-${CHART_VIEW_LIMITS.panStep}" aria-label="向上移動海圖">↑</button><button data-action="chart-pan" data-x="-${CHART_VIEW_LIMITS.panStep}" data-y="0" aria-label="向左移動海圖">←</button><button data-action="chart-pan" data-x="${CHART_VIEW_LIMITS.panStep}" data-y="0" aria-label="向右移動海圖">→</button><button data-action="chart-pan" data-x="0" data-y="${CHART_VIEW_LIMITS.panStep}" aria-label="向下移動海圖">↓</button></div></div><div id="chart-viewport" class="chart-viewport" tabindex="0" role="application" aria-label="可縮放的古海圖。可用方向鍵平移，加號與減號縮放，數字零回到船位。"><div id="chart-stage" class="chart-stage" style="transform:${chartTransform()}"><div class="chart-paper" aria-hidden="true"><i class="chart-land chart-land-bay"></i><i class="chart-land chart-land-islands"></i><i class="chart-compass">✥</i><i class="chart-water-lines"></i></div>${chartRouteMarkup()}${CHART_REGION_POINTS.map(chartRegionNode).join("")}<div id="chart-ship-marker" class="chart-ship-marker ${travelStatus ? "is-traveling" : ""}" style="left:${shipPosition.x}%;top:${shipPosition.y}%" role="img" aria-label="船隻目前${travelStatus ? "正在航行" : state.world.docking?.status === "offshore" ? "位於目的地外海" : "安全停泊"}"><span aria-hidden="true">▰</span><small>我的船</small></div></div></div><p class="chart-help">滑鼠：拖曳／滾輪 · 鍵盤：方向鍵／＋／−／0 · 觸控：單指拖曳與畫面按鈕。海圖不使用快速晃動或大幅視差。</p></section><aside class="chart-side">${chartCurrentCard()}${chartDestinationCards()}</aside></div>`;
   bindChartInteractions();
+}
+
+function showRouteConfirmation(routeId) {
+  const route = routeById(routeId);
+  if (!route) return;
+  const destinationId = route.fromRegionId === state.world.currentRegionId ? route.toRegionId : route.fromRegionId;
+  const destination = regionById(destinationId);
+  const familiar = state.world.completedRouteIds.includes(route.id);
+  const duration = getRouteDurationForState(state, route.id);
+  modalRoot.innerHTML = `<div class="modal-backdrop"><div class="modal route-confirm-modal"><span class="section-label">${familiar ? "熟悉航線" : "第一次遠航"}</span><h2>前往${destination?.name || "目的地"}？</h2><p class="modal-copy">${route.name}預計需要${formatTravelMinutes(duration)}，分成 ${route.travelSegments} 段。航程不能瞬間略過，但可以關閉遊戲，時間會照常前進。</p><div class="route-confirm-notes"><span>✓ 不消耗燃料</span><span>✓ 不會迷航或失敗</span><span>✓ 抵達後由你決定停泊</span></div><div class="modal-actions"><button class="soft-button" data-action="close-modal">再準備一下</button><button class="primary-button" data-action="confirm-chart-route" data-id="${route.id}">沿暖流出發</button></div></div></div>`;
+}
+
+function showDockingScene(result) {
+  const destination = regionById(result.destinationId);
+  const returningHome = result.destinationId === SLEEPING_TIDE_BAY_ID;
+  modalRoot.innerHTML = `<div class="modal-backdrop docking-backdrop"><div class="modal docking-modal"><div class="docking-scene-mark" aria-hidden="true">${returningHome ? "⚓" : "◌"}</div><span class="section-label">${result.firstArrival ? "第一次停泊" : "再次靠岸"}</span><h2>${destination?.portName || "港口"}</h2><p class="modal-copy">${returningHome ? "熟悉的燈火穿過薄霧，眠潮灣把返航的船穩穩接回木棧橋。" : "暖色海面托著零散島影，風棲港的繩索輕輕落上船柱。這一刻已記進你的航程。"}</p>${destination?.contentStatus === "route-only" ? '<p class="quiet-note">琉光群島的釣點與居民內容將在 Slice F 接上；目前可以整理船屋、查看圖鑑或自由返航。</p>' : ""}<div class="modal-actions"><button class="primary-button" data-action="close-modal">踏上碼頭</button></div></div></div>`;
 }
 
 function showResidentDialogue(residentId, deliveredDialogue = null) {
@@ -402,7 +565,9 @@ function currentCatchContext() {
 }
 
 function castLine() {
-  if (fishing.phase !== "idle" || !state.baitAmounts[state.equippedBait]) return;
+  const canFishHere = isDockedAt(state.world?.currentRegionId)
+    && getRegionSpots(state.world.currentRegionId).some(spot => spot.id === state.selectedSpot);
+  if (!canFishHere || fishing.phase !== "idle" || !state.baitAmounts[state.equippedBait]) return;
   state.baitAmounts[state.equippedBait]--;
   if (!state.completedTutorial && state.tutorialStep < 1) state.tutorialStep = 1;
   fishing.phase = "waiting"; fishing.fish = chooseFish(state); fishing.context = currentCatchContext(); fishing.progress = 0; fishing.tension = .36; fishing.danger = 0;
@@ -633,6 +798,20 @@ function showSpecimenModal(uid) {
   modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal specimen-modal ${isShimmer?"is-shimmer":""}"><div class="specimen-hero">${fishArt(fish,false,caught.variant,"scene")}</div>${isShimmer?'<span class="new-ribbon is-shimmer">✦ 閃光標本</span>':""}<h2>${fish.name}</h2><p class="catch-subtitle">${fish.english}</p><div class="catch-stats"><div><small>體長</small><b>${caught.length} cm</b></div><div><small>重量</small><b>${caught.weight} kg</b></div><div><small>尺寸</small><b>${sizeName(caught.sizeTier)}</b></div></div>${specimenContext(caught)}<div class="modal-actions"><button class="soft-button" data-action="close-modal">關閉</button></div></div></div>`;
 }
 
+function renderHomeChartCard() {
+  const status = getTravelStatus(state.world);
+  if (status) {
+    const destination = regionById(status.travel.toRegionId);
+    return `<div class="card home-card chart-table-card is-traveling"><span class="section-label">船屋航圖桌 · 航行中</span><h3>前往${destination?.name || "目的地"}</h3><p>剩餘 <b data-travel-remaining>${formatTravelTime(status.remainingMs)}</b> · 第 <i data-travel-segment>${status.segment} / ${status.totalSegments}</i> 段。離開船屋或關閉遊戲都不會中斷航程。</p><div class="progress-track voyage-progress"><i data-travel-progress style="width:${status.progress * 100}%"></i></div><button class="soft-button" data-action="open-chart">查看移動中的船位</button></div>`;
+  }
+  if (state.world.docking?.status === "offshore") {
+    const destination = regionById(state.world.docking.regionId);
+    return `<div class="card home-card chart-table-card is-arrived"><span class="section-label">船屋航圖桌 · 已抵達</span><h3>${destination?.name || "目的地"}外海</h3><p>船已收帆等待，不會自行進港。準備好後可以在這裡停泊。</p><button class="primary-button" data-action="dock-arrival">停泊 · ${destination?.portName || "目的港"}</button></div>`;
+  }
+  const region = regionById(state.world.currentRegionId);
+  return `<div class="card home-card chart-table-card"><span class="section-label">船屋航圖桌</span><h3>從${region?.name || "目前港口"}展開古海圖</h3><p>確認船位、相鄰洋流與預估航程。已完成的航線會成為約三分鐘的熟悉航線。</p><button class="soft-button" data-action="open-chart">查看古海圖</button></div>`;
+}
+
 function finishAquariumAction(result,message) {
   if(!result.ok){toast(({locked:"發現 5 種魚後才會解鎖水族箱",full:"水族箱已滿，請選擇替換標本",missing:"找不到這份漁獲","missing-catch":"找不到要放入的漁獲","missing-aquarium":"找不到要替換的標本","invalid-index":"無法移動這個展示位置"})[result.reason]||"水族箱操作未完成");return false;}
   modalRoot.innerHTML="";sound.play("coin");saveGame();toast(message);render();notifyCompletedAchievements(result.completedAchievements);return true;
@@ -641,7 +820,7 @@ function finishAquariumAction(result,message) {
 function renderHome() {
   content.innerHTML=`${panelHeading("我的船屋","外面是未知的海，這裡是永遠為你亮著燈的家。")}
     ${renderAquariumPanel()}<div class="home-layout"><div class="cabin-view"><div class="cabin-glow"></div><div class="cabin-window"><i class="window-rain"></i></div>${["sleep","wall","table","light","corner"].map(slot=>{const id=state.placedFurniture[slot],item=furnitureById(id);return `<button class="home-slot slot-${slot} ${item?"":"is-empty"}" data-action="slot" data-id="${slot}" title="${item?item.name:"空插槽"}">${item?`<span>${item.icon}</span>`:""}</button>`}).join("")}</div>
-    <aside class="home-side"><div class="card home-card chart-table-card"><span class="section-label">船屋航圖桌</span><h3>攤開古海圖</h3><p>看看船停在哪裡，也預先記下琉光群島的方向。尚未完成的航線不會讓船出發。</p><button class="soft-button" data-action="open-chart">查看古海圖</button></div><div class="card home-card"><span class="section-label">休息一下</span><h3>${TIMES[state.timeIndex].name}的船屋</h3><p>${state.weather==="rain"?"細雨落在窗上，提燈讓木牆顯得更加溫暖。":"光線從舷窗落進來，船身隨著海面緩緩呼吸。"}</p><button class="primary-button sleep-button" data-action="sleep">睡到下一個時段</button></div><div class="card home-card"><span class="section-label">已擁有的家具</span><div class="owned-list">${state.ownedFurniture.map(id=>{const item=furnitureById(id);return `<button class="owned-chip ${state.placedFurniture[item.slot]===id?"is-placed":""}" data-action="place-furniture" data-id="${id}">${item.icon} ${item.name}</button>`}).join("")}</div></div><div class="card home-card"><span class="section-label">圖鑑里程碑</span><div class="milestone-list">${MILESTONES.map(m=>`<div class="milestone-row ${state.completedMilestones.includes(m.count)?"is-done":""}"><i></i><span>${m.count} 種 · ${m.reward}</span></div>`).join("")}</div></div></aside></div>`;
+    <aside class="home-side">${renderHomeChartCard()}<div class="card home-card"><span class="section-label">休息一下</span><h3>${TIMES[state.timeIndex].name}的船屋</h3><p>${state.weather==="rain"?"細雨落在窗上，提燈讓木牆顯得更加溫暖。":"光線從舷窗落進來，船身隨著海面緩緩呼吸。"}</p><button class="primary-button sleep-button" data-action="sleep">睡到下一個時段</button></div><div class="card home-card"><span class="section-label">已擁有的家具</span><div class="owned-list">${state.ownedFurniture.map(id=>{const item=furnitureById(id);return `<button class="owned-chip ${state.placedFurniture[item.slot]===id?"is-placed":""}" data-action="place-furniture" data-id="${id}">${item.icon} ${item.name}</button>`}).join("")}</div></div><div class="card home-card"><span class="section-label">圖鑑里程碑</span><div class="milestone-list">${MILESTONES.map(m=>`<div class="milestone-row ${state.completedMilestones.includes(m.count)?"is-done":""}"><i></i><span>${m.count} 種 · ${m.reward}</span></div>`).join("")}</div></div></aside></div>`;
 }
 
 function placeFurniture(id) {
@@ -718,6 +897,10 @@ function showDeveloperTools() {
   const residentOptions = RESIDENTS.map(resident => `<option value="${resident.id}">${resident.name}</option>`).join("");
   const active = state.residentCommissions.active;
   modalRoot.innerHTML = `<div class="modal-backdrop"><div class="modal developer-modal"><span class="section-label">資料驅動測試入口</span><h2>Slice C 開發者控制</h2><p class="modal-copy">每日模板與居民委託選項直接由正式內容資料產生；所有操作只寫入獨立開發者存檔。</p><div class="developer-control-grid"><section class="developer-control-card"><h3>每日小目標</h3><label>卡片位置<select id="developer-daily-slot"><option value="0">第 1 張</option><option value="1">第 2 張</option><option value="2">第 3 張</option></select></label><label>正式模板<select id="developer-daily-template">${dailyOptions}</select></label><div class="developer-control-actions"><button class="soft-button" data-action="developer-set-daily">指定模板</button><button class="soft-button" data-action="developer-complete-daily">全部完成</button><button class="soft-button" data-action="developer-claim-daily">領取完成</button><button class="soft-button" data-action="developer-next-day">推進航海日</button><button class="soft-button" data-action="developer-reset-daily">重置今日</button></div></section><section class="developer-control-card"><h3>居民委託</h3><label>居民<select id="developer-resident">${residentOptions}</select></label><label>正式模板<select id="developer-commission-template">${commissionOptions}</select></label><p class="quiet-note">${active ? `進行中：${active.title} · ${active.progress}/${active.goal}` : "目前沒有 active 委託"}</p><div class="developer-control-actions"><button class="soft-button" data-action="developer-set-offer">指定提案</button><button class="soft-button" data-action="developer-accept-offer">接受提案</button><button class="soft-button" data-action="developer-complete-commission">完成進度</button><button class="soft-button" data-action="developer-deliver-commission">交付</button><button class="soft-button" data-action="developer-drop-commission">放下</button><button class="soft-button" data-action="developer-clear-commission-history">清除歷史</button></div></section></div><div class="modal-actions"><button class="primary-button" data-action="close-modal">完成測試</button></div></div></div>`;
+  const travelStatus = getTravelStatus(state.world);
+  const scaleOptions = DEVELOPER_TRAVEL_SCALES.map(scale => `<option value="${scale}" ${state.travelSettings.developerDurationScale === scale ? "selected" : ""}>${scale === 1 ? "正式速度 100%" : `測試速度 ${Math.round(scale * 100)}%`}</option>`).join("");
+  $(".developer-modal h2")?.replaceChildren("Slice E 開發者控制");
+  $(".developer-control-grid")?.insertAdjacentHTML("beforeend", `<section class="developer-control-card"><h3>正式航線</h3><label>航程時間比例<select id="developer-travel-scale">${scaleOptions}</select></label><p class="quiet-note">${travelStatus ? `航行中：${travelStatus.route.name} · ${travelStatus.segment}/${travelStatus.totalSegments}` : state.world.docking?.status === "offshore" ? `已抵達${regionById(state.world.docking.regionId)?.name || "目的地"}外海` : "目前安全停泊"}</p><div class="developer-control-actions"><button class="soft-button" data-action="developer-set-travel-scale">套用比例</button><button class="soft-button" data-action="developer-arrive-travel" ${travelStatus ? "" : "disabled"}>立即抵達外海</button><button class="soft-button" data-action="developer-reset-route">重置首條航線</button></div></section>`);
 }
 
 function finishDeveloperAction(message) {
@@ -808,9 +991,18 @@ document.addEventListener("click", event => {
   if(action==="chart-zoom")updateChartView(zoomChartView(state.chartView,Number(direction)));
   if(action==="chart-pan")updateChartView(panChartView(state.chartView,Number(x),Number(y)));
   if(action==="chart-reset")updateChartView({zoom:1,x:0,y:0});
-  if(action==="chart-route"){
-    const result=requestChartRoute(state.world,id);
-    toast(result.reason==="route-unavailable"?"這條航線仍在測繪，現在不能建立航行狀態":"航行功能會在下一個開發階段接上");
+  if(action==="prepare-chart-route")showRouteConfirmation(id);
+  if(action==="confirm-chart-route"){
+    modalRoot.innerHTML="";
+    clearFishing(); fishing.phase="idle";
+    const result=beginRouteTravel(state,id,Date.now());
+    if(result.ok){saveGame();syncTravelClock();render();toast(`已沿${result.route.name}出發。可以關閉遊戲，航程會照常前進。`,"gold");}
+    else toast("目前無法從這個位置出發，請先確認船已安全停泊");
+  }
+  if(action==="dock-arrival"){
+    const result=dockAtDestination(state,Date.now());
+    if(result.ok){saveGame();syncTravelClock();render();showDockingScene(result);}
+    else toast("船目前還沒有抵達可停泊的外海");
   }
   if(action==="dismiss-tutorial")tutorialEl.classList.add("is-hidden");
   if(action==="tutorial-go-fishing")setView("fishing");
@@ -848,9 +1040,20 @@ document.addEventListener("click", event => {
     if(result.ok)finishDeveloperAction("active 委託已放下");else toast("目前沒有 active 委託");
   }
   if(action==="developer-clear-commission-history"&&developerClearResidentCommissionHistory(state))finishDeveloperAction("居民委託歷史已清除");
+  if(action==="developer-set-travel-scale"){
+    const scale=$("#developer-travel-scale")?.value;
+    if(developerSetTravelScale(state,scale))finishDeveloperAction(`下一趟航程測試比例已設為 ${Math.round(state.travelSettings.developerDurationScale*100)}%`);
+  }
+  if(action==="developer-arrive-travel"){
+    if(developerArriveTravel(state,Date.now())){saveGame();syncTravelClock();render();showDeveloperTools();toast("已抵達目的地外海，仍需手動停泊","gold");}
+    else toast("目前沒有進行中的航程");
+  }
+  if(action==="developer-reset-route"&&developerResetRouteState(state)){
+    saveGame();syncTravelClock();render();showDeveloperTools();toast("首條航線已重置至眠潮灣初次出發狀態","gold");
+  }
   if(action==="toggle-sound"){state.settings.sound=!state.settings.sound;saveGame();showSettings();syncWorld();if(state.settings.sound){sound.play("coin");sound.startAmbient();}else sound.stopAmbient();}
   if(action==="close-modal")modalRoot.innerHTML="";
-  if(action==="to-title"){clearFishing();sound.stopAmbient();modalRoot.innerHTML="";gameShell.classList.add("is-hidden");titleScreen.classList.remove("is-hidden");app.classList.remove("is-developer-mode");$("#developer-tools-button").hidden=true;$("#continue-button").disabled=!hasSave("normal");}
+  if(action==="to-title"){if(state.world?.travel)travelClockTick({forceSave:true});clearInterval(travelClockTimer);travelClockTimer=null;clearFishing();sound.stopAmbient();modalRoot.innerHTML="";gameShell.classList.add("is-hidden");titleScreen.classList.remove("is-hidden");app.classList.remove("is-developer-mode");$("#developer-tools-button").hidden=true;$("#continue-button").disabled=!hasSave("normal");}
 });
 
 document.addEventListener("submit",event=>{
@@ -882,6 +1085,12 @@ document.addEventListener("keydown",event=>{
 });
 document.addEventListener("keyup",event=>{if(event.code==="Space"){fishing.held=false;$("#reel-button")?.classList.remove("is-held");}});
 window.addEventListener("pointerup",()=>{fishing.held=false;$("#reel-button")?.classList.remove("is-held");});
+document.addEventListener("visibilitychange",()=>{
+  if(!state.world?.travel)return;
+  if(document.visibilityState==="hidden")travelClockTick({forceSave:true});
+  else {const result=travelClockTick();if(result.arrived||result.changed)render();syncTravelClock();}
+});
+window.addEventListener("pagehide",()=>{if(state.world?.travel)travelClockTick({forceSave:true});});
 
 $$(".nav-button").forEach(button=>button.addEventListener("click",()=>setView(button.dataset.view)));
 $("#continue-button").addEventListener("click",()=>startGame(false,"normal"));

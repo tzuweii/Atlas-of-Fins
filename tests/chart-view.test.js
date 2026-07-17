@@ -50,13 +50,14 @@ test("new games and migrated saves always receive a safe chart view", () => {
   assert.deepEqual(migrateState({ version: 3 }).chartView, { zoom: 1, x: 0, y: 0 });
 });
 
-test("preview routes reject departure without creating or mutating travel state", () => {
+test("available chart routes create a timed journey without mutating the input world", () => {
   const world = createInitialState().world;
   const before = structuredClone(world);
-  const result = requestChartRoute(world, SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID);
-  assert.equal(result.ok, false);
-  assert.equal(result.reason, "route-unavailable");
-  assert.equal(result.world, world);
+  const result = requestChartRoute(world, SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID, "2026-01-01T00:00:00.000Z");
+  assert.equal(result.ok, true);
+  assert.notEqual(result.world, world);
+  assert.equal(result.world.travel.routeId, SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID);
+  assert.equal(result.world.docking.status, "traveling");
   assert.deepEqual(world, before);
   assert.equal(world.travel, null);
 });

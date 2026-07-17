@@ -1,4 +1,4 @@
-import { getRouteDestination, isRouteAvailable, routeById } from "../data/routes.js";
+import { beginWorldTravel, canBeginWorldTravel } from "./travel.js";
 
 export const CHART_VIEW_LIMITS = Object.freeze({
   minZoom: 0.8,
@@ -44,18 +44,9 @@ export function panChartView(view, deltaX, deltaY) {
 }
 
 export function canBeginChartRoute(world, routeId) {
-  const route = routeById(routeId);
-  if (!route || !isRouteAvailable(routeId)) return { ok: false, reason: "route-unavailable", route };
-  if (!world?.unlockedRouteIds?.includes(routeId)) return { ok: false, reason: "route-locked", route };
-  if (world.travel || world.docking?.status !== "docked") return { ok: false, reason: "not-docked", route };
-  const destinationId = getRouteDestination(route, world.currentRegionId);
-  if (!destinationId) return { ok: false, reason: "wrong-region", route };
-  return { ok: true, route, destinationId };
+  return canBeginWorldTravel(world, routeId);
 }
 
-export function requestChartRoute(world, routeId) {
-  const availability = canBeginChartRoute(world, routeId);
-  return availability.ok
-    ? { ...availability, ok: false, reason: "travel-not-implemented", world }
-    : { ...availability, world };
+export function requestChartRoute(world, routeId, now, options) {
+  return beginWorldTravel(world, routeId, now, options);
 }

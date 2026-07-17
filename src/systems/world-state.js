@@ -1,6 +1,7 @@
 import { FISH } from "../data.js";
 import { REGIONS, SLEEPING_TIDE_BAY_ID, getFishHabitat, isRegionAvailable } from "../data/regions.js";
 import { ROUTES, isRouteAvailable, routeById } from "../data/routes.js";
+import { getRouteTravelDurationMs } from "./travel.js";
 
 const isIsoDate = value => typeof value === "string" && !Number.isNaN(Date.parse(value));
 const uniqueStrings = values => [...new Set(Array.isArray(values) ? values.filter(value => typeof value === "string" && value) : [])];
@@ -8,6 +9,7 @@ const knownFishIds = new Set(FISH.map(fish => fish.id));
 
 const availableRegionIds = () => REGIONS.filter(region => region.status === "available").map(region => region.id);
 const availableRouteIds = () => ROUTES.filter(route => route.status === "available").map(route => route.id);
+const defaultRouteIds = () => ROUTES.filter(route => route.status === "available" && route.unlock?.type === "default").map(route => route.id);
 const validFishIds = values => uniqueStrings(values).filter(fishId => knownFishIds.has(fishId));
 
 function regionProgressEntry(raw, fallbackDiscoveredFishIds = [], fallbackArrivedAt = null) {
@@ -25,7 +27,8 @@ export function createInitialWorldState({ discoveredFishIds = [], firstArrivedAt
   return {
     currentRegionId: SLEEPING_TIDE_BAY_ID,
     visitedRegionIds: [SLEEPING_TIDE_BAY_ID],
-    unlockedRouteIds: [],
+    unlockedRouteIds: defaultRouteIds(),
+    completedRouteIds: [],
     regionProgress: {
       [SLEEPING_TIDE_BAY_ID]: regionProgressEntry(null, discoveredFishIds, firstArrivedAt)
     },
@@ -45,13 +48,14 @@ export function createDeveloperWorldState({ discoveredFishIds = [], currentRegio
     currentRegionId: safeCurrentRegionId,
     visitedRegionIds: implementedRegionIds,
     unlockedRouteIds: availableRouteIds(),
+    completedRouteIds: [],
     regionProgress,
     travel: null,
     docking: { status: "docked", regionId: safeCurrentRegionId }
   };
 }
 
-function normalizeTravel(raw) {
+function normalizeTravel(raw, completedRouteIds = []) {
   if (!raw || typeof raw !== "object" || !isRouteAvailable(raw.routeId)) return null;
   const route = routeById(raw.routeId);
   const endpointsMatch = route
@@ -59,12 +63,21 @@ function normalizeTravel(raw) {
     && [route.fromRegionId, route.toRegionId].includes(raw.toRegionId)
     && raw.fromRegionId !== raw.toRegionId;
   if (!endpointsMatch || !isRegionAvailable(raw.fromRegionId) || !isRegionAvailable(raw.toRegionId)) return null;
+  if (!isIsoDate(raw.startedAt) || !isIsoDate(raw.lastCheckedAt)) return null;
+  const fallbackDurationMs = getRouteTravelDurationMs(route, { completedRouteIds });
+  const durationMs = Math.min(7 * 24 * 60 * 60 * 1000, Math.max(1000, Number(raw.durationMs) || fallbackDurationMs));
+  const elapsedMs = Math.min(durationMs, Math.max(0, Number(raw.elapsedMs) || 0));
+  const totalSegments = Math.max(1, Math.floor(Number(route.travelSegments) || 1));
+  const progress = elapsedMs / durationMs;
   return {
     routeId: route.id,
     fromRegionId: raw.fromRegionId,
     toRegionId: raw.toRegionId,
-    segment: Math.min(route.travelSegments, Math.max(1, Math.floor(Number(raw.segment) || 1))),
-    startedAt: isIsoDate(raw.startedAt) ? raw.startedAt : null,
+    segment: progress >= 1 ? totalSegments : Math.min(totalSegments, Math.floor(progress * totalSegments) + 1),
+    startedAt: raw.startedAt,
+    lastCheckedAt: raw.lastCheckedAt,
+    durationMs,
+    elapsedMs,
     observations: Array.isArray(raw.observations) ? raw.observations.filter(entry => entry && typeof entry === "object") : []
   };
 }
@@ -84,7 +97,11 @@ export function normalizeWorldState(raw, {
     ...uniqueStrings(source.visitedRegionIds).filter(regionId => implementedRegionIds.includes(regionId)),
     safeCurrentRegionId
   ])];
-  const unlockedRouteIds = uniqueStrings(source.unlockedRouteIds).filter(routeId => isRouteAvailable(routeId));
+  const unlockedRouteIds = [...new Set([
+    ...defaultRouteIds(),
+    ...uniqueStrings(source.unlockedRouteIds).filter(routeId => isRouteAvailable(routeId))
+  ])];
+  const completedRouteIds = uniqueStrings(source.completedRouteIds).filter(routeId => isRouteAvailable(routeId));
   const sourceProgress = source.regionProgress && typeof source.regionProgress === "object" ? source.regionProgress : {};
   const regionProgress = Object.fromEntries(visitedRegionIds.map(regionId => [
     regionId,
@@ -94,12 +111,13 @@ export function normalizeWorldState(raw, {
       regionId === SLEEPING_TIDE_BAY_ID ? firstArrivedAt : null
     )
   ]));
-  const travel = normalizeTravel(source.travel);
+  const travel = normalizeTravel(source.travel, completedRouteIds);
   if (travel) {
     return {
       currentRegionId: safeCurrentRegionId,
       visitedRegionIds,
       unlockedRouteIds,
+      completedRouteIds,
       regionProgress,
       travel,
       docking: { status: "traveling", regionId: null }
@@ -113,6 +131,7 @@ export function normalizeWorldState(raw, {
     currentRegionId: safeCurrentRegionId,
     visitedRegionIds,
     unlockedRouteIds,
+    completedRouteIds,
     regionProgress,
     travel: null,
     docking: offshoreRegionId

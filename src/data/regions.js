@@ -57,6 +57,7 @@ export const REGIONS = [
     palette: "sleeping_tide",
     musicId: "bay",
     journalPoolId: "sleeping_tide",
+    contentStatus: "complete",
     status: "available"
   },
   {
@@ -66,11 +67,12 @@ export const REGIONS = [
     currentProfile: "warm_current_coral_archipelago",
     climateTags: ["tropical", "subtropical", "coral"],
     spotIds: [],
-    unlock: { type: "future-slice" },
+    unlock: { type: "route", routeId: "sleeping_tide_to_luminous_archipelago" },
     palette: "luminous_archipelago",
     musicId: null,
     journalPoolId: null,
-    status: "preview"
+    contentStatus: "route-only",
+    status: "available"
   }
 ];
 

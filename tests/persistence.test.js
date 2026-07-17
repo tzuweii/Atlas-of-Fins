@@ -100,6 +100,24 @@ test("Slice C v4 state is backed up byte-for-byte before same-version Slice D ch
   assert.equal(result.state.money, 444);
 });
 
+test("Slice D v4 state is backed up before Slice E travel history normalization", () => {
+  const alpha4 = createInitialState();
+  alpha4.money = 555;
+  delete alpha4.travelSettings;
+  delete alpha4.world.completedRouteIds;
+  const alpha4Text = JSON.stringify(alpha4);
+  const storage = new MemoryStorage({ [SAVE_KEY]: alpha4Text, [BACKUP_KEY]: "older-alpha" });
+  const result = load(storage);
+
+  assert.equal(storage.getItem(BACKUP_KEY), alpha4Text);
+  assert.equal(result.migratedFromVersion, 4);
+  assert.equal(result.preserveBackupOnWrite, true);
+  assert.deepEqual(result.state.travelSettings, { developerDurationScale: 1 });
+  assert.deepEqual(result.state.world.completedRouteIds, []);
+  assert.deepEqual(result.state.world.unlockedRouteIds, ["sleeping_tide_to_luminous_archipelago"]);
+  assert.equal(result.state.money, 555);
+});
+
 test("Slice B v4 state is backed up byte-for-byte before same-version Slice C normalization", () => {
   const alpha2Text = JSON.stringify({
     version: 4,

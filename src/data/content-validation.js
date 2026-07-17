@@ -6,6 +6,7 @@ const COLLECTION_NAMES = [
 
 const WEATHER_IDS = new Set(["sunny", "rain"]);
 const SIZE_TARGETS = new Set(["small", "standard", "large", "record"]);
+const ROUTE_DISTANCE_CLASSES = new Set(["short", "medium", "long"]);
 const isChartPosition = value => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100;
 
 const asArray = value => Array.isArray(value) ? value : [];
@@ -171,6 +172,12 @@ export function validateContentCatalog(content = {}) {
   for (const route of collections.routes) {
     requireReference("routes", route, "fromRegionId", route?.fromRegionId, ids.regions, "區域");
     requireReference("routes", route, "toRegionId", route?.toRegionId, ids.regions, "區域");
+    if (!ROUTE_DISTANCE_CLASSES.has(route?.distanceClass)) {
+      addError("invalid-distance", "routes", route?.id, `routes[${route?.id || "missing-id"}].distanceClass`, `航線距離級別「${String(route?.distanceClass)}」不受支援`);
+    }
+    if (!(Number(route?.travelSegments) >= 1)) {
+      addError("invalid-segments", "routes", route?.id, `routes[${route?.id || "missing-id"}].travelSegments`, "航線至少需要一個航段");
+    }
   }
   for (const resident of collections.residents) {
     requireReference("residents", resident, "regionId", resident?.regionId, ids.regions, "區域");

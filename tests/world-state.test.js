@@ -24,15 +24,17 @@ test("sleeping tide bay packages all legacy spots, fish habitats, and bay events
   assert.equal(BAY_EVENTS.every(event => event.regionId === SLEEPING_TIDE_BAY_ID), true);
 });
 
-test("luminous archipelago and its route remain preview-only in Slice B", () => {
+test("Slice E exposes the route while keeping luminous fishing content deferred", () => {
   const luminous = REGIONS.find(region => region.id === LUMINOUS_ARCHIPELAGO_ID);
-  assert.equal(luminous.status, "preview");
+  assert.equal(luminous.status, "available");
+  assert.equal(luminous.contentStatus, "route-only");
   assert.deepEqual(luminous.spotIds, []);
   assert.equal(ROUTES.length, 1);
   assert.equal(ROUTES[0].id, SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID);
-  assert.equal(ROUTES[0].status, "preview");
-  assert.equal(isRouteAvailable(ROUTES[0].id), false);
-  assert.deepEqual(getRoutesForRegion(SLEEPING_TIDE_BAY_ID), []);
+  assert.equal(ROUTES[0].status, "available");
+  assert.equal(ROUTES[0].distanceClass, "short");
+  assert.equal(isRouteAvailable(ROUTES[0].id), true);
+  assert.deepEqual(getRoutesForRegion(SLEEPING_TIDE_BAY_ID), ROUTES);
   assert.deepEqual(getRoutesForRegion(SLEEPING_TIDE_BAY_ID, { includePreview: true }), ROUTES);
 });
 
@@ -55,13 +57,15 @@ test("new and developer games only unlock currently implemented world content", 
   const initial = createInitialWorldState();
   assert.equal(initial.currentRegionId, SLEEPING_TIDE_BAY_ID);
   assert.deepEqual(initial.visitedRegionIds, [SLEEPING_TIDE_BAY_ID]);
-  assert.deepEqual(initial.unlockedRouteIds, []);
+  assert.deepEqual(initial.unlockedRouteIds, [SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID]);
+  assert.deepEqual(initial.completedRouteIds, []);
   assert.deepEqual(initial.docking, { status: "docked", regionId: SLEEPING_TIDE_BAY_ID });
   assert.equal(initial.travel, null);
 
   const developer = createDeveloperWorldState({ discoveredFishIds: FISH.map(fish => fish.id) });
-  assert.deepEqual(developer.visitedRegionIds, [SLEEPING_TIDE_BAY_ID]);
-  assert.deepEqual(developer.unlockedRouteIds, []);
+  assert.deepEqual(developer.visitedRegionIds, [SLEEPING_TIDE_BAY_ID, LUMINOUS_ARCHIPELAGO_ID]);
+  assert.deepEqual(developer.unlockedRouteIds, [SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID]);
+  assert.deepEqual(developer.completedRouteIds, []);
   assert.equal(developer.regionProgress[SLEEPING_TIDE_BAY_ID].discoveredFishIds.length, FISH.length);
   assert.deepEqual(createInitialState().world, initial);
   assert.deepEqual(createDeveloperState().world, developer);
@@ -115,8 +119,8 @@ test("unknown world content and broken travel safely return to a valid dock", ()
     docking: { status: "offshore", regionId: "deleted-region" }
   });
   assert.equal(repaired.currentRegionId, SLEEPING_TIDE_BAY_ID);
-  assert.deepEqual(repaired.visitedRegionIds, [SLEEPING_TIDE_BAY_ID]);
-  assert.deepEqual(repaired.unlockedRouteIds, []);
+  assert.deepEqual(repaired.visitedRegionIds, [SLEEPING_TIDE_BAY_ID, LUMINOUS_ARCHIPELAGO_ID]);
+  assert.deepEqual(repaired.unlockedRouteIds, [SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID]);
   assert.equal(repaired.travel, null);
   assert.deepEqual(repaired.docking, { status: "docked", regionId: SLEEPING_TIDE_BAY_ID });
 });

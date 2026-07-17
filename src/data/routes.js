@@ -9,14 +9,15 @@ export const ROUTES = [
     toRegionId: LUMINOUS_ARCHIPELAGO_ID,
     name: "琉光暖流航線",
     currentTags: ["warm_current"],
-    unlock: { type: "future-slice" },
+    unlock: { type: "default" },
+    distanceClass: "short",
     travelSegments: 3,
     preview: {
       color: "coral_blue",
       silhouetteFishIds: [],
       musicPreviewId: null
     },
-    status: "preview"
+    status: "available"
   }
 ];
 

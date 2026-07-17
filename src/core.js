@@ -1,6 +1,6 @@
 import {
   ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, AQUARIUM_DECORATIONS, BAITS, BAY_EVENTS,
-  DAILY_GOAL_TEMPLATES, FISH, FURNITURE, MILESTONES, RARITY, RODS, SLEEPING_TIDE_BAY_ID, SPOTS, TIMES,
+  DAILY_GOAL_TEMPLATES, FISH, FURNITURE, MILESTONES, RARITY, RODS, ROUTES, SLEEPING_TIDE_BAY_ID, SPOTS, TIMES,
   getFishHabitat, isRegionAvailable
 } from "./data.js";
 import { BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, SAVE_KEY, SAVE_VERSION } from "./persistence/save-schema.js";
@@ -22,12 +22,18 @@ import {
   CHART_VIEW_LIMITS, canBeginChartRoute, createDefaultChartView, normalizeChartView,
   panChartView, requestChartRoute, zoomChartView
 } from "./systems/chart-view.js";
+import {
+  DEVELOPER_TRAVEL_SCALES, FAMILIAR_TRAVEL_DURATION_MS, FIRST_TRAVEL_DURATION_MS,
+  advanceWorldTravel, beginWorldTravel, dockWorldAtDestination, getRouteTravelDurationMs,
+  getTravelStatus, normalizeTravelScale
+} from "./systems/travel.js";
 
 export {
   BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, SAVE_KEY, SAVE_VERSION, createDailyQuests,
   CHART_VIEW_LIMITS, canBeginChartRoute, createDefaultChartView, createDeveloperWorldState,
-  createInitialWorldState, normalizeChartView, normalizeWorldState, panChartView,
-  requestChartRoute, zoomChartView
+  createInitialWorldState, DEVELOPER_TRAVEL_SCALES, FAMILIAR_TRAVEL_DURATION_MS,
+  FIRST_TRAVEL_DURATION_MS, getRouteTravelDurationMs, getTravelStatus, normalizeChartView,
+  normalizeTravelScale, normalizeWorldState, panChartView, requestChartRoute, zoomChartView
 };
 export const DEFAULT_TITLE = "海灣旅人";
 
@@ -272,6 +278,7 @@ export function createInitialState() {
     dailyBoard: null,
     residentCommissions: null,
     chartView: createDefaultChartView(),
+    travelSettings: { developerDurationScale: 1 },
     world: createInitialWorldState(),
     bayEvent: createBayEventState(1),
     bayEventHistory: {},
@@ -396,10 +403,17 @@ function migrateDeveloperUnlocks(state, raw) {
   state.totalCaught = Math.max(state.totalCaught, full.totalCaught);
   state.totalSold = Math.max(state.totalSold, full.totalSold);
   state.recordCatches = Math.max(state.recordCatches, full.recordCatches);
-  state.world = createDeveloperWorldState({
+  const developerWorld = createDeveloperWorldState({
     discoveredFishIds: Object.keys(state.discovered),
     currentRegionId: state.world?.currentRegionId
   });
+  state.world = {
+    ...state.world,
+    visitedRegionIds: [...new Set([...developerWorld.visitedRegionIds, ...(state.world?.visitedRegionIds || [])])],
+    unlockedRouteIds: [...new Set([...developerWorld.unlockedRouteIds, ...(state.world?.unlockedRouteIds || [])])],
+    completedRouteIds: [...new Set(state.world?.completedRouteIds || [])],
+    regionProgress: { ...developerWorld.regionProgress, ...(state.world?.regionProgress || {}) }
+  };
   evaluateAchievements(state);
   return state;
 }
@@ -414,6 +428,11 @@ export function migrateState(raw) {
   merged.baitAmounts = { ...base.baitAmounts, ...(raw.baitAmounts || {}) };
   merged.placedFurniture = { ...base.placedFurniture, ...(raw.placedFurniture || {}) };
   merged.settings = { ...base.settings, ...(raw.settings || {}) };
+  merged.travelSettings = {
+    ...base.travelSettings,
+    ...(raw.travelSettings && typeof raw.travelSettings === "object" ? raw.travelSettings : {}),
+    developerDurationScale: normalizeTravelScale(raw.travelSettings?.developerDurationScale)
+  };
   merged.discovered = Object.fromEntries(Object.entries(raw.discovered || {})
     .filter(([fishId]) => isKnownId(FISH, fishId))
     .map(([fishId, record]) => [fishId, migrateDiscovery(record)])
@@ -489,7 +508,10 @@ export function isCurrentSaveSchema(raw) {
     && Number(raw?.dailyBoard?.day) >= 1
     && Array.isArray(raw?.dailyBoard?.entries)
     && raw?.residentCommissions && typeof raw.residentCommissions === "object"
-    && raw?.chartView && typeof raw.chartView === "object";
+    && raw?.chartView && typeof raw.chartView === "object"
+    && raw?.travelSettings && typeof raw.travelSettings === "object"
+    && Number.isFinite(Number(raw.travelSettings.developerDurationScale))
+    && Array.isArray(raw?.world?.completedRouteIds);
 }
 
 export function discoveredCount(state) {
@@ -869,6 +891,68 @@ export function deliverResidentCommission(state, residentId) {
   state.residentCommissions = result.state;
   applyStructuredReward(state, result.reward);
   return result;
+}
+
+export function getRouteDurationForState(state, routeId) {
+  const route = ROUTES.find(item => item.id === routeId);
+  const scale = state?.developerMode ? state.travelSettings?.developerDurationScale : 1;
+  return getRouteTravelDurationMs(route, state?.world, scale);
+}
+
+export function beginRouteTravel(state, routeId, now = Date.now()) {
+  if (!state?.world) return { ok: false, reason: "missing-world", world: state?.world };
+  const scale = state.developerMode ? state.travelSettings?.developerDurationScale : 1;
+  const result = beginWorldTravel(state.world, routeId, now, { scale });
+  if (result.ok) state.world = result.world;
+  return result;
+}
+
+export function progressTravel(state, now = Date.now()) {
+  if (!state?.world) return { ok: false, reason: "missing-world", world: state?.world, changed: false, arrived: false };
+  const result = advanceWorldTravel(state.world, now);
+  if (result.ok && result.changed) state.world = result.world;
+  return result;
+}
+
+export function dockAtDestination(state, now = Date.now()) {
+  if (!state?.world) return { ok: false, reason: "missing-world", world: state?.world };
+  const result = dockWorldAtDestination(state.world, now);
+  if (!result.ok) return result;
+  state.world = result.world;
+  const firstSpot = SPOTS.find(spot => spot.regionId === result.destinationId);
+  if (firstSpot) state.selectedSpot = firstSpot.id;
+  return result;
+}
+
+export function developerSetTravelScale(state, scale) {
+  if (!state?.developerMode) return false;
+  state.travelSettings = {
+    ...(state.travelSettings || {}),
+    developerDurationScale: normalizeTravelScale(scale)
+  };
+  return true;
+}
+
+export function developerArriveTravel(state, now = Date.now()) {
+  if (!state?.developerMode || !state.world?.travel) return false;
+  state.world = {
+    ...state.world,
+    travel: { ...state.world.travel, elapsedMs: state.world.travel.durationMs }
+  };
+  const result = progressTravel(state, now);
+  return Boolean(result.ok && result.arrived);
+}
+
+export function developerResetRouteState(state) {
+  if (!state?.developerMode) return false;
+  const previousBayProgress = state.world?.regionProgress?.[SLEEPING_TIDE_BAY_ID];
+  state.world = createInitialWorldState({
+    discoveredFishIds: previousBayProgress?.discoveredFishIds || Object.keys(state.discovered || {}),
+    firstArrivedAt: previousBayProgress?.firstArrivedAt || state.lastSavedAt
+  });
+  const firstSpot = SPOTS.find(spot => spot.regionId === SLEEPING_TIDE_BAY_ID);
+  if (firstSpot) state.selectedSpot = firstSpot.id;
+  return true;
 }
 
 export function developerSetDailyGoal(state, slotIndex, templateId) {
