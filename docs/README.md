@@ -1,8 +1,8 @@
 # Atlas of Fins｜專案文件總覽
 
 > 最後整理：2026-07-18
-> 對應程式版本：v0.5.0-alpha.5
-> 現行實作計畫：v0.5「船屋與航程記憶」
+> 對應程式版本：v0.5.0-alpha.6
+> 最近完成計畫：v0.5「船屋與航程記憶」
 > 用途：區分跨版本權威文件、現行計畫與已完成版本紀錄。
 
 ## 1. 文件狀態定義
@@ -19,7 +19,7 @@
 判讀規則：
 
 1. 查詢「現在玩得到什麼」時，以程式、自動測試、[`DEVELOPMENT_PROGRESS.md`](DEVELOPMENT_PROGRESS.md) 與已完成版本規格為準。
-2. 查詢「接下來怎麼實作」時，以 [`versions/v0.5/V0_5_IMPLEMENTATION_PLAN.md`](versions/v0.5/V0_5_IMPLEMENTATION_PLAN.md) 為準。
+2. 查詢「v0.5 如何實作與驗收」時，以 [`versions/v0.5/V0_5_IMPLEMENTATION_PLAN.md`](versions/v0.5/V0_5_IMPLEMENTATION_PLAN.md) 與 [`versions/v0.5/V0_5_STRESS_REPORT.md`](versions/v0.5/V0_5_STRESS_REPORT.md) 為準；下一版本需另建 v0.6 計畫。
 3. 查詢「完整遊戲最後要做成什麼」時，以 [`FINAL_GAME_DESIGN.md`](FINAL_GAME_DESIGN.md) 為最高權威。
 4. 子系統架構文件只補充實作細節，不可覆寫正式定案。
 5. 尚未實作的正式定案不可寫進目前版本的已完成功能清單或 [`TEST_CHECKLIST.md`](TEST_CHECKLIST.md)。
@@ -29,7 +29,7 @@
 1. [`../README.md`](../README.md)：安裝、遊玩方式與目前可玩功能。
 2. [`DEVELOPMENT_PROGRESS.md`](DEVELOPMENT_PROGRESS.md)：唯一的版本與開發進度總表。
 3. [`FINAL_GAME_DESIGN.md`](FINAL_GAME_DESIGN.md)：長期正式定案與第一張航圖版本順序。
-4. [`versions/v0.5/V0_5_IMPLEMENTATION_PLAN.md`](versions/v0.5/V0_5_IMPLEMENTATION_PLAN.md)：現行版本的 Slice、存檔、相依順序與驗收門檻；Slice A～E 已完成。
+4. [`versions/v0.5/V0_5_IMPLEMENTATION_PLAN.md`](versions/v0.5/V0_5_IMPLEMENTATION_PLAN.md)：v0.5 的 Slice、存檔、相依順序與完成門檻；Slice A～F 已完成。
 5. [`COLLECTION_EXPERIENCE_SYSTEMS.md`](COLLECTION_EXPERIENCE_SYSTEMS.md)：v0.5 潮光、船隻、日誌與自動釣魚的架構背景。
 6. [`LONG_TERM_GAME_DESIGN.md`](LONG_TERM_GAME_DESIGN.md) 與 [`WORLD_ROUTE_SYSTEM_DESIGN.md`](WORLD_ROUTE_SYSTEM_DESIGN.md)：產品方向及世界航線架構。
 7. `versions/` 內對應版本的歷史規格、完成計畫與驗收報告。
@@ -51,7 +51,7 @@ docs/
     ├── v0.2/                         # 收藏航程完成規格
     ├── v0.3/                         # 海灣事件與魚誌完成規格
     ├── v0.4/                         # 第一趟遠航完成計畫與壓測
-    └── v0.5/                         # 現行船屋與航程記憶計畫
+    └── v0.5/                         # 船屋與航程記憶完成計畫及壓測
 ```
 
 只有明確屬於單一版本的文件放入 `versions/`。會隨後續版本持續更新的進度、驗收、正式定案、架構與授權文件留在 `docs/` 根層。
@@ -78,7 +78,8 @@ docs/
 | v0.3 | [`FISH_EXPANSION_DESIGN.md`](versions/v0.3/FISH_EXPANSION_DESIGN.md) | 已完成規格 | 10 種新增魚、收藏里程碑與驗收 |
 | v0.4 | [`V0_4_IMPLEMENTATION_PLAN.md`](versions/v0.4/V0_4_IMPLEMENTATION_PLAN.md) | 已完成計畫 | Slice A～H、模組邊界、相依順序與完成紀錄 |
 | v0.4 | [`SLICE_H_STRESS_REPORT.md`](versions/v0.4/SLICE_H_STRESS_REPORT.md) | 已完成驗收 | SVG、長時間航行、切區、離線與記憶體壓測基線 |
-| v0.5 | [`V0_5_IMPLEMENTATION_PLAN.md`](versions/v0.5/V0_5_IMPLEMENTATION_PLAN.md) | 現行實作計畫 | v5、事件、潮光、前三艘船、船別家具、日誌、自動釣架與 Slice A～F |
+| v0.5 | [`V0_5_IMPLEMENTATION_PLAN.md`](versions/v0.5/V0_5_IMPLEMENTATION_PLAN.md) | 已完成計畫 | v5、事件、潮光、前三艘船、船別家具、日誌、自動釣架與 Slice A～F |
+| v0.5 | [`V0_5_STRESS_REPORT.md`](versions/v0.5/V0_5_STRESS_REPORT.md) | 已完成驗收 | 經濟模型、500 事件、181 日日誌、300 次切船、240 次離線結算與 Chromium 效能基線 |
 
 未來建立 v0.6 以上實作計畫時，新增對應 `versions/v0.x/`，不要把新版本工作附加到 v0.5 文件末端。
 

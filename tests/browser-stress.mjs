@@ -86,6 +86,16 @@ await evaluate(`(() => {
 
 await click("#developer-tools-button");
 await evaluate(`(() => {
+  const shipIds=['drifting_home','tidewhisper_residence','voyager_study'];
+  for(let cycle=0;cycle<300;cycle+=1){
+    const select=document.querySelector('#developer-ship');
+    select.value=shipIds[cycle%shipIds.length];
+    document.querySelector('[data-action="developer-activate-ship"]').click();
+  }
+})()`);
+await wait(3400);
+assert.equal(await evaluate("JSON.parse(localStorage.getItem('atlas-of-fins.dev-save')).ships.activeShipId"), "voyager_study");
+await evaluate(`(() => {
   for(let cycle=0;cycle<60;cycle+=1){
     const select=document.querySelector('#developer-region');
     select.value=cycle%2?'luminous_archipelago':'sleeping_tide_bay';
@@ -147,6 +157,7 @@ assert.equal(exceptions.length, 0, exceptions.join("\n"));
 
 console.log(JSON.stringify({
   viewRenders: 80 * views.length,
+  shipSwitches: 300,
   regionSwitches: 61,
   offlineVoyages: 12,
   baseline: { heap: baselineHeap, ...baselineDom },

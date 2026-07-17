@@ -3,7 +3,7 @@
 > 文件狀態：架構參考；十組討論後的正式決策見 [`FINAL_GAME_DESIGN.md`](FINAL_GAME_DESIGN.md)
 > 建立日期：2026-07-16
 > 適用範圍：v0.4 至 v1.0 的產品與內容決策
-> 現行工作包：[`V0_5_IMPLEMENTATION_PLAN.md`](versions/v0.5/V0_5_IMPLEMENTATION_PLAN.md)
+> 最近完成工作包：[`V0_5_IMPLEMENTATION_PLAN.md`](versions/v0.5/V0_5_IMPLEMENTATION_PLAN.md)
 > 核心定位：療癒、單機、低操作壓力、以幸福感與好奇心驅動的收藏釣魚遊戲
 > 覆寫規則：本文件保存產品方向形成過程、風險與早期提案；名稱、數值、居民、航程、離線與版本順序若有衝突，以正式定案為準
 

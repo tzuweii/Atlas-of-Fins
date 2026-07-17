@@ -1,6 +1,6 @@
 # Atlas of Fins｜v0.5 實作計畫
 
-> 文件狀態：Slice A～E 已完成並通過驗證；下一步為 Slice F
+> 文件狀態：Slice A～F 已完成並通過驗證
 > 建立日期：2026-07-18
 > 起始版本：v0.4.0-alpha.8
 > 目標版本：v0.5「船屋與航程記憶」
@@ -305,7 +305,7 @@ src/
 | C | v0.5.0-alpha.3 | 三艘船視覺、船別家具與水族箱場景 | B | `[x]` |
 | D | v0.5.0-alpha.4 | 魚類初遇、航海日誌、今日潮記與封存 | A、C | `[x]` |
 | E | v0.5.0-alpha.5 | 靜潮自動釣架與離線結算 | A～D | `[x]` |
-| F | v0.5.0-alpha.6 | 經濟驗證、完整回歸、壓測與文件收尾 | A～E | `[ ]` |
+| F | v0.5.0-alpha.6 | 經濟驗證、完整回歸、壓測與文件收尾 | A～E | `[x]` |
 
 每個 Slice 通過自己的完成門檻後建立一個獨立 commit，不建立 WIP commit；任何紅燈不得留到下一片處理。
 
@@ -384,22 +384,22 @@ src/
 
 ### F1. 經濟與流程
 
-- [ ] 以正常遊玩驗證 20／50 潮光與 1,800／4,200／1,500 金幣節奏。
-- [ ] 驗證船別家具 `+15%／+30%` 四捨五入規則及固定價格。
-- [ ] 檢查初始船也能完成全部航線，航速差只帶來溫和升級感。
-- [ ] 若測試需要調整數值，記錄原因與前後影響，不暗改既有經濟。
+- [x] 以正常遊玩驗證 20／50 潮光與 1,800／4,200／1,500 金幣節奏。
+- [x] 驗證船別家具 `+15%／+30%` 四捨五入規則及固定價格。
+- [x] 檢查初始船也能完成全部航線，航速差只帶來溫和升級感。
+- [x] 測試不需調整既有數值；完整假設、檢查點與影響記錄於 [`V0_5_STRESS_REPORT.md`](V0_5_STRESS_REPORT.md)。
 
 ### F2. 完整回歸
 
-- [ ] 一般流程、開發者控制、模式隔離、資料驗證、v1～v5 遷移與備份回復全數通過。
-- [ ] 滑鼠、鍵盤、觸控、三段文字、三段 UI 縮放及 390px 窄螢幕通過。
-- [ ] `npm test`、`npm run test:browser:run`、`npm run test:browser:stress` 全數通過且未捕捉例外為 0。
+- [x] 一般流程、開發者控制、模式隔離、資料驗證、v1～v5 遷移與備份回復全數通過。
+- [x] 滑鼠、鍵盤、觸控、三段文字、三段 UI 縮放及 390px 窄螢幕通過。
+- [x] `npm test`、`npm run test:browser:run`、`npm run test:browser:stress` 全數通過且未捕捉例外為 0。
 
 ### F3. 文件與版本
 
-- [ ] 把已完成項目加入 [`TEST_CHECKLIST.md`](../../TEST_CHECKLIST.md)，更新 [`DEVELOPMENT_PROGRESS.md`](../../DEVELOPMENT_PROGRESS.md)、[根 README](../../../README.md)、[文件索引](../../README.md)與[`素材授權紀錄`](../../ASSET_LICENSES.md)。
-- [ ] 建立 v0.5 壓測報告，記錄環境、暖機基線、測後數值與差異。
-- [ ] 版本更新為 `v0.5.0-alpha.6`，完成 Slice F commit。
+- [x] 把已完成項目加入 [`TEST_CHECKLIST.md`](../../TEST_CHECKLIST.md)，更新 [`DEVELOPMENT_PROGRESS.md`](../../DEVELOPMENT_PROGRESS.md)、[根 README](../../../README.md)、[文件索引](../../README.md)與[`素材授權紀錄`](../../ASSET_LICENSES.md)。
+- [x] 建立 [`V0_5_STRESS_REPORT.md`](V0_5_STRESS_REPORT.md)，記錄環境、暖機基線、測後數值與差異。
+- [x] 版本更新為 `v0.5.0-alpha.6`，完成 Slice F commit。
 
 ## 18. 開發者控制最低範圍
 

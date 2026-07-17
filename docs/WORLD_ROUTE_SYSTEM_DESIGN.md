@@ -3,7 +3,7 @@
 > 文件狀態：架構參考；正式世界、航程與版本規格見 [`FINAL_GAME_DESIGN.md`](FINAL_GAME_DESIGN.md)
 > 建立日期：2026-07-16
 > 正式首個實作版本：v0.4「第一趟遠航垂直切片」
-> 現行擴充計畫：[`V0_5_IMPLEMENTATION_PLAN.md`](versions/v0.5/V0_5_IMPLEMENTATION_PLAN.md)
+> 最近完成擴充計畫：[`V0_5_IMPLEMENTATION_PLAN.md`](versions/v0.5/V0_5_IMPLEMENTATION_PLAN.md)
 > 前置版本：v0.3.0-alpha.4，單一海灣、3 個釣點、30 種魚、存檔 v3
 > 覆寫規則：資料模型與遷移原則仍有效；分支拓撲、候選名稱、略過航程、居民跨海互動與待核准清單已由正式定案覆寫
 

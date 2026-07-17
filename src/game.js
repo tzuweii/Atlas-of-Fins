@@ -64,7 +64,7 @@ let chartPointer = null;
 let chartSaveTimer = null;
 let travelClockTimer = null;
 let lastPersistedTravelElapsed = 0;
-let preserveBackupOnNextSave = false;
+const protectedBackupModes = new Set();
 let shouldRewriteLoadedSave = false;
 let pendingPortableImport = null;
 let shipTransitionTimer = null;
@@ -160,11 +160,10 @@ function saveGame(showToast = false) {
       primaryKey,
       backupKey,
       temporaryKey,
-      preserveBackup: preserveBackupOnNextSave,
+      preserveBackup: protectedBackupModes.has(activeSaveMode),
       validate: isCurrentSaveSchema
     });
     if (!result.ok) throw new Error(result.reason);
-    preserveBackupOnNextSave = false;
     shouldRewriteLoadedSave = false;
     lastPersistedTravelElapsed = getTravelStatus(state.world)?.elapsedMs || 0;
     if (showToast) toast(activeSaveMode === "developer" ? "開發者測試紀錄已儲存" : "航海日誌已妥善收好");
@@ -186,7 +185,7 @@ function loadGame() {
       requiresMigration: raw => !isCurrentSaveSchema(raw)
     });
     if (loaded) {
-      preserveBackupOnNextSave = loaded.preserveBackupOnWrite;
+      if (loaded.preserveBackupOnWrite) protectedBackupModes.add(activeSaveMode);
       shouldRewriteLoadedSave = loaded.shouldRewritePrimary;
       return loaded.state;
     }
@@ -204,11 +203,11 @@ function startGame(isNew = false, mode = "normal") {
   selectedJournalFish = null;
   logbookFilter = { type: "all", value: null };
   selectedLogbookEntryId = null;
-  preserveBackupOnNextSave = false;
   shouldRewriteLoadedSave = false;
   let autoFishingUpdate = { changed: false, summary: null };
   if (isNew) {
     state = mode === "developer" ? createDeveloperState() : createInitialState();
+    protectedBackupModes.delete(mode);
     const [primaryKey, backupKey, temporaryKey] = saveKeys();
     localStorage.removeItem(primaryKey); localStorage.removeItem(backupKey); localStorage.removeItem(temporaryKey);
     saveGame();
@@ -1278,14 +1277,17 @@ function previewPortableImport() {
 function confirmPortableImport() {
   if (!pendingPortableImport?.ok) return;
   const previousState = state;
+  const wasBackupProtected = protectedBackupModes.has(activeSaveMode);
   state = pendingPortableImport.state;
   state.settings = normalizeDisplaySettings(state.settings);
-  preserveBackupOnNextSave = false;
+  protectedBackupModes.delete(activeSaveMode);
   if (!saveGame(true)) {
+    if (wasBackupProtected) protectedBackupModes.add(activeSaveMode);
     state = previousState;
     showPortableImport("本機空間不足，原本的航程沒有被改動。", pendingPortableImport.draft);
     return;
   }
+  protectedBackupModes.add(activeSaveMode);
   pendingPortableImport = null;
   savePreferences();
   applyDisplaySettings();
