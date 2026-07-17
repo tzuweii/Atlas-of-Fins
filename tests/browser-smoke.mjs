@@ -79,6 +79,12 @@ assert.equal(await evaluate("document.querySelectorAll('.spot-card:disabled').le
 assert.equal(await evaluate("document.querySelector('#money-label').innerText.replaceAll(',', '')"), "999999");
 assert.match(await evaluate("document.querySelector('#time-label').innerText"), /夜晚/);
 assert.match(await evaluate("document.querySelector('.bay-event-card[data-bay-event=\"moonlit_tide\"]').innerText"), /月光潮汐[\s\S]*礁石邊緣／海灣深水區[\s\S]*0 \/ 2[\s\S]*目前生效/);
+assert.equal(await evaluate("document.querySelector('#developer-tools-button').hidden"), false);
+await click("#developer-tools-button");
+assert.match(await evaluate("document.querySelector('.developer-modal').innerText"), /Slice C 開發者控制[\s\S]*每日小目標[\s\S]*居民委託/);
+assert.equal(await evaluate("document.querySelectorAll('#developer-daily-template option').length"), 5);
+assert.equal(await evaluate("document.querySelectorAll('#developer-commission-template option').length"), 8);
+await click('[data-action="close-modal"]');
 await click('[data-view="journal"]');
 assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /探索進度[\s\S]*30 \/ 30/);
 assert.equal(await evaluate("document.querySelectorAll('.fish-card').length"), 30);
@@ -131,6 +137,12 @@ assert.match(await evaluate("document.querySelector('.bay-event-card[data-bay-ev
 assert.match(await evaluate("document.querySelector('#scene-caption').innerText"), /銀潮靠岸/);
 assert.match(await evaluate("document.querySelector('#tutorial').innerText"), /航海教學 · 1 \/ 6[\s\S]*去釣魚/);
 assert.equal(await evaluate("Boolean(document.querySelector('[data-action=\\\"tutorial-go-fishing\\\"]'))"), true);
+await click('[data-view="residents"]');
+assert.equal(await evaluate("document.querySelectorAll('.resident-card').length"), 2);
+assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /沒有好感度[\s\S]*燈塔守望者[\s\S]*魚市場老闆/);
+assert.match(await evaluate("document.querySelector('[data-resident=\lighthouse_keeper\]').innerText"), /淺灘的潮聲[\s\S]*接受委託/);
+await click('[data-resident="lighthouse_keeper"] [data-action="accept-commission"]');
+assert.match(await evaluate("document.querySelector('[data-resident=\lighthouse_keeper\]').innerText"), /慢慢進行中[\s\S]*0 \/ 2[\s\S]*放下委託/);
 await click('[data-view="fishing"]');
 assert.match(await evaluate("document.querySelector('#tutorial').innerText"), /航海教學 · 2 \/ 6[\s\S]*拋下魚線/);
 assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).tutorialStep`), 1);
@@ -172,6 +184,12 @@ assert.match(await evaluate("document.querySelector('.catch-modal').innerText"),
 assert.match(await evaluate("document.querySelector('.catch-modal').innerText"), /海灣事件進度[\s\S]*銀潮靠岸 · 1 \/ 3/);
 
 await click('[data-action="close-catch"]');
+assert.equal(await evaluate("document.querySelector('#resident-badge').innerText"), "進行中");
+await click('[data-view="residents"]');
+assert.match(await evaluate("document.querySelector('[data-resident=\lighthouse_keeper\]').innerText"), /淺灘的潮聲[\s\S]*1 \/ 2/);
+await click('[data-resident="lighthouse_keeper"] [data-action="talk-resident"]');
+assert.match(await evaluate("document.querySelector('.modal').innerText"), /燈塔守望者[\s\S]*記著回來的方向/);
+await click('[data-action="close-modal"]');
 await click('[data-view="journal"]');
 assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /探索進度[\s\S]*1 \/ 30/);
 assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /初次相遇[\s\S]*初次：/);
@@ -277,6 +295,11 @@ assert.ok(saved.unlockedAquariumDecor.includes("shimmer_specks"));
 assert.equal(saved.aquariumDecoration, "shimmer_specks");
 assert.equal(saved.bayEvent.eventId, "silver_tide");
 assert.equal(saved.bayEvent.progress, 1);
+assert.equal(saved.dailyBoard.day, 1);
+assert.equal(saved.dailyBoard.entries.length, 3);
+assert.equal(saved.currentQuests, undefined);
+assert.equal(saved.residentCommissions.active.residentId, "lighthouse_keeper");
+assert.equal(saved.residentCommissions.active.progress, 1);
 
 await click("#menu-button");
 await click('[data-action="to-title"]');
@@ -326,7 +349,18 @@ const legacyV3Payload = await evaluate(`(() => {
   save.version = 3;
   save.money = 2468;
   delete save.world;
+  save.currentQuests = save.dailyBoard.entries.map(entry => ({
+    id: entry.templateId,
+    instanceId: entry.instanceId,
+    text: entry.text,
+    goal: entry.goal,
+    reward: entry.reward.amount,
+    progress: entry.progress,
+    claimed: entry.claimed
+  }));
   save.currentQuests[0].progress = Math.min(1, save.currentQuests[0].goal);
+  delete save.dailyBoard;
+  delete save.residentCommissions;
   const raw = JSON.stringify(save);
   localStorage.setItem("atlas-of-fins.save", raw);
   localStorage.setItem("atlas-of-fins.backup", "older-backup");
@@ -339,7 +373,9 @@ assert.equal(migratedV4Save.version, 4);
 assert.equal(migratedV4Save.money, 2468);
 assert.equal(migratedV4Save.world.currentRegionId, "sleeping_tide_bay");
 assert.equal(migratedV4Save.world.docking.status, "docked");
-assert.equal(migratedV4Save.currentQuests[0].progress, 1);
+assert.equal(migratedV4Save.currentQuests, undefined);
+assert.equal(migratedV4Save.dailyBoard.entries[0].progress, 1);
+assert.equal(migratedV4Save.residentCommissions.offerDayByResident.lighthouse_keeper, migratedV4Save.day);
 assert.equal(await evaluate(`localStorage.getItem("atlas-of-fins.backup")`), legacyV3Payload);
 assert.equal(exceptions.length, 0, `No uncaught browser exceptions: ${exceptions.join(", ")}`);
 

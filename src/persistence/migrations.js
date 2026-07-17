@@ -4,7 +4,8 @@ export function loadStoredState(storage, {
   primaryKey,
   backupKey,
   targetVersion,
-  migrate
+  migrate,
+  requiresMigration
 }) {
   if (!storage || typeof migrate !== "function") return null;
   for (const sourceKey of [primaryKey, backupKey]) {
@@ -18,7 +19,7 @@ export function loadStoredState(storage, {
       continue;
     }
 
-    const needsMigration = parsedVersion(raw) < targetVersion;
+    const needsMigration = parsedVersion(raw) < targetVersion || Boolean(requiresMigration?.(raw, targetVersion));
     if (needsMigration && sourceKey === primaryKey) {
       // The exact pre-migration payload is the recovery point.
       storage.setItem(backupKey, rawText);

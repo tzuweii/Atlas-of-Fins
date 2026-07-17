@@ -1,5 +1,9 @@
 import { validateContentCatalog } from "./data/content-validation.js";
 import { DAILY_GOAL_TEMPLATES, QUEST_TEMPLATES } from "./data/daily-goals.js";
+import { COMMISSION_TEMPLATES, commissionTemplateById, getResidentCommissionTemplates } from "./data/commissions.js";
+import {
+  FISH_MARKET_OWNER_ID, LIGHTHOUSE_KEEPER_ID, RESIDENTS, getRegionResidents, residentById
+} from "./data/residents.js";
 import {
   LUMINOUS_ARCHIPELAGO_ID, REGIONS, REGION_SPOTS, SLEEPING_TIDE_BAY_ID, SPOTS,
   getFishHabitat, getRegionFish, getRegionSpots, isRegionAvailable, regionById, regionSpotById
@@ -10,11 +14,12 @@ import {
 } from "./data/routes.js";
 
 export {
-  DAILY_GOAL_TEMPLATES, QUEST_TEMPLATES,
+  COMMISSION_TEMPLATES, DAILY_GOAL_TEMPLATES, FISH_MARKET_OWNER_ID, LIGHTHOUSE_KEEPER_ID,
+  QUEST_TEMPLATES, RESIDENTS, commissionTemplateById, getRegionResidents, getResidentCommissionTemplates,
   LUMINOUS_ARCHIPELAGO_ID, REGIONS, REGION_SPOTS, ROUTES, SLEEPING_TIDE_BAY_ID,
   SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID, SPOTS, getFishHabitat, getRegionFish,
   getRegionSpots, getRouteDestination, getRoutesForRegion, isRegionAvailable,
-  isRouteAvailable, regionById, regionSpotById, routeById
+  isRouteAvailable, regionById, regionSpotById, residentById, routeById
 };
 
 export const TIMES = [
@@ -222,5 +227,6 @@ export const CONTENT_VALIDATION = validateContentCatalog({
   aquariumDecorations: AQUARIUM_DECORATIONS,
   regions: REGIONS,
   routes: ROUTES,
-  residents: []
+  residents: RESIDENTS,
+  commissions: COMMISSION_TEMPLATES
 });

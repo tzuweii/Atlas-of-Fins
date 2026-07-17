@@ -52,6 +52,7 @@ export const REGIONS = [
     currentProfile: "temperate_subtropical_current_edge",
     climateTags: ["temperate", "subtropical", "coastal"],
     spotIds: REGION_SPOTS.map(spot => spot.id),
+    residentIds: ["lighthouse_keeper", "fish_market_owner"],
     unlock: { type: "default" },
     palette: "sleeping_tide",
     musicId: "bay",

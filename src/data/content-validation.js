@@ -1,10 +1,10 @@
 const COLLECTION_NAMES = [
   "times", "spots", "rods", "baits", "furniture", "fish", "dailyGoals",
-  "events", "achievements", "aquariumDecorations", "regions", "routes", "residents"
+  "events", "achievements", "aquariumDecorations", "regions", "routes", "residents", "commissions"
 ];
 
 const WEATHER_IDS = new Set(["sunny", "rain"]);
-const SIZE_TARGETS = new Set(["large"]);
+const SIZE_TARGETS = new Set(["small", "standard", "large", "record"]);
 
 const asArray = value => Array.isArray(value) ? value : [];
 
@@ -49,6 +49,52 @@ export function validateContentCatalog(content = {}) {
       `${collection}[${item?.id || "missing-id"}].${path}`,
       `引用的${targetName} ID「${String(value)}」不存在`
     );
+  };
+
+  const validateReward = (collection, item, reward, path = "reward") => {
+    if (reward?.type === "coins") {
+      if (!(Number(reward.amount) > 0)) addError("invalid-reward", collection, item?.id, `${collection}[${item?.id || "missing-id"}].${path}.amount`, "金幣獎勵必須大於 0");
+      return;
+    }
+    if (reward?.type === "bait") {
+      requireReference(collection, item, `${path}.baitId`, reward.baitId, ids.baits, "魚餌");
+      if (!(Number(reward.amount) > 0)) addError("invalid-reward", collection, item?.id, `${collection}[${item?.id || "missing-id"}].${path}.amount`, "魚餌獎勵數量必須大於 0");
+      return;
+    }
+    addError("invalid-reward", collection, item?.id, `${collection}[${item?.id || "missing-id"}].${path}.type`, `獎勵類型「${String(reward?.type)}」不受支援`);
+  };
+
+  const validateProgressCondition = (collection, item, condition, path = "condition") => {
+    if (!condition || !["catch", "sell"].includes(condition.eventType)) {
+      addError("invalid-type", collection, item?.id, `${collection}[${item?.id || "missing-id"}].${path}.eventType`, `進度事件類型「${String(condition?.eventType)}」不受支援`);
+      return;
+    }
+    asArray(condition.regionIds).forEach((id, index) => requireReference(collection, item, `${path}.regionIds[${index}]`, id, ids.regions, "區域"));
+    asArray(condition.spotIds).forEach((id, index) => {
+      requireReference(collection, item, `${path}.spotIds[${index}]`, id, ids.spots, "釣點");
+      const spot = collections.spots.find(entry => entry.id === id);
+      if (spot && asArray(condition.regionIds).length && !condition.regionIds.includes(spot.regionId)) {
+        addError("region-mismatch", collection, item?.id, `${collection}[${item?.id || "missing-id"}].${path}.spotIds[${index}]`, `釣點「${id}」不屬於條件指定區域`);
+      }
+    });
+    asArray(condition.timeIds).forEach((id, index) => requireReference(collection, item, `${path}.timeIds[${index}]`, id, ids.times, "時段"));
+    asArray(condition.baitIds).forEach((id, index) => requireReference(collection, item, `${path}.baitIds[${index}]`, id, ids.baits, "魚餌"));
+    asArray(condition.fishIds).forEach((id, index) => requireReference(collection, item, `${path}.fishIds[${index}]`, id, ids.fish, "魚種"));
+    asArray(condition.rarityIds).forEach((id, index) => {
+      if (!rarityIds.has(id)) addError("missing-reference", collection, item?.id, `${collection}[${item?.id || "missing-id"}].${path}.rarityIds[${index}]`, `引用的稀有度 ID「${String(id)}」不存在`);
+    });
+    asArray(condition.fishTags).forEach((id, index) => {
+      if (!fishTags.has(id)) addError("missing-reference", collection, item?.id, `${collection}[${item?.id || "missing-id"}].${path}.fishTags[${index}]`, `引用的魚類標籤「${String(id)}」不存在`);
+    });
+    asArray(condition.weatherIds).forEach((id, index) => {
+      if (!WEATHER_IDS.has(id)) addError("missing-reference", collection, item?.id, `${collection}[${item?.id || "missing-id"}].${path}.weatherIds[${index}]`, `引用的天氣 ID「${String(id)}」不存在`);
+    });
+    asArray(condition.sizeTiers).forEach((id, index) => {
+      if (!SIZE_TARGETS.has(id)) addError("invalid-target", collection, item?.id, `${collection}[${item?.id || "missing-id"}].${path}.sizeTiers[${index}]`, `尺寸條件「${String(id)}」不受支援`);
+    });
+    if (condition.eventType === "sell" && condition.metric !== "amount") {
+      addError("invalid-target", collection, item?.id, `${collection}[${item?.id || "missing-id"}].${path}.metric`, "販售進度必須使用 amount");
+    }
   };
 
   for (const spot of collections.spots) {
@@ -105,19 +151,9 @@ export function validateContentCatalog(content = {}) {
   }
 
   for (const goal of collections.dailyGoals) {
-    if (goal?.type === "rarity" && !rarityIds.has(goal.target)) {
-      addError("missing-reference", "dailyGoals", goal?.id, `dailyGoals[${goal?.id || "missing-id"}].target`, `引用的稀有度 ID「${String(goal.target)}」不存在`);
-    } else if (goal?.type === "tag" && !fishTags.has(goal.target)) {
-      addError("missing-reference", "dailyGoals", goal?.id, `dailyGoals[${goal?.id || "missing-id"}].target`, `引用的魚類標籤「${String(goal.target)}」不存在`);
-    } else if (goal?.type === "bait") {
-      requireReference("dailyGoals", goal, "target", goal.target, ids.baits, "魚餌");
-    } else if (goal?.type === "sell" && goal.target !== "coins") {
-      addError("invalid-target", "dailyGoals", goal?.id, `dailyGoals[${goal?.id || "missing-id"}].target`, "販售目標必須使用 coins");
-    } else if (goal?.type === "size" && !SIZE_TARGETS.has(goal.target)) {
-      addError("invalid-target", "dailyGoals", goal?.id, `dailyGoals[${goal?.id || "missing-id"}].target`, `尺寸目標「${String(goal.target)}」不受支援`);
-    } else if (!["rarity", "tag", "bait", "sell", "size"].includes(goal?.type)) {
-      addError("invalid-type", "dailyGoals", goal?.id, `dailyGoals[${goal?.id || "missing-id"}].type`, `每日目標類型「${String(goal?.type)}」不受支援`);
-    }
+    validateProgressCondition("dailyGoals", goal, goal?.condition);
+    validateReward("dailyGoals", goal, goal?.reward);
+    if (!(Number(goal?.goal) > 0)) addError("invalid-goal", "dailyGoals", goal?.id, `dailyGoals[${goal?.id || "missing-id"}].goal`, "每日目標數量必須大於 0");
   }
 
   for (const achievement of collections.achievements) {
@@ -136,6 +172,12 @@ export function validateContentCatalog(content = {}) {
   }
   for (const resident of collections.residents) {
     requireReference("residents", resident, "regionId", resident?.regionId, ids.regions, "區域");
+  }
+  for (const commission of collections.commissions) {
+    requireReference("commissions", commission, "residentId", commission?.residentId, ids.residents, "居民");
+    validateProgressCondition("commissions", commission, commission?.condition);
+    validateReward("commissions", commission, commission?.reward);
+    if (!(Number(commission?.goal) > 0)) addError("invalid-goal", "commissions", commission?.id, `commissions[${commission?.id || "missing-id"}].goal`, "委託目標數量必須大於 0");
   }
 
   return {

@@ -1,10 +1,18 @@
-import { ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, BAITS, CONTENT_VALIDATION, FISH, FURNITURE, MILESTONES, RARITY, RODS, SPOTS, TIMES } from "./data.js";
 import {
-  BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, SAVE_KEY, SAVE_VERSION, advanceTime, applyMilestones, baitById, buyBait, buyFurniture, buyRod,
-  chooseFish, claimAchievement, claimQuest, createDeveloperState, createInitialState, discoveredCount, equipTitle, fishById,
+  ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, BAITS, COMMISSION_TEMPLATES, CONTENT_VALIDATION,
+  DAILY_GOAL_TEMPLATES, FISH, FURNITURE, MILESTONES, RARITY, RESIDENTS, RODS, SPOTS, TIMES,
+  getResidentCommissionTemplates, residentById
+} from "./data.js";
+import {
+  BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, SAVE_KEY, SAVE_VERSION, acceptResidentCommission, advanceTime,
+  applyMilestones, baitById, buyBait, buyFurniture, buyRod, chooseFish, claimAchievement,
+  claimAllCompletedDailyGoals, claimQuest, createDeveloperState, createInitialState, deliverResidentCommission,
+  developerClearResidentCommissionHistory, developerCompleteDailyGoals, developerCompleteResidentCommission,
+  developerResetDailyBoard, developerSetDailyGoal, developerSetResidentOffer, discoveredCount,
+  dropResidentCommission, equipTitle, fishById,
   furnitureById, generateCatch, getAchievementProgress, getActiveBayEvent, getAquariumCapacity, getBayEventHint, getFamiliarity,
   getTensionConfig, getUnclaimedAchievementCount, isUnlocked, migrateState, moveCatchToAquarium,
-  isBayEventConditionActive, recordCatch, removeFishFromAquarium, replaceAquariumFish, rodById, sellCatches,
+  isBayEventConditionActive, isCurrentSaveSchema, recordCatch, removeFishFromAquarium, replaceAquariumFish, rodById, sellCatches,
   setAquariumDecoration, swapAquariumFish
 } from "./core.js";
 import { loadStoredState } from "./persistence/migrations.js";
@@ -94,7 +102,13 @@ function saveGame(showToast = false) {
 function loadGame() {
   const [primaryKey, backupKey] = saveKeys();
   try {
-    const loaded = loadStoredState(localStorage, { primaryKey, backupKey, targetVersion: SAVE_VERSION, migrate: migrateState });
+    const loaded = loadStoredState(localStorage, {
+      primaryKey,
+      backupKey,
+      targetVersion: SAVE_VERSION,
+      migrate: migrateState,
+      requiresMigration: raw => !isCurrentSaveSchema(raw)
+    });
     if (loaded) {
       preserveBackupOnNextSave = loaded.preserveBackupOnWrite;
       shouldRewriteLoadedSave = loaded.shouldRewritePrimary;
@@ -139,6 +153,10 @@ function syncWorld() {
   $("#journal-badge").textContent = `${discoveredCount(state)}/${FISH.length}${unclaimed?` · ${unclaimed}`:""}`;
   $("#journal-badge").title = unclaimed?`${unclaimed} 項成就獎勵待領取`:"圖鑑探索進度";
   $("#catch-badge").textContent = state.catchInventory.length;
+  const activeCommission = state.residentCommissions?.active;
+  $("#resident-badge").hidden = !activeCommission;
+  $("#resident-badge").textContent = activeCommission?.progress >= activeCommission?.goal ? "可交付" : "進行中";
+  $("#developer-tools-button").hidden = activeSaveMode !== "developer";
   $("#sound-button").textContent = state.settings.sound ? "♪" : "×";
   $("#sail-emblem").textContent = state.completedMilestones.includes(FISH.length) ? "✺" : state.completedMilestones.includes(20) ? "✦" : "◌";
   $(".brand-mini small").textContent = activeSaveMode === "developer" ? `開發者模式 · ${state.equippedTitle}` : state.equippedTitle;
@@ -155,6 +173,7 @@ function render() {
   if (currentView === "journal") renderJournal();
   if (currentView === "catch") renderCatch();
   if (currentView === "shop") renderShop();
+  if (currentView === "residents") renderResidents();
   if (currentView === "home") renderHome();
 }
 
@@ -198,10 +217,57 @@ function renderBayEvent() {
 }
 
 function renderQuests() {
-  return `<aside class="card quest-card"><span class="section-label">第 ${state.day} 日</span><h3>今日的小小目標</h3>${state.currentQuests.map(quest => {
+  return `<aside class="card quest-card"><span class="section-label">第 ${state.dailyBoard.day} 日</span><h3>今日的小小目標</h3>${state.dailyBoard.entries.map(quest => {
     const complete = quest.progress >= quest.goal;
-    return `<div class="quest-item"><div class="quest-top"><span>${quest.claimed ? "✓ " : ""}${quest.text}</span><span>+${quest.reward}</span></div><div class="progress-track"><i style="width:${Math.min(100,quest.progress/quest.goal*100)}%"></i></div>${complete&&!quest.claimed?`<button class="quest-claim" data-action="claim-quest" data-id="${quest.instanceId}">領取獎勵</button>`:`<div class="quiet-note">${Math.floor(quest.progress)} / ${quest.goal}</div>`}</div>`;
+    return `<div class="quest-item"><div class="quest-top"><span>${quest.claimed ? "✓ " : ""}${quest.text}</span><span>${rewardLabel(quest.reward)}</span></div><div class="progress-track"><i style="width:${Math.min(100,quest.progress/quest.goal*100)}%"></i></div>${complete&&!quest.claimed?`<button class="quest-claim" data-action="claim-quest" data-id="${quest.instanceId}">領取獎勵</button>`:`<div class="quiet-note">${Math.floor(quest.progress)} / ${quest.goal}</div>`}</div>`;
   }).join("")}<p class="quiet-note">沒有倒數，也沒有逾期懲罰。想做的時候再做就好。</p></aside>`;
+}
+
+function rewardLabel(reward) {
+  if (reward?.label) return reward.label;
+  if (reward?.type === "coins") return `${reward.amount} 金幣`;
+  if (reward?.type === "bait") return `${baitById(reward.baitId)?.name || "魚餌"} ${reward.amount} 份`;
+  return "一份小禮物";
+}
+
+function isDockedAt(regionId) {
+  return state.world?.currentRegionId === regionId
+    && state.world?.docking?.status === "docked"
+    && state.world.docking.regionId === regionId;
+}
+
+function residentCard(resident) {
+  const active = state.residentCommissions.active?.residentId === resident.id ? state.residentCommissions.active : null;
+  const offer = state.residentCommissions.offersByResident?.[resident.id];
+  const history = state.residentCommissions.history?.[resident.id];
+  const anotherActive = state.residentCommissions.active && !active;
+  let commission = `<div class="commission-panel"><p class="quiet-note">今天沒有新的提案。放下的委託會等到下一個航海日再更新。</p></div>`;
+  if (offer) {
+    commission = `<div class="commission-panel"><span class="section-label">今日提案</span><h4>${offer.title}</h4><p>${offer.description}</p><div class="commission-meta"><span>獎勵 ${rewardLabel(offer.reward)}</span><span>0 / ${offer.goal}</span></div><div class="resident-actions"><button class="primary-button" data-action="accept-commission" data-id="${resident.id}" ${anotherActive ? "disabled" : ""}>${anotherActive ? "已有進行中的委託" : "接受委託"}</button></div></div>`;
+  }
+  if (active) {
+    const complete = active.progress >= active.goal;
+    commission = `<div class="commission-panel"><span class="section-label">${complete ? "可以交付" : "慢慢進行中"}</span><h4>${active.title}</h4><p>${active.description}</p><div class="commission-meta"><span>獎勵 ${rewardLabel(active.reward)}</span><span>${Math.floor(active.progress)} / ${active.goal}</span></div><div class="progress-track"><i style="width:${Math.min(100,active.progress/active.goal*100)}%"></i></div><div class="resident-actions">${complete ? `<button class="primary-button" data-action="deliver-commission" data-id="${resident.id}">當面交付</button>` : ""}<button class="soft-button" data-action="drop-commission">放下委託</button></div></div>`;
+  }
+  const dialogue = active ? (active.progress >= active.goal ? resident.dialogue.ready : resident.dialogue.active) : offer ? resident.dialogue.offer : resident.dialogue.greeting;
+  return `<article class="card resident-card" data-resident="${resident.id}"><div class="resident-heading"><span class="resident-icon">${resident.icon}</span><div><h3>${resident.name}</h3><p>${resident.role} · ${resident.portLocationName}</p></div></div><p class="resident-dialogue">「${dialogue}」</p>${commission}<div class="resident-actions"><button class="soft-button" data-action="talk-resident" data-id="${resident.id}">聊一會兒</button><span class="quiet-note">已完成 ${history?.completions || 0} 次</span></div></article>`;
+}
+
+function renderResidents() {
+  const regionId = state.world?.currentRegionId;
+  const residents = RESIDENTS.filter(resident => resident.regionId === regionId);
+  const docked = isDockedAt(regionId);
+  const body = docked && residents.length
+    ? `<div class="resident-grid">${residents.map(residentCard).join("")}</div>`
+    : `<div class="card resident-empty"><span class="resident-icon">⌂</span><h3>先回港停泊</h3><p class="modal-copy">居民只在自己的港口生活，不會跨海追蹤旅程。回到有效港口後再來聊聊吧。</p></div>`;
+  content.innerHTML = `${panelHeading("港口居民", "沒有好感度、連續拜訪或期限。接受後的委託會安靜保留，直到你回來交付或自行放下。")} ${body}`;
+}
+
+function showResidentDialogue(residentId, deliveredDialogue = null) {
+  const resident = residentById(residentId);
+  if (!resident) return;
+  const dialogue = deliveredDialogue || resident.dialogue.greeting;
+  modalRoot.innerHTML = `<div class="modal-backdrop"><div class="modal"><span class="section-label">${resident.portLocationName}</span><h2>${resident.name}</h2><p class="modal-copy">「${dialogue}」</p><p class="quiet-note">${resident.role}。居民不使用暫定姓名，也不會離開自己的港口遠端聯繫。</p><div class="modal-actions"><button class="primary-button" data-action="close-modal">道別</button></div></div></div>`;
 }
 
 function renderFishingStage() {
@@ -480,7 +546,8 @@ function showSlotModal(slot){
 
 function sleep() {
   const previousDay=state.day;
-  advanceTime(state); sound.play("sleep"); saveGame(); syncWorld(); toast(`睡醒時已是${TIMES[state.timeIndex].name}${state.timeIndex===0?`，第 ${state.day} 日`:""}`);
+  const timeResult=advanceTime(state); sound.play("sleep"); saveGame(); syncWorld(); toast(`睡醒時已是${TIMES[state.timeIndex].name}${state.timeIndex===0?`，第 ${state.day} 日`:""}`);
+  if(timeResult.autoClaims.length) setTimeout(()=>toast(`${timeResult.autoClaims.length} 項已完成的小目標獎勵已自動收好`,"gold"),240);
   if(state.day!==previousDay){const event=getActiveBayEvent(state);setTimeout(()=>toast(event?`新的海況：${event.name}`:"今天的海灣潮聲平穩",event?"gold":""),360);}
   if(!state.completedTutorial&&state.tutorialStep>=5){state.completedTutorial=true;state.tutorialStep=6;saveGame();toast("教學完成。接下來，照自己的步調探索海灣吧！","gold");}
   renderHome(); updateTutorial();
@@ -533,6 +600,20 @@ function notifyCompletedAchievements(achievements=[]) {
 function showSettings() {
   modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal"><h2>聲音與旅程</h2><p class="modal-copy">所有音效皆由瀏覽器即時合成，不使用外部音訊素材。</p><div class="settings-row"><span>操作與捕獲音效</span><button class="toggle ${state.settings.sound?"is-on":""}" data-action="toggle-sound"><i></i></button></div><div class="modal-actions"><button class="soft-button" data-action="close-modal">關閉</button></div></div></div>`;
 }
+
+function showDeveloperTools() {
+  if (!state.developerMode) return;
+  const dailyOptions = DAILY_GOAL_TEMPLATES.map(template => `<option value="${template.id}">${template.id} · ${template.text}</option>`).join("");
+  const commissionOptions = RESIDENTS.map(resident => `<optgroup label="${resident.name}">${getResidentCommissionTemplates(resident.id).map(template => `<option value="${template.id}">${template.id} · ${template.title}</option>`).join("")}</optgroup>`).join("");
+  const residentOptions = RESIDENTS.map(resident => `<option value="${resident.id}">${resident.name}</option>`).join("");
+  const active = state.residentCommissions.active;
+  modalRoot.innerHTML = `<div class="modal-backdrop"><div class="modal developer-modal"><span class="section-label">資料驅動測試入口</span><h2>Slice C 開發者控制</h2><p class="modal-copy">每日模板與居民委託選項直接由正式內容資料產生；所有操作只寫入獨立開發者存檔。</p><div class="developer-control-grid"><section class="developer-control-card"><h3>每日小目標</h3><label>卡片位置<select id="developer-daily-slot"><option value="0">第 1 張</option><option value="1">第 2 張</option><option value="2">第 3 張</option></select></label><label>正式模板<select id="developer-daily-template">${dailyOptions}</select></label><div class="developer-control-actions"><button class="soft-button" data-action="developer-set-daily">指定模板</button><button class="soft-button" data-action="developer-complete-daily">全部完成</button><button class="soft-button" data-action="developer-claim-daily">領取完成</button><button class="soft-button" data-action="developer-next-day">推進航海日</button><button class="soft-button" data-action="developer-reset-daily">重置今日</button></div></section><section class="developer-control-card"><h3>居民委託</h3><label>居民<select id="developer-resident">${residentOptions}</select></label><label>正式模板<select id="developer-commission-template">${commissionOptions}</select></label><p class="quiet-note">${active ? `進行中：${active.title} · ${active.progress}/${active.goal}` : "目前沒有 active 委託"}</p><div class="developer-control-actions"><button class="soft-button" data-action="developer-set-offer">指定提案</button><button class="soft-button" data-action="developer-accept-offer">接受提案</button><button class="soft-button" data-action="developer-complete-commission">完成進度</button><button class="soft-button" data-action="developer-deliver-commission">交付</button><button class="soft-button" data-action="developer-drop-commission">放下</button><button class="soft-button" data-action="developer-clear-commission-history">清除歷史</button></div></section></div><div class="modal-actions"><button class="primary-button" data-action="close-modal">完成測試</button></div></div></div>`;
+}
+
+function finishDeveloperAction(message) {
+  saveGame(); render(); showDeveloperTools(); toast(message, "gold");
+}
+
 function showDeveloperLogin(error = "") {
   modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal developer-modal"><span class="section-label">測試工具</span><h2>開發者模式</h2><p class="modal-copy">使用獨立測試存檔進入全解鎖旅程，不會覆蓋一般航程。</p><form id="developer-login-form" class="developer-form"><label for="developer-password">開發者密碼</label><input id="developer-password" name="password" type="password" autocomplete="off" required autofocus aria-describedby="developer-login-error"><p id="developer-login-error" class="developer-error" aria-live="polite">${error}</p><div class="modal-actions"><button class="soft-button" data-action="close-modal" type="button">取消</button><button class="primary-button" type="submit">進入測試旅程</button></div></form></div></div>`;
   $("#developer-password")?.focus();
@@ -549,6 +630,20 @@ document.addEventListener("click", event => {
   if(action==="reset-fishing")resetFishing();
   if(action==="spot"){state.selectedSpot=id;saveGame();renderFishing();syncWorld();}
   if(action==="claim-quest"&&claimQuest(state,id)){sound.play("coin");saveGame();toast("今日目標完成，獎勵已收入錢袋");render();}
+  if(action==="talk-resident")showResidentDialogue(id);
+  if(action==="accept-commission"){
+    const result=acceptResidentCommission(state,id);
+    if(result.ok){saveGame();render();toast(`已接受「${result.commission.title}」，委託不會隨換日過期`);}
+  }
+  if(action==="drop-commission"){
+    const result=dropResidentCommission(state);
+    if(result.ok){saveGame();render();toast("委託已輕輕放下，沒有任何懲罰");}
+  }
+  if(action==="deliver-commission"){
+    const result=deliverResidentCommission(state,id);
+    if(result.ok){sound.play("coin");saveGame();render();showResidentDialogue(id,result.dialogue);toast(`委託完成：${rewardLabel(result.reward)}`,"gold");}
+    else toast("需要回到正確居民所在的港口，才能當面交付");
+  }
   if(action==="close-catch"){modalRoot.innerHTML="";render();}
   if(action==="modal-journal"){modalRoot.innerHTML="";selectedJournalFish=id;setView("journal");}
   if(action==="journal-filter"){journalFilter=id;renderJournal();}
@@ -601,9 +696,43 @@ document.addEventListener("click", event => {
   if(action==="sleep")sleep();
   if(action==="dismiss-tutorial")tutorialEl.classList.add("is-hidden");
   if(action==="tutorial-go-fishing")setView("fishing");
+  if(action==="show-developer-tools")showDeveloperTools();
+  if(action==="developer-set-daily"){
+    const slot=$("#developer-daily-slot")?.value,templateId=$("#developer-daily-template")?.value;
+    if(developerSetDailyGoal(state,slot,templateId))finishDeveloperAction("已指定每日目標模板");
+  }
+  if(action==="developer-complete-daily"&&developerCompleteDailyGoals(state))finishDeveloperAction("每日目標進度已完成");
+  if(action==="developer-claim-daily"){
+    const claims=claimAllCompletedDailyGoals(state);
+    finishDeveloperAction(`已領取 ${claims.length} 項每日獎勵`);
+  }
+  if(action==="developer-next-day"){
+    const startDay=state.day;
+    for(let index=0;index<TIMES.length&&state.day===startDay;index+=1)advanceTime(state,()=>1);
+    finishDeveloperAction(`已推進至第 ${state.day} 日`);
+  }
+  if(action==="developer-reset-daily"&&developerResetDailyBoard(state))finishDeveloperAction("今日目標已重置");
+  if(action==="developer-set-offer"){
+    const template=COMMISSION_TEMPLATES.find(item=>item.id===$("#developer-commission-template")?.value);
+    if(template&&developerSetResidentOffer(state,template.residentId,template.id))finishDeveloperAction(`已指定${residentById(template.residentId).name}提案`);
+  }
+  if(action==="developer-accept-offer"){
+    const result=acceptResidentCommission(state,$("#developer-resident")?.value);
+    if(result.ok)finishDeveloperAction(`已接受「${result.commission.title}」`);else toast("目前無法接受：請確認居民提案與 active 狀態");
+  }
+  if(action==="developer-complete-commission"&&developerCompleteResidentCommission(state))finishDeveloperAction("active 委託進度已完成");
+  if(action==="developer-deliver-commission"){
+    const residentId=state.residentCommissions.active?.residentId,result=residentId?deliverResidentCommission(state,residentId):{ok:false};
+    if(result.ok)finishDeveloperAction(`已交付委託：${rewardLabel(result.reward)}`);else toast("沒有可在目前港口交付的委託");
+  }
+  if(action==="developer-drop-commission"){
+    const result=dropResidentCommission(state);
+    if(result.ok)finishDeveloperAction("active 委託已放下");else toast("目前沒有 active 委託");
+  }
+  if(action==="developer-clear-commission-history"&&developerClearResidentCommissionHistory(state))finishDeveloperAction("居民委託歷史已清除");
   if(action==="toggle-sound"){state.settings.sound=!state.settings.sound;saveGame();showSettings();syncWorld();if(state.settings.sound){sound.play("coin");sound.startAmbient();}else sound.stopAmbient();}
   if(action==="close-modal")modalRoot.innerHTML="";
-  if(action==="to-title"){clearFishing();sound.stopAmbient();modalRoot.innerHTML="";gameShell.classList.add("is-hidden");titleScreen.classList.remove("is-hidden");app.classList.remove("is-developer-mode");$("#continue-button").disabled=!hasSave("normal");}
+  if(action==="to-title"){clearFishing();sound.stopAmbient();modalRoot.innerHTML="";gameShell.classList.add("is-hidden");titleScreen.classList.remove("is-hidden");app.classList.remove("is-developer-mode");$("#developer-tools-button").hidden=true;$("#continue-button").disabled=!hasSave("normal");}
 });
 
 document.addEventListener("submit",event=>{
@@ -642,8 +771,9 @@ $("#time-chip").addEventListener("click",()=>toast("回到船屋使用床鋪，�
 setInterval(()=>{ if(!gameShell.classList.contains("is-hidden"))saveGame(); },30000);
 setInterval(()=>{
   if(gameShell.classList.contains("is-hidden"))return;
-  advanceTime(state);saveGame();syncWorld();sound.startAmbient();
+  const timeResult=advanceTime(state);saveGame();syncWorld();sound.startAmbient();
   toast(`潮水慢慢推進，現在是${TIMES[state.timeIndex].name}`);
+  if(timeResult.autoClaims.length)setTimeout(()=>toast(`${timeResult.autoClaims.length} 項每日獎勵已自動收好`,"gold"),280);
   if(currentView==="home")renderHome();
 },300000);
 window.addEventListener("beforeunload",()=>saveGame());

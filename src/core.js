@@ -1,10 +1,20 @@
 import {
   ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, AQUARIUM_DECORATIONS, BAITS, BAY_EVENTS,
-  FISH, FURNITURE, MILESTONES, RARITY, RODS, SLEEPING_TIDE_BAY_ID, SPOTS, TIMES,
+  DAILY_GOAL_TEMPLATES, FISH, FURNITURE, MILESTONES, RARITY, RODS, SLEEPING_TIDE_BAY_ID, SPOTS, TIMES,
   getFishHabitat, isRegionAvailable
 } from "./data.js";
 import { BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, SAVE_KEY, SAVE_VERSION } from "./persistence/save-schema.js";
-import { applyDailyQuestProgress, claimDailyQuest, createDailyQuests } from "./systems/daily-board.js";
+import {
+  applyDailyGoalProgress, claimCompletedDailyGoals, claimDailyGoal, createDailyBoard,
+  createDailyGoalEntry, createDailyQuests, normalizeDailyBoard
+} from "./systems/daily-board.js";
+import {
+  acceptResidentCommission as acceptResidentCommissionState,
+  applyResidentCommissionProgress, clearResidentCommissionHistory, completeActiveResidentCommission,
+  createResidentCommissionState, deliverResidentCommission as deliverResidentCommissionState,
+  dropResidentCommission as dropResidentCommissionState, normalizeResidentCommissionState,
+  refreshResidentOffers, setResidentOffer
+} from "./systems/resident-commissions.js";
 import {
   createDeveloperWorldState, createInitialWorldState, normalizeWorldState, recordRegionalDiscovery
 } from "./systems/world-state.js";
@@ -39,6 +49,33 @@ const isKnownId = (items, id) => items.some(item => item.id === id);
 const uniqueKnownIds = (values, items) => [...new Set(Array.isArray(values) ? values.filter(id => isKnownId(items, id)) : [])];
 const safeDate = value => typeof value === "string" && !Number.isNaN(Date.parse(value)) ? value : null;
 const nonNegativeNumber = value => Math.max(0, Number(value) || 0);
+
+export function getProgressAvailabilityContext(state) {
+  const availableRegionIds = [...new Set([
+    ...(state?.world?.visitedRegionIds || []),
+    state?.world?.currentRegionId
+  ].filter(isRegionAvailable))];
+  const availableSpotIds = SPOTS.filter(spot => availableRegionIds.includes(spot.regionId)
+    && (!spot.requires || state?.ownedRods?.includes(spot.requires))).map(spot => spot.id);
+  const availableBaitIds = BAITS.filter(bait => isUnlocked(bait, state)).map(bait => bait.id);
+  const availableFishIds = FISH.filter(fish => fish.habitats?.some(habitat => availableRegionIds.includes(habitat.regionId)
+    && habitat.spotIds.some(spotId => availableSpotIds.includes(spotId)))).map(fish => fish.id);
+  return { availableRegionIds, availableSpotIds, availableBaitIds, availableFishIds, fishCatalog: FISH };
+}
+
+export function applyStructuredReward(state, reward) {
+  if (reward?.type === "coins") {
+    const amount = Math.max(0, Number(reward.amount) || 0);
+    state.money += amount;
+    return amount > 0;
+  }
+  if (reward?.type === "bait" && BAITS.some(bait => bait.id === reward.baitId)) {
+    const amount = Math.max(0, Math.floor(Number(reward.amount) || 0));
+    state.baitAmounts[reward.baitId] = (state.baitAmounts[reward.baitId] || 0) + amount;
+    return amount > 0;
+  }
+  return false;
+}
 
 function normalizeCatchContext(raw) {
   const context = raw && typeof raw === "object" ? raw : {};
@@ -202,7 +239,7 @@ export function updateBayEventProgress(state, caught, completedAt = new Date().t
 }
 
 export function createInitialState() {
-  return {
+  const state = {
     version: SAVE_VERSION,
     money: 120,
     timeIndex: 0,
@@ -226,8 +263,8 @@ export function createInitialState() {
     completedMilestones: [],
     completedTutorial: false,
     tutorialStep: 0,
-    currentQuests: createDailyQuests(1),
-    questHistory: {},
+    dailyBoard: null,
+    residentCommissions: null,
     world: createInitialWorldState(),
     bayEvent: createBayEventState(1),
     bayEventHistory: {},
@@ -238,6 +275,10 @@ export function createInitialState() {
     settings: { sound: true, reducedMotion: false },
     lastSavedAt: null
   };
+  const availability = getProgressAvailabilityContext(state);
+  state.dailyBoard = createDailyBoard(state.day, availability);
+  state.residentCommissions = createResidentCommissionState(state.day, availability);
+  return state;
 }
 
 export function createDeveloperState() {
@@ -295,7 +336,10 @@ export function createDeveloperState() {
   state.completedMilestones = MILESTONES.map(item => item.count);
   state.completedTutorial = true;
   state.tutorialStep = 6;
-  state.currentQuests = createDailyQuests(state.day).map(quest => ({ ...quest, progress: quest.goal }));
+  const availability = getProgressAvailabilityContext(state);
+  state.dailyBoard = createDailyBoard(state.day, availability);
+  state.dailyBoard.entries = state.dailyBoard.entries.map(entry => ({ ...entry, progress: entry.goal }));
+  state.residentCommissions = createResidentCommissionState(state.day, availability);
   state.totalCaught = FISH.length * 10;
   state.totalSold = 10000;
   state.recordCatches = FISH.length;
@@ -417,7 +461,11 @@ export function migrateState(raw) {
   }
   merged.equippedTitle = merged.unlockedTitles.includes(raw.equippedTitle) ? raw.equippedTitle : base.equippedTitle;
   merged.aquariumDecoration = merged.unlockedAquariumDecor.includes(raw.aquariumDecoration) ? raw.aquariumDecoration : null;
-  merged.currentQuests = Array.isArray(raw.currentQuests) && raw.currentQuests.length ? raw.currentQuests : createDailyQuests(merged.day);
+  const progressAvailability = getProgressAvailabilityContext(merged);
+  merged.dailyBoard = normalizeDailyBoard(raw.dailyBoard, merged.day, progressAvailability, raw.currentQuests);
+  merged.residentCommissions = normalizeResidentCommissionState(raw.residentCommissions, merged.day, progressAvailability);
+  delete merged.currentQuests;
+  delete merged.questHistory;
   merged.money = Math.max(0, Number(merged.money) || 0);
   merged.totalSold = nonNegativeNumber(merged.totalSold);
   const recordedCatchTotal = Object.values(merged.discovered).reduce((sum, record) => sum + record.count, 0);
@@ -426,6 +474,13 @@ export function migrateState(raw) {
   merged.recordCatches = Math.max(Math.floor(nonNegativeNumber(merged.recordCatches)), heldRecordCatches);
   evaluateAchievements(merged);
   return merged.developerMode ? migrateDeveloperUnlocks(merged, raw) : merged;
+}
+
+export function isCurrentSaveSchema(raw) {
+  return Math.max(0, Math.floor(Number(raw?.version) || 0)) >= SAVE_VERSION
+    && Number(raw?.dailyBoard?.day) >= 1
+    && Array.isArray(raw?.dailyBoard?.entries)
+    && raw?.residentCommissions && typeof raw.residentCommissions === "object";
 }
 
 export function discoveredCount(state) {
@@ -650,7 +705,17 @@ export function recordCatch(state, caught, baitId = state.equippedBait) {
   if (caught.sizeTier === "record") state.recordCatches = (state.recordCatches || 0) + 1;
   if (isNew) state.money += 35 + ({ common: 0, uncommon: 30, rare: 100 }[fish.rarity]);
   if (isFirstShimmer) state.money += SHIMMER_CONFIG.researchReward;
-  updateQuestProgress(state, { type: "catch", fish, caught, baitId: context.baitId || baitId });
+  updateProgressEvent(state, {
+    type: "catch",
+    source: "manual",
+    fish,
+    caught,
+    baitId: context.baitId || baitId,
+    regionId: context.regionId,
+    spotId: context.spotId,
+    timeId: context.timeId,
+    weather: context.weather
+  });
   const bayEventUpdate = updateBayEventProgress(state, caught);
   const completedAchievements = evaluateAchievements(state);
   return {
@@ -674,7 +739,7 @@ export function sellCatches(state, uids) {
   state.catchInventory = state.catchInventory.filter(item => !uidSet.has(item.uid));
   state.money += total;
   state.totalSold += total;
-  updateQuestProgress(state, { type: "sell", amount: total });
+  updateProgressEvent(state, { type: "sell", source: "manual", amount: total });
   return { sold: sold.length, total };
 }
 
@@ -757,15 +822,92 @@ export function buyFurniture(state, furnitureId) {
 }
 
 export function updateQuestProgress(state, event) {
-  const nextEntries = applyDailyQuestProgress(state.currentQuests, event);
-  state.currentQuests.splice(0, state.currentQuests.length, ...nextEntries);
+  updateProgressEvent(state, { ...event, source: event?.source || "manual" });
 }
 
 export function claimQuest(state, instanceId) {
-  const result = claimDailyQuest(state.currentQuests, instanceId);
+  const result = claimDailyGoal(state.dailyBoard, instanceId);
   if (!result.ok) return false;
-  state.currentQuests.splice(0, state.currentQuests.length, ...result.entries);
-  state.money += result.reward;
+  state.dailyBoard = result.board;
+  applyStructuredReward(state, result.reward);
+  return true;
+}
+
+export function updateProgressEvent(state, event) {
+  state.dailyBoard = applyDailyGoalProgress(state.dailyBoard, event);
+  state.residentCommissions = applyResidentCommissionProgress(state.residentCommissions, event);
+}
+
+export function acceptResidentCommission(state, residentId) {
+  const result = acceptResidentCommissionState(state.residentCommissions, residentId, state.day);
+  if (result.ok) state.residentCommissions = result.state;
+  return result;
+}
+
+export function dropResidentCommission(state) {
+  const result = dropResidentCommissionState(state.residentCommissions);
+  if (result.ok) state.residentCommissions = result.state;
+  return result;
+}
+
+export function deliverResidentCommission(state, residentId) {
+  const result = deliverResidentCommissionState(state.residentCommissions, {
+    residentId,
+    regionId: state.world?.currentRegionId,
+    docked: state.world?.docking?.status === "docked" && state.world.docking.regionId === state.world.currentRegionId
+  });
+  if (!result.ok) return result;
+  state.residentCommissions = result.state;
+  applyStructuredReward(state, result.reward);
+  return result;
+}
+
+export function developerSetDailyGoal(state, slotIndex, templateId) {
+  const template = DAILY_GOAL_TEMPLATES.find(item => item.id === templateId);
+  const index = Math.min(2, Math.max(0, Math.floor(Number(slotIndex) || 0)));
+  if (!template || !state.developerMode) return false;
+  const entries = [...state.dailyBoard.entries];
+  entries[index] = createDailyGoalEntry(template, state.day, index);
+  state.dailyBoard = { day: state.day, entries };
+  return true;
+}
+
+export function developerCompleteDailyGoals(state) {
+  if (!state.developerMode) return false;
+  state.dailyBoard = { ...state.dailyBoard, entries: state.dailyBoard.entries.map(entry => ({ ...entry, progress: entry.goal })) };
+  return true;
+}
+
+export function claimAllCompletedDailyGoals(state) {
+  const result = claimCompletedDailyGoals(state.dailyBoard);
+  state.dailyBoard = result.board;
+  result.claims.forEach(claim => applyStructuredReward(state, claim.reward));
+  return result.claims;
+}
+
+export function developerResetDailyBoard(state) {
+  if (!state.developerMode) return false;
+  state.dailyBoard = createDailyBoard(state.day, getProgressAvailabilityContext(state));
+  return true;
+}
+
+export function developerSetResidentOffer(state, residentId, templateId) {
+  if (!state.developerMode) return false;
+  const result = setResidentOffer(state.residentCommissions, residentId, templateId, state.day, getProgressAvailabilityContext(state));
+  if (result.ok) state.residentCommissions = result.state;
+  return result.ok;
+}
+
+export function developerCompleteResidentCommission(state) {
+  if (!state.developerMode) return false;
+  const result = completeActiveResidentCommission(state.residentCommissions);
+  if (result.ok) state.residentCommissions = result.state;
+  return result.ok;
+}
+
+export function developerClearResidentCommissionHistory(state) {
+  if (!state.developerMode) return false;
+  state.residentCommissions = clearResidentCommissionHistory(state.residentCommissions);
   return true;
 }
 
@@ -785,14 +927,20 @@ export function applyMilestones(state) {
 }
 
 export function advanceTime(state, random = Math.random) {
+  const result = { dayChanged: false, autoClaims: [] };
   state.timeIndex = (state.timeIndex + 1) % TIMES.length;
   if (state.timeIndex === 0) {
+    result.autoClaims = claimAllCompletedDailyGoals(state);
     state.day += 1;
+    result.dayChanged = true;
     state.weather = random() < .35 ? "rain" : "sunny";
-    state.currentQuests = createDailyQuests(state.day);
+    const availability = getProgressAvailabilityContext(state);
+    state.dailyBoard = createDailyBoard(state.day, availability);
+    state.residentCommissions = refreshResidentOffers(state.residentCommissions, state.day, availability);
     state.bayEvent = createBayEventState(state.day);
     applyBayEventWorldConditions(state);
   }
+  return result;
 }
 
 export function getTensionConfig(fish, rod) {

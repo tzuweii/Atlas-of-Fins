@@ -76,20 +76,27 @@ test("v1 through v3 migration adds v4 world state without changing collection va
       sardine: { count: 4, bestLength: 20, bestWeight: .2 },
       anchovy: { count: 3, bestLength: 15, bestWeight: .1 }
     },
-    currentQuests: [{ instanceId: "legacy-goal", progress: 2, goal: 3, claimed: false }]
+    currentQuests: [{
+      id: "common3", instanceId: "1-0-common3", text: "捕獲 3 條常見魚",
+      type: "rarity", target: "common", progress: 2, goal: 3, reward: 85, claimed: false
+    }]
   };
   const migrated = migrateState(raw);
   assert.equal(migrated.version, 4);
   assert.equal(migrated.money, raw.money);
   assert.equal(migrated.totalCaught, raw.totalCaught);
   assert.deepEqual(Object.keys(migrated.discovered), ["sardine", "anchovy"]);
-  assert.deepEqual(migrated.currentQuests, raw.currentQuests);
+  assert.equal(migrated.currentQuests, undefined);
+  assert.deepEqual(
+    migrated.dailyBoard.entries.map(entry => ({ instanceId: entry.instanceId, progress: entry.progress, claimed: entry.claimed })),
+    raw.currentQuests.map(entry => ({ instanceId: entry.instanceId, progress: entry.progress, claimed: entry.claimed }))
+  );
   assert.equal(migrated.world.currentRegionId, SLEEPING_TIDE_BAY_ID);
   assert.deepEqual(migrated.world.regionProgress[SLEEPING_TIDE_BAY_ID].discoveredFishIds, ["sardine", "anchovy"]);
 
   const reloaded = migrateState(JSON.parse(JSON.stringify(migrated)));
   assert.deepEqual(reloaded.world, migrated.world);
-  assert.deepEqual(reloaded.currentQuests, migrated.currentQuests);
+  assert.deepEqual(reloaded.dailyBoard, migrated.dailyBoard);
   assert.equal(reloaded.money, migrated.money);
 });
 
