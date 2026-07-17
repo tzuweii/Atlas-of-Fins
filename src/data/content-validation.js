@@ -2,7 +2,7 @@ const COLLECTION_NAMES = [
   "times", "spots", "rods", "baits", "furniture", "fish", "dailyGoals",
   "events", "achievements", "aquariumDecorations", "regions", "routes", "residents", "commissions",
   "observations", "wonders", "researchNodes", "residentStoryScenes", "chartRegions", "chartRoutes",
-  "tideglowSources"
+  "tideglowSources", "ships"
 ];
 
 const WEATHER_IDS = new Set(["sunny", "rain"]);
@@ -310,6 +310,27 @@ export function validateContentCatalog(content = {}) {
         addError("missing-source-key", "tideglowSources", source?.id, `tideglowSources[${source?.id || "missing-id"}].${key}`, "潮光來源需要穩定的去重鍵");
       }
     }
+  }
+  let previousShipThreshold = -1;
+  let previousShipSpeed = 0;
+  for (const ship of collections.ships) {
+    if (!["implemented", "preview"].includes(ship?.status)) {
+      addError("invalid-status", "ships", ship?.id, `ships[${ship?.id || "missing-id"}].status`, "船隻狀態必須為 implemented 或 preview");
+    }
+    if (!(Number(ship?.speedMultiplier) >= 1) || Number(ship.speedMultiplier) < previousShipSpeed) {
+      addError("invalid-speed", "ships", ship?.id, `ships[${ship?.id || "missing-id"}].speedMultiplier`, "船隻航速必須至少 1 且依序遞增");
+    }
+    if (!(Number(ship?.tideglowRequired) >= 0) || Number(ship.tideglowRequired) < previousShipThreshold) {
+      addError("invalid-threshold", "ships", ship?.id, `ships[${ship?.id || "missing-id"}].tideglowRequired`, "船隻潮光門檻必須為非負且依序遞增");
+    }
+    if (ship?.status === "implemented" && !(Number(ship?.price) >= 0)) {
+      addError("invalid-price", "ships", ship?.id, `ships[${ship?.id || "missing-id"}].price`, "已實作船隻需要非負固定價格");
+    }
+    if (ship?.status === "preview" && ship?.price != null) {
+      addError("preview-price", "ships", ship?.id, `ships[${ship?.id || "missing-id"}].price`, "預告船隻價格需留待後續版本定案");
+    }
+    previousShipThreshold = Number(ship?.tideglowRequired) || 0;
+    previousShipSpeed = Number(ship?.speedMultiplier) || 0;
   }
 
   return {

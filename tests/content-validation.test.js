@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   ACHIEVEMENTS, AQUARIUM_DECORATIONS, BAITS, BAY_EVENTS, COMMISSION_TEMPLATES, CONTENT_VALIDATION,
   CHART_REGION_POINTS, CHART_ROUTE_PATHS, DAILY_GOAL_TEMPLATES, FISH, FURNITURE, RARITY,
-  REGIONS, RESIDENTS, RODS, ROUTES, SPOTS, TIDEGLOW_SOURCES, TIMES
+  REGIONS, RESIDENTS, RODS, ROUTES, SHIPS, SPOTS, TIDEGLOW_SOURCES, TIMES
 } from "../src/data.js";
 import { formatContentValidationErrors, validateContentCatalog } from "../src/data/content-validation.js";
 
@@ -25,7 +25,8 @@ const currentCatalog = () => ({
   commissions: structuredClone(COMMISSION_TEMPLATES),
   chartRegions: structuredClone(CHART_REGION_POINTS),
   chartRoutes: structuredClone(CHART_ROUTE_PATHS),
-  tideglowSources: structuredClone(TIDEGLOW_SOURCES)
+  tideglowSources: structuredClone(TIDEGLOW_SOURCES),
+  ships: structuredClone(SHIPS)
 });
 
 test("current content catalog has unique IDs and valid references", () => {
@@ -95,4 +96,15 @@ test("Tideglow sources require unique event types, positive points, and stable r
   assert.ok(report.errors.some(error => error.code === "duplicate-event-type"));
   assert.ok(report.errors.some(error => error.code === "invalid-points"));
   assert.ok(report.errors.some(error => error.code === "missing-source-key"));
+});
+
+test("ship catalog validates progression order, permanent prices, and preview boundaries", () => {
+  const catalog = currentCatalog();
+  catalog.ships[1].speedMultiplier = .9;
+  catalog.ships[2].tideglowRequired = 10;
+  catalog.ships[3].price = 9000;
+  const report = validateContentCatalog(catalog);
+  assert.ok(report.errors.some(error => error.code === "invalid-speed"));
+  assert.ok(report.errors.some(error => error.code === "invalid-threshold"));
+  assert.ok(report.errors.some(error => error.code === "preview-price"));
 });

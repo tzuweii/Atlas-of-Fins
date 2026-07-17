@@ -2,28 +2,29 @@ import {
   ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, BAITS, BAY_EVENTS, CHART_REGION_POINTS, CHART_ROUTE_PATHS,
   CHENGYE_ID, COMMISSION_TEMPLATES, CONTENT_VALIDATION, DAILY_GOAL_TEMPLATES, FISH, FURNITURE, MILESTONES,
   LUMINOUS_ARCHIPELAGO_ID, OBSERVATION_SUBJECTS, RARITY, REGIONS, RESEARCH_NODES, RESIDENTS, RODS,
-  SLEEPING_TIDE_BAY_ID, SPOTS, TIDEGLOW_SOURCES, TIMES, WONDERS,
+  SHIPS, SLEEPING_TIDE_BAY_ID, SPOTS, TIDEGLOW_SOURCES, TIMES, WONDERS,
   fishAssetSrcSet, getFishHabitat, getResidentCommissionTemplates, getRegionFishingSpots, getRegionObservationSpots,
-  regionById, resolveFishAsset, residentById, routeById
+  regionById, resolveFishAsset, residentById, routeById, shipById
 } from "./data.js";
 import {
   BACKUP_KEY, CHART_VIEW_LIMITS, DEVELOPER_TRAVEL_SCALES, DEV_BACKUP_KEY, DEV_SAVE_KEY, DEV_TEMP_SAVE_KEY,
   SAVE_KEY, SAVE_VERSION, TEMP_SAVE_KEY,
-  acceptResidentCommission, advanceResidentStory, advanceTime,
-  applyMilestones, baitById, beginRouteTravel, buyBait, buyFurniture, buyRod, chooseFish, claimAchievement,
+  acceptResidentCommission, activeShip, activeShipSpeed, advanceResidentStory, advanceTime,
+  applyMilestones, baitById, beginRouteTravel, buyBait, buyFurniture, buyRod, buyShip, chooseFish, claimAchievement,
   claimAllCompletedDailyGoals, claimQuest, createDeveloperState, createInitialState, deliverResidentCommission,
   developerArriveTravel, developerClearResidentCommissionHistory, developerCompleteDailyGoals,
   developerCompleteRegionResearch, developerCompleteResidentCommission, developerRecordObservation,
   developerResetChengyeStory, developerResetDailyBoard, developerResetObservations, developerResetRouteState,
   developerDockRegion, developerSetDailyGoal, developerSetRegionEvent, developerSetResidentOffer,
-  developerSetTravelScale, developerAdjustTideglow, developerEmitTideglowEvent, discoveredCount,
+  developerSetTravelScale, developerAdjustTideglow, developerEmitTideglowEvent,
+  developerRevealShips, developerSetShipOwned, developerSetShipSpeed, discoveredCount,
   dockAtDestination, dropResidentCommission, equipTitle, fishById,
   furnitureById, generateCatch, getAchievementProgress, getActiveBayEvent, getActiveBayEventState,
   getAquariumCapacity, getBayEventHint, getFamiliarity, getObservationHint,
-  getRegionResearchStatus, getResidentStoryStatus,
+  getRegionResearchStatus, getResidentStoryStatus, getShipPurchaseState,
   getRouteDurationForState, getTensionConfig, getTravelStatus, getUnclaimedAchievementCount, isUnlocked, migrateState, moveCatchToAquarium,
   isBayEventConditionActive, isCurrentSaveSchema, observeAtSpot, recordCatch, removeFishFromAquarium, replaceAquariumFish, rodById, sellCatches,
-  normalizeChartView, panChartView, progressTravel, setAquariumDecoration, swapAquariumFish,
+  normalizeChartView, panChartView, progressTravel, setAquariumDecoration, swapAquariumFish, switchActiveShip,
   zoomChartView
 } from "./core.js";
 import { loadStoredState, writeStoredState } from "./persistence/migrations.js";
@@ -219,6 +220,10 @@ function syncWorld() {
     ? state.world.docking.regionId
     : state.world?.currentRegionId || SLEEPING_TIDE_BAY_ID;
   app.dataset.region = sceneRegionId;
+  const currentShip = activeShip(state);
+  app.dataset.ship = currentShip.id;
+  $(".boat-scene")?.setAttribute("data-ship", currentShip.id);
+  $(".boat-scene")?.setAttribute("aria-label", `${currentShip.name}的船身`);
   $("#time-icon").textContent = time.icon; $("#time-label").textContent = `${time.name} · 第 ${state.day} 日`;
   $("#weather-icon").textContent = state.weather === "rain" ? "☂" : "☀";
   $("#weather-label").textContent = state.weather === "rain" ? "細雨" : "晴朗";
@@ -332,7 +337,8 @@ function renderVoyageStateCard() {
   const status = getTravelStatus(state.world);
   if (status) {
     const destination = regionById(status.travel.toRegionId);
-    return `<article class="card voyage-state-card is-traveling"><span class="section-label">航行中 · ${status.route.name}</span><h3>順著暖流前往${destination?.name || "目的地"}</h3><p>船屋、圖鑑與古海圖都能照常查看。航程會依真實經過時間前進，關閉遊戲也沒關係。</p><div class="voyage-time"><b data-travel-remaining>${formatTravelTime(status.remainingMs)}</b><span>第 <i data-travel-segment>${status.segment} / ${status.totalSegments}</i> 段</span></div><div class="progress-track voyage-progress"><i data-travel-progress style="width:${status.progress * 100}%"></i></div><button class="soft-button" data-action="open-chart">在古海圖上查看船位</button></article>`;
+    const voyageShip = shipById(status.travel.shipId) || activeShip(state);
+    return `<article class="card voyage-state-card is-traveling"><span class="section-label">${voyageShip.name} · ${status.route.name}</span><h3>順著暖流前往${destination?.name || "目的地"}</h3><p>這一航段以 ${status.travel.speedMultiplier?.toFixed(2) || "1.00"}× 航速鎖定。船屋、圖鑑與古海圖都能照常查看。</p><div class="voyage-time"><b data-travel-remaining>${formatTravelTime(status.remainingMs)}</b><span>第 <i data-travel-segment>${status.segment} / ${status.totalSegments}</i> 段</span></div><div class="progress-track voyage-progress"><i data-travel-progress style="width:${status.progress * 100}%"></i></div><button class="soft-button" data-action="open-chart">在古海圖上查看船位</button></article>`;
   }
   if (state.world?.docking?.status === "offshore") {
     const destination = regionById(state.world.docking.regionId);
@@ -552,14 +558,15 @@ function chartCurrentCard() {
   if (travelStatus) {
     const from = regionById(travelStatus.travel.fromRegionId);
     const to = regionById(travelStatus.travel.toRegionId);
-    return `<div class="card chart-current-card"><span class="section-label">目前船位</span><h3>⌁ 暖流航程中</h3><p>${from?.name || "出發地"} → ${to?.name || "目的地"}</p></div>`;
+    const voyageShip = shipById(travelStatus.travel.shipId) || activeShip(state);
+    return `<div class="card chart-current-card"><span class="section-label">目前船位 · ${voyageShip.name}</span><h3>⌁ 暖流航程中</h3><p>${from?.name || "出發地"} → ${to?.name || "目的地"}</p></div>`;
   }
   if (state.world.docking?.status === "offshore") {
     const region = regionById(state.world.docking.regionId);
     return `<div class="card chart-current-card"><span class="section-label">目前船位</span><h3>◉ ${region?.name || "目的地"}外海</h3><p>已收帆，正在等待手動停泊</p></div>`;
   }
   const region = regionById(state.world.currentRegionId);
-  return `<div class="card chart-current-card"><span class="section-label">目前船位</span><h3>⚓ ${region?.name || "眠潮灣"}</h3><p>${region?.portName || "眠潮泊地"} · 已安全停泊</p></div>`;
+  return `<div class="card chart-current-card"><span class="section-label">目前船位 · ${activeShip(state).name}</span><h3>⚓ ${region?.name || "眠潮灣"}</h3><p>${region?.portName || "眠潮泊地"} · 已安全停泊</p></div>`;
 }
 
 function applyChartView() {
@@ -628,7 +635,8 @@ function showRouteConfirmation(routeId) {
   const destination = regionById(destinationId);
   const familiar = state.world.completedRouteIds.includes(route.id);
   const duration = getRouteDurationForState(state, route.id);
-  modalRoot.innerHTML = `<div class="modal-backdrop"><div class="modal route-confirm-modal"><span class="section-label">${familiar ? "熟悉航線" : "第一次遠航"}</span><h2>前往${destination?.name || "目的地"}？</h2><p class="modal-copy">${route.name}預計需要${formatTravelMinutes(duration)}，分成 ${route.travelSegments} 段。航程不能瞬間略過，但可以關閉遊戲，時間會照常前進。</p><div class="route-confirm-notes"><span>✓ 不消耗燃料</span><span>✓ 不會迷航或失敗</span><span>✓ 抵達後由你決定停泊</span></div><div class="modal-actions"><button class="soft-button" data-action="close-modal">再準備一下</button><button class="primary-button" data-action="confirm-chart-route" data-id="${route.id}">沿暖流出發</button></div></div></div>`;
+  const ship = activeShip(state);
+  modalRoot.innerHTML = `<div class="modal-backdrop"><div class="modal route-confirm-modal"><span class="section-label">${familiar ? "熟悉航線" : "第一次遠航"} · ${ship.name}</span><h2>前往${destination?.name || "目的地"}？</h2><p class="modal-copy">${route.name}預計需要${formatTravelMinutes(duration)}，分成 ${route.travelSegments} 段。航程不能瞬間略過，會以目前 ${activeShipSpeed(state).toFixed(2)}× 航速鎖定整段時間；出發後不因切換或讀檔跳變，也可以放心關閉遊戲。</p><div class="route-confirm-notes"><span>✓ 不消耗燃料</span><span>✓ 不會迷航或失敗</span><span>✓ 抵達後由你決定停泊</span></div><div class="modal-actions"><button class="soft-button" data-action="close-modal">再準備一下</button><button class="primary-button" data-action="confirm-chart-route" data-id="${route.id}">沿暖流出發</button></div></div></div>`;
 }
 
 function showDockingScene(result) {
@@ -878,13 +886,37 @@ function renderCatch() {
 function sizeName(tier){return({small:"小型",standard:"標準",large:"大型",record:"紀錄級"})[tier]}
 
 function renderShop() {
-  const tabNames={rods:"魚竿",baits:"魚餌",furniture:"船屋家具"};
+  const tabNames={rods:"魚竿",baits:"魚餌",furniture:"船屋家具",ships:"船隻"};
   let items=[];
   if(shopTab==="rods") items=RODS.map(item=>shopItem(item,"rod"));
   if(shopTab==="baits") items=BAITS.map(item=>shopItem(item,"bait"));
   if(shopTab==="furniture") items=FURNITURE.map(item=>shopItem(item,"furniture"));
-  const actions=`<span class="price">● ${state.money.toLocaleString("zh-TW")}</span>`;
+  if(shopTab==="ships") items=SHIPS.map(shipStoreItem);
+  const actions=`<span class="price">● ${state.money.toLocaleString("zh-TW")}</span><span class="price tideglow-price">✦ ${state.tideglow.total.toLocaleString("zh-TW")}</span>`;
   content.innerHTML=`${panelHeading("海灣商店","老闆會替你收好需要的裝備；商品永遠不會限時消失。",actions)}<div class="shop-tabs">${Object.entries(tabNames).map(([id,name])=>`<button class="filter-chip ${shopTab===id?"is-active":""}" data-action="shop-tab" data-id="${id}">${name}</button>`).join("")}</div><div class="shop-grid">${items.join("")}</div>`;
+}
+
+function shipStoreItem(ship) {
+  const owned = state.ships.ownedShipIds.includes(ship.id);
+  const active = state.ships.activeShipId === ship.id;
+  const revealed = state.ships.revealedShipIds.includes(ship.id);
+  const eligibility = getShipPurchaseState(state, ship.id);
+  const future = ship.status === "preview";
+  let action = `<button class="soft-button" disabled>${future ? "後續航圖開放" : "尚未符合條件"}</button>`;
+  if (owned) action = `<button class="soft-button" data-action="switch-ship" data-id="${ship.id}" ${active ? "disabled" : ""}>${active ? "目前使用中" : "切換使用"}</button>`;
+  else if (eligibility.ok) action = `<button class="primary-button" data-action="prepare-buy-ship" data-id="${ship.id}">購買並使用</button>`;
+  const reason = eligibility.reason === "tideglow" ? `還需要 ${Math.max(0, ship.tideglowRequired - state.tideglow.total)} 潮光`
+    : eligibility.reason === "money" ? `還需要 ${Math.max(0, ship.price - state.money)} 金幣`
+      : eligibility.reason === "not-docked" ? "需先停泊已實作港口" : future ? "未來版本預告" : owned ? "永久擁有" : "可購買";
+  const price = future ? "價格將於開放時定案" : ship.price ? `${ship.price.toLocaleString("zh-TW")} 金幣` : "初始擁有";
+  return `<article class="card shop-item ship-store-item ${active ? "is-active-ship" : ""} ${revealed ? "is-revealed" : "is-misted"}" data-ship-card="${ship.id}"><div class="ship-store-silhouette is-${ship.silhouette}" aria-hidden="true"><i></i><b></b></div><span class="section-label">${future ? "未來船影" : owned ? "已收藏" : revealed ? "潮光已揭露" : "潮光中的輪廓"}</span><h3>${ship.name}</h3><p>${ship.description}</p><div class="ship-store-stats"><span>✦ ${ship.tideglowRequired} 潮光</span><span>航速 ${ship.speedMultiplier.toFixed(2)}×</span></div><div class="price-row"><span class="price">${price}</span><span class="item-state">${reason}</span></div>${action}</article>`;
+}
+
+function showShipPurchaseConfirmation(shipId) {
+  const eligibility = getShipPurchaseState(state, shipId);
+  if (!eligibility.ok) { toast("目前還不能購買這艘船，請確認潮光、金幣與停泊狀態"); return; }
+  const ship = eligibility.ship;
+  modalRoot.innerHTML = `<div class="modal-backdrop"><div class="modal ship-purchase-modal"><span class="section-label">永久船隻收藏</span><h2>讓${ship.name}靠岸？</h2><p class="modal-copy">將支付 ${ship.price.toLocaleString("zh-TW")} 金幣並立即切換使用；${ship.tideglowRequired} 潮光只是解鎖門檻，不會被消耗。</p><p class="quiet-note">新船保有可使用的固定床台、航圖桌、日誌入口與水族箱基座；可替換家具需依這艘船的樣式另外購買。</p><div class="modal-actions"><button class="soft-button" data-action="close-modal">再想一下</button><button class="primary-button" data-action="confirm-buy-ship" data-id="${ship.id}">購買並使用</button></div></div></div>`;
 }
 
 function shopItem(item,type) {
@@ -971,7 +1003,8 @@ function finishAquariumAction(result,message) {
 }
 
 function renderHome() {
-  content.innerHTML=`${panelHeading("我的船屋","外面是未知的海，這裡是永遠為你亮著燈的家。")}
+  const ship = activeShip(state);
+  content.innerHTML=`${panelHeading(ship.name,`目前船屋 · 航速 ${activeShipSpeed(state).toFixed(2)}×。外面是未知的海，這裡是永遠為你亮著燈的家。`)}
     ${renderAquariumPanel()}<div class="home-layout"><div class="cabin-view"><div class="cabin-glow"></div><div class="cabin-window"><i class="window-rain"></i></div>${["sleep","wall","table","light","corner"].map(slot=>{const id=state.placedFurniture[slot],item=furnitureById(id);return `<button class="home-slot slot-${slot} ${item?"":"is-empty"}" data-action="slot" data-id="${slot}" title="${item?item.name:"空插槽"}">${item?`<span>${item.icon}</span>`:""}</button>`}).join("")}</div>
     <aside class="home-side">${renderHomeChartCard()}<div class="card home-card"><span class="section-label">休息一下</span><h3>${TIMES[state.timeIndex].name}的船屋</h3><p>${state.weather==="rain"?"細雨落在窗上，提燈讓木牆顯得更加溫暖。":"光線從舷窗落進來，船身隨著海面緩緩呼吸。"}</p><button class="primary-button sleep-button" data-action="sleep">睡到下一個時段</button></div><div class="card home-card"><span class="section-label">已擁有的家具</span><div class="owned-list">${state.ownedFurniture.map(id=>{const item=furnitureById(id);return `<button class="owned-chip ${state.placedFurniture[item.slot]===id?"is-placed":""}" data-action="place-furniture" data-id="${id}">${item.icon} ${item.name}</button>`}).join("")}</div></div><div class="card home-card"><span class="section-label">圖鑑里程碑</span><div class="milestone-list">${MILESTONES.map(m=>`<div class="milestone-row ${state.completedMilestones.includes(m.count)?"is-done":""}"><i></i><span>${m.count} 種 · ${m.reward}</span></div>`).join("")}</div></div></aside></div>`;
 }
@@ -1041,6 +1074,8 @@ function notifyTideglow(events = []) {
     return sum + (result?.awarded ? Number(result.points) || 0 : 0);
   }, 0);
   if (points > 0) setTimeout(() => toast(`潮光悄悄亮起了 +${points}`, "gold"), 260);
+  const revealed = events.flatMap(event => event?.results?.tideglow?.newlyRevealed || []);
+  if (revealed.length) setTimeout(() => toast(`遠處船影漸漸清楚：${revealed.map(ship => ship.name).join("、")}`, "gold"), 620);
 }
 
 function notifyCompletedAchievements(achievements=[]) {
@@ -1138,7 +1173,7 @@ function showDeveloperTools() {
   modalRoot.innerHTML = `<div class="modal-backdrop"><div class="modal developer-modal"><span class="section-label">資料驅動測試入口</span><h2>Slice C 開發者控制</h2><p class="modal-copy">每日模板與居民委託選項直接由正式內容資料產生；所有操作只寫入獨立開發者存檔。</p><div class="developer-control-grid"><section class="developer-control-card"><h3>每日小目標</h3><label>卡片位置<select id="developer-daily-slot"><option value="0">第 1 張</option><option value="1">第 2 張</option><option value="2">第 3 張</option></select></label><label>正式模板<select id="developer-daily-template">${dailyOptions}</select></label><div class="developer-control-actions"><button class="soft-button" data-action="developer-set-daily">指定模板</button><button class="soft-button" data-action="developer-complete-daily">全部完成</button><button class="soft-button" data-action="developer-claim-daily">領取完成</button><button class="soft-button" data-action="developer-next-day">推進航海日</button><button class="soft-button" data-action="developer-reset-daily">重置今日</button></div></section><section class="developer-control-card"><h3>居民委託</h3><label>居民<select id="developer-resident">${residentOptions}</select></label><label>正式模板<select id="developer-commission-template">${commissionOptions}</select></label><p class="quiet-note">${active ? `進行中：${active.title} · ${active.progress}/${active.goal}` : "目前沒有 active 委託"}</p><div class="developer-control-actions"><button class="soft-button" data-action="developer-set-offer">指定提案</button><button class="soft-button" data-action="developer-accept-offer">接受提案</button><button class="soft-button" data-action="developer-complete-commission">完成進度</button><button class="soft-button" data-action="developer-deliver-commission">交付</button><button class="soft-button" data-action="developer-drop-commission">放下</button><button class="soft-button" data-action="developer-clear-commission-history">清除歷史</button></div></section></div><div class="modal-actions"><button class="primary-button" data-action="close-modal">完成測試</button></div></div></div>`;
   const travelStatus = getTravelStatus(state.world);
   const scaleOptions = DEVELOPER_TRAVEL_SCALES.map(scale => `<option value="${scale}" ${state.travelSettings.developerDurationScale === scale ? "selected" : ""}>${scale === 1 ? "正式速度 100%" : `測試速度 ${Math.round(scale * 100)}%`}</option>`).join("");
-  $(".developer-modal h2")?.replaceChildren("v0.5 Slice A 整合控制");
+  $(".developer-modal h2")?.replaceChildren("v0.5 Slice B 整合控制");
   $(".developer-modal .modal-copy")?.replaceChildren("既有旅程控制與 v5 事件、潮光帳本集中於此；全部操作只寫入獨立開發者存檔。");
   $(".developer-control-grid")?.insertAdjacentHTML("beforeend", `<section class="developer-control-card"><h3>正式航線</h3><label>航程時間比例<select id="developer-travel-scale">${scaleOptions}</select></label><p class="quiet-note">${travelStatus ? `航行中：${travelStatus.route.name} · ${travelStatus.segment}/${travelStatus.totalSegments}` : state.world.docking?.status === "offshore" ? `已抵達${regionById(state.world.docking.regionId)?.name || "目的地"}外海` : "目前安全停泊"}</p><div class="developer-control-actions"><button class="soft-button" data-action="developer-set-travel-scale">套用比例</button><button class="soft-button" data-action="developer-arrive-travel" ${travelStatus ? "" : "disabled"}>立即抵達外海</button><button class="soft-button" data-action="developer-reset-route">重置首條航線</button></div></section>`);
   const regionOptions = REGIONS.filter(region => region.status === "available").map(region => `<option value="${region.id}" ${state.world.currentRegionId === region.id ? "selected" : ""}>${region.name} · ${region.portName}</option>`).join("");
@@ -1151,6 +1186,9 @@ function showDeveloperTools() {
   const tideglowOptions = TIDEGLOW_SOURCES.map(source => `<option value="${source.eventType}">${source.label} · +${source.points}</option>`).join("");
   const ledger = Object.values(state.tideglow?.ledgerBySourceId || {}).slice(-5).reverse();
   $(".developer-control-grid")?.insertAdjacentHTML("beforeend", `<section class="developer-control-card"><h3>潮光與事件帳本</h3><label>合法來源<select id="developer-tideglow-source">${tideglowOptions}</select></label><p class="quiet-note">顯示 ${state.tideglow?.total || 0} · 帳本 ${Object.keys(state.tideglow?.ledgerBySourceId || {}).length} · pending ${state.gameEvents?.pending?.length || 0} · recent ${state.gameEvents?.recent?.length || 0}</p><div class="developer-ledger">${ledger.length ? ledger.map(entry => `<small>${entry.sourceId} · +${entry.points}</small>`).join("") : "<small>帳本尚未留下光點</small>"}</div><div class="developer-control-actions"><button class="soft-button" data-action="developer-tideglow-down">−10 顯示值</button><button class="soft-button" data-action="developer-tideglow-up">+10 顯示值</button><button class="soft-button" data-action="developer-emit-tideglow">發送來源</button><button class="soft-button" data-action="developer-emit-tideglow">重送驗證去重</button></div></section>`);
+  const shipOptions = SHIPS.map(ship => `<option value="${ship.id}" ${state.ships.activeShipId === ship.id ? "selected" : ""}>${ship.name} · ${ship.status === "implemented" ? `${ship.speedMultiplier.toFixed(2)}×` : "預告"}</option>`).join("");
+  const speedOptions = [...new Set([.5, 1, ...SHIPS.map(ship => ship.speedMultiplier), 1.5, 2])].sort((a,b)=>a-b).map(speed => `<option value="${speed}" ${activeShipSpeed(state) === speed ? "selected" : ""}>${speed.toFixed(2)}×</option>`).join("");
+  $(".developer-control-grid")?.insertAdjacentHTML("beforeend", `<section class="developer-control-card"><h3>船隻、揭露與航速</h3><label>正式船隻<select id="developer-ship">${shipOptions}</select></label><label>航速測試覆寫<select id="developer-ship-speed">${speedOptions}</select></label><p class="quiet-note">目前 ${activeShip(state).name} · 擁有 ${state.ships.ownedShipIds.length}/${SHIPS.length} · 揭露 ${state.ships.revealedShipIds.length}/${SHIPS.length}</p><div class="developer-control-actions"><button class="soft-button" data-action="developer-own-ship">切換擁有</button><button class="soft-button" data-action="developer-activate-ship">設為目前船</button><button class="soft-button" data-action="developer-reveal-ships">揭露全部</button><button class="soft-button" data-action="developer-set-ship-speed">套用航速</button><button class="soft-button" data-action="developer-fill-money">補滿金幣</button></div></section>`);
   $(".developer-control-grid")?.insertAdjacentHTML("beforeend", `<section class="developer-control-card"><h3>整合與存檔</h3><p class="quiet-note">存檔 v${SAVE_VERSION} · ${regionById(state.world.currentRegionId)?.name || state.world.currentRegionId} · DOM ${document.querySelectorAll("*").length} 節點 · SVG ${document.querySelectorAll("svg").length} 個</p><div class="developer-control-actions"><button class="soft-button" data-action="show-settings">顯示與縮放</button><button class="soft-button" data-action="show-save-export">匯出開發者存檔</button><button class="soft-button" data-action="show-save-import">匯入開發者存檔</button></div></section>`);
 }
 
@@ -1231,6 +1269,17 @@ document.addEventListener("click", event => {
     if(setAquariumDecoration(state,next)){saveGame();renderHome();toast(next?"水族箱已亮起拾光微粒":"水族箱裝飾已關閉");}
   }
   if(action==="shop-tab"){shopTab=id;renderShop();}
+  if(action==="prepare-buy-ship")showShipPurchaseConfirmation(id);
+  if(action==="confirm-buy-ship"){
+    const result=buyShip(state,id);
+    if(result.ok){modalRoot.innerHTML="";saveGame();syncWorld();render();sound.play("coin");toast(`${result.ship.name}已靠岸；潮光仍完整保留`,"gold");}
+    else toast("購買未完成，原本的金幣與船隻都沒有改變");
+  }
+  if(action==="switch-ship"){
+    const result=switchActiveShip(state,id);
+    if(result.ok&&!result.unchanged){saveGame();syncWorld();render();toast(`現在使用${result.ship.name}`,"gold");}
+    else if(!result.ok)toast("只有安全停泊時能切換已擁有的船隻");
+  }
   if(action==="shop-equip-rod"){state.equippedRod=id;saveGame();toast(`已裝備${rodById(id).name}`);renderShop();syncWorld();}
   if(action==="buy-rod"&&buyRod(state,id)){sound.play("coin");saveGame();toast(`買下並裝備了${rodById(id).name}`);render();}
   if(action==="buy-bait"&&buyBait(state,id)){sound.play("coin");if(!state.completedTutorial&&state.tutorialStep===4)state.tutorialStep=5;saveGame();toast(`${baitById(id).name}已放入裝備箱`);render();updateTutorial();}
@@ -1325,6 +1374,17 @@ document.addEventListener("click", event => {
     const result=developerEmitTideglowEvent(state,eventType,developerTideglowRefs(eventType));
     if(result)finishDeveloperAction(result.results?.tideglow?.awarded?"合法潮光來源已入帳":"來源已存在，帳本正確阻止重複入帳");
   }
+  if(action==="developer-own-ship"){
+    const shipId=$("#developer-ship")?.value,owned=state.ships.ownedShipIds.includes(shipId);
+    if(developerSetShipOwned(state,shipId,!owned))finishDeveloperAction(owned?"已移除測試船隻擁有狀態":"已加入測試船隻擁有狀態");
+  }
+  if(action==="developer-activate-ship"){
+    const shipId=$("#developer-ship")?.value,result=switchActiveShip(state,shipId);
+    if(result.ok)finishDeveloperAction(`目前船隻已設為${result.ship.name}`);else toast("請先讓開發者存檔擁有這艘已實作船隻");
+  }
+  if(action==="developer-reveal-ships"&&developerRevealShips(state))finishDeveloperAction("六艘正式船影已全部揭露");
+  if(action==="developer-set-ship-speed"&&developerSetShipSpeed(state,$("#developer-ship-speed")?.value))finishDeveloperAction(`航速測試值已設為 ${activeShipSpeed(state).toFixed(2)}×`);
+  if(action==="developer-fill-money"){state.money=999999;finishDeveloperAction("測試金幣已補滿");}
   if(action==="show-settings")showSettings();
   if(action==="show-save-export")showPortableExport();
   if(action==="show-save-import")showPortableImport("",pendingPortableImport?.draft||"");

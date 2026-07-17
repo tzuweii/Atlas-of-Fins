@@ -1,7 +1,7 @@
 import {
   ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, AQUARIUM_DECORATIONS, BAITS, BAY_EVENTS,
   CHENGYE_ID, DAILY_GOAL_TEMPLATES, FISH, FURNITURE, LUMINOUS_ARCHIPELAGO_ID, MILESTONES, RARITY,
-  REGIONS, RODS, ROUTES, SLEEPING_TIDE_BAY_ID, SPOTS, TIDEGLOW_SOURCES, TIMES,
+  REGIONS, RODS, ROUTES, SHIPS, SLEEPING_TIDE_BAY_ID, SPOTS, TIDEGLOW_SOURCES, TIMES,
   getFishHabitat, getRegionFishingSpots, isRegionAvailable
 } from "./data.js";
 import {
@@ -48,10 +48,17 @@ import {
 import {
   adjustDeveloperTideglow, applyTideglowEvent, createTideglowState, normalizeTideglowState
 } from "./systems/tideglow.js";
+import {
+  SHIP_CATALOG_VERSION, STARTER_SHIP_ID as SHIP_STARTER_ID, activeShip, activeShipSpeed,
+  createShipsState, developerRevealAllShips as revealAllShipsForDeveloper,
+  developerSetShipOwned as setShipOwnedForDeveloper, developerSetShipSpeed as setShipSpeedForDeveloper,
+  getShipPurchaseState, normalizeShipsState, purchaseShip as purchaseShipState,
+  revealEligibleShips, switchShip as switchShipState
+} from "./systems/ships.js";
 
 export {
   BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, DEV_TEMP_SAVE_KEY, SAVE_KEY, SAVE_VERSION, TEMP_SAVE_KEY,
-  TIDEGLOW_SOURCES, createDailyQuests,
+  SHIPS, TIDEGLOW_SOURCES, activeShip, activeShipSpeed, createDailyQuests, getShipPurchaseState,
   CHART_VIEW_LIMITS, canBeginChartRoute, createDefaultChartView, createDeveloperWorldState,
   createInitialWorldState, DEVELOPER_TRAVEL_SCALES, FAMILIAR_TRAVEL_DURATION_MS,
   FIRST_TRAVEL_DURATION_MS, getObservationHint, getRegionResearchStatus, getResidentStoryStatus,
@@ -59,23 +66,15 @@ export {
   normalizeTravelScale, normalizeWorldState, panChartView, requestChartRoute, zoomChartView
 };
 export const DEFAULT_TITLE = "海灣旅人";
-export const STARTER_SHIP_ID = "drifting_home";
+export const STARTER_SHIP_ID = SHIP_STARTER_ID;
 
 function createShipShell(ownedFurniture = ["sleeping_bag"], placedFurniture = { sleep: "sleeping_bag", wall: null, table: null, light: null, corner: null }) {
-  return {
-    activeShipId: STARTER_SHIP_ID,
-    ownedShipIds: [STARTER_SHIP_ID],
-    purchasedAtByShipId: {},
-    revealedShipIds: [STARTER_SHIP_ID],
-    interiorsByShipId: {
-      [STARTER_SHIP_ID]: {
-        ownedFurnitureIds: [...ownedFurniture],
-        placedFurniture: { ...placedFurniture },
-        lightingId: "default",
-        aquariumFrameId: "default"
-      }
-    }
-  };
+  return createShipsState({
+    ownedFurnitureIds: [...ownedFurniture],
+    placedFurniture: { ...placedFurniture },
+    lightingId: "default",
+    aquariumFrameId: "default"
+  });
 }
 
 function createJournalShell() {
@@ -464,6 +463,16 @@ export function createDeveloperState() {
   state.aquariumDecoration = state.unlockedAquariumDecor[0] || null;
   state.selectedSpot = "deep";
   state.world = createDeveloperWorldState({ discoveredFishIds: Object.keys(state.discovered) });
+  state.ships = normalizeShipsState({
+    ...state.ships,
+    activeShipId: "voyager_study",
+    ownedShipIds: SHIPS.filter(ship => ship.status === "implemented").map(ship => ship.id),
+    revealedShipIds: SHIPS.map(ship => ship.id),
+    purchasedAtByShipId: {
+      tidewhisper_residence: caughtAt,
+      voyager_study: caughtAt
+    }
+  });
   state.observations = createDeveloperObservationState({ day: state.day, observedAt: caughtAt });
   evaluateResearchProgress(state, LUMINOUS_ARCHIPELAGO_ID);
   state.settings.sound = false;
@@ -532,6 +541,11 @@ function migrateDeveloperUnlocks(state, raw) {
     getProgressAvailabilityContext(state)
   );
   state.residentStories = normalizeResidentStoryState(state.residentStories);
+  state.ships = normalizeShipsState({
+    ...state.ships,
+    ownedShipIds: [...new Set([...state.ships.ownedShipIds, ...SHIPS.filter(ship => ship.status === "implemented").map(ship => ship.id)])],
+    revealedShipIds: SHIPS.map(ship => ship.id)
+  });
   evaluateResearchProgress(state, LUMINOUS_ARCHIPELAGO_ID);
   evaluateAchievements(state);
   return state;
@@ -561,7 +575,7 @@ export function migrateState(raw) {
     merged.tideglow = normalizeTideglowState(raw.tideglow, { allowDeveloperAdjustment: raw.developerMode === true });
     const sourceShips = raw.ships && typeof raw.ships === "object" ? raw.ships : {};
     const starterInterior = sourceShips.interiorsByShipId?.[STARTER_SHIP_ID];
-    merged.ships = {
+    merged.ships = normalizeShipsState({
       ...createShipShell(),
       ...sourceShips,
       activeShipId: typeof sourceShips.activeShipId === "string" ? sourceShips.activeShipId : STARTER_SHIP_ID,
@@ -579,9 +593,7 @@ export function migrateState(raw) {
           aquariumFrameId: typeof starterInterior?.aquariumFrameId === "string" ? starterInterior.aquariumFrameId : "default"
         }
       }
-    };
-    if (!merged.ships.ownedShipIds.includes(STARTER_SHIP_ID)) merged.ships.ownedShipIds.unshift(STARTER_SHIP_ID);
-    if (!merged.ships.ownedShipIds.includes(merged.ships.activeShipId)) merged.ships.activeShipId = STARTER_SHIP_ID;
+    }, { starterInterior: createShipShell().interiorsByShipId[STARTER_SHIP_ID] });
     const journal = raw.journal && typeof raw.journal === "object" ? raw.journal : {};
     merged.journal = {
       ...createJournalShell(),
@@ -678,6 +690,7 @@ export function migrateState(raw) {
   const heldRecordCatches = [...merged.catchInventory, ...merged.aquarium.fish].filter(caught => caught.sizeTier === "record").length;
   merged.recordCatches = Math.max(Math.floor(nonNegativeNumber(merged.recordCatches)), heldRecordCatches);
   evaluateAchievements(merged);
+  revealEligibleShips(merged);
   return merged.developerMode ? migrateDeveloperUnlocks(merged, raw) : merged;
 }
 
@@ -702,6 +715,7 @@ export function isCurrentSaveSchema(raw) {
     && raw?.gameEvents && Array.isArray(raw.gameEvents.pending) && Array.isArray(raw.gameEvents.recent)
     && raw?.tideglow && Number.isFinite(Number(raw.tideglow.total))
     && raw?.ships && Array.isArray(raw.ships.ownedShipIds)
+    && raw.ships.catalogVersion === SHIP_CATALOG_VERSION
     && raw?.journal && Array.isArray(raw.journal.permanentEntries)
     && raw?.autoFishing && typeof raw.autoFishing === "object";
 }
@@ -929,7 +943,8 @@ function gameEventConsumers(state) {
         allowDeveloperSource: state.developerMode === true
       });
       state.tideglow = result.state;
-      return { ok: true, ...result };
+      const newlyRevealed = result.awarded ? revealEligibleShips(state) : [];
+      return { ok: true, ...result, newlyRevealed };
     }
   };
 }
@@ -1244,13 +1259,15 @@ export function deliverResidentCommission(state, residentId) {
 export function getRouteDurationForState(state, routeId) {
   const route = ROUTES.find(item => item.id === routeId);
   const scale = state?.developerMode ? state.travelSettings?.developerDurationScale : 1;
-  return getRouteTravelDurationMs(route, state?.world, scale);
+  return getRouteTravelDurationMs(route, state?.world, scale, activeShipSpeed(state));
 }
 
 export function beginRouteTravel(state, routeId, now = Date.now()) {
   if (!state?.world) return { ok: false, reason: "missing-world", world: state?.world };
   const scale = state.developerMode ? state.travelSettings?.developerDurationScale : 1;
-  const result = beginWorldTravel(state.world, routeId, now, { scale });
+  const ship = activeShip(state);
+  const speedMultiplier = activeShipSpeed(state);
+  const result = beginWorldTravel(state.world, routeId, now, { scale, speedMultiplier, shipId: ship.id });
   if (result.ok) state.world = result.world;
   return result;
 }
@@ -1285,12 +1302,33 @@ export function dockAtDestination(state, now = Date.now()) {
 export function developerAdjustTideglow(state, delta) {
   if (!state?.developerMode) return false;
   state.tideglow = adjustDeveloperTideglow(state.tideglow, delta);
+  revealEligibleShips(state);
   return true;
 }
 
 export function developerEmitTideglowEvent(state, eventType, refs = {}) {
   if (!state?.developerMode || !TIDEGLOW_SOURCES.some(source => source.eventType === eventType)) return null;
   return emitTideglowEvent(state, eventType, refs, { source: "developer" });
+}
+
+export function buyShip(state, shipId, purchasedAt) {
+  return purchaseShipState(state, shipId, purchasedAt);
+}
+
+export function switchActiveShip(state, shipId) {
+  return switchShipState(state, shipId);
+}
+
+export function developerSetShipOwned(state, shipId, owned = true) {
+  return setShipOwnedForDeveloper(state, shipId, owned);
+}
+
+export function developerRevealShips(state) {
+  return revealAllShipsForDeveloper(state);
+}
+
+export function developerSetShipSpeed(state, speedMultiplier) {
+  return setShipSpeedForDeveloper(state, speedMultiplier);
 }
 
 export function developerSetTravelScale(state, scale) {

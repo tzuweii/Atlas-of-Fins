@@ -109,6 +109,8 @@ function normalizeTravel(raw, completedRouteIds = []) {
     lastCheckedAt: raw.lastCheckedAt,
     durationMs,
     elapsedMs,
+    shipId: typeof raw.shipId === "string" ? raw.shipId : null,
+    speedMultiplier: Math.min(2, Math.max(.5, Number(raw.speedMultiplier) || 1)),
     observations: Array.isArray(raw.observations) ? raw.observations.filter(entry => entry && typeof entry === "object") : []
   };
 }

@@ -149,7 +149,8 @@ test("four immutable v4 fixtures migrate to the v5 shell without retroactive rew
     const migrated = migrateState(raw);
     assert.equal(migrated.version, SAVE_VERSION);
     assert.equal(migrated.tideglow.total, 0, name);
-    assert.deepEqual(migrated.ships.ownedShipIds, [STARTER_SHIP_ID], name);
+    if (raw.developerMode) assert.deepEqual(migrated.ships.ownedShipIds, [STARTER_SHIP_ID, "tidewhisper_residence", "voyager_study"], name);
+    else assert.deepEqual(migrated.ships.ownedShipIds, [STARTER_SHIP_ID], name);
     assert.equal(migrated.ships.activeShipId, STARTER_SHIP_ID, name);
     assert.equal(migrated.journal.permanentEntries.length, 1, name);
     assert.deepEqual(migrated.journal.fishEncounterLineById, {}, name);

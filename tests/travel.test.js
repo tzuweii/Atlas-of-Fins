@@ -132,7 +132,7 @@ test("developer controls scale, arrive, and reset only the implemented route sta
   const state = createDeveloperState();
   assert.deepEqual(DEVELOPER_TRAVEL_SCALES, [1, 0.1, 0.01]);
   assert.equal(developerSetTravelScale(state, 0.01), true);
-  assert.equal(getRouteDurationForState(state, ROUTE_ID), 3600);
+  assert.equal(getRouteDurationForState(state, ROUTE_ID), Math.round(3600 / 1.12));
   assert.equal(beginRouteTravel(state, ROUTE_ID, T0).ok, true);
   assert.equal(developerArriveTravel(state, atMinutes(1)), true);
   assert.deepEqual(state.world.docking, { status: "offshore", regionId: LUMINOUS_ARCHIPELAGO_ID });

@@ -23,13 +23,14 @@ export function normalizeTravelScale(value) {
   return Number.isFinite(parsed) ? clamp(parsed, 0.01, 1) : 1;
 }
 
-export function getRouteTravelDurationMs(route, world, scale = 1) {
+export function getRouteTravelDurationMs(route, world, scale = 1, speedMultiplier = 1) {
   if (!route) return 0;
   const familiar = world?.completedRouteIds?.includes(route.id);
   const base = familiar
     ? FAMILIAR_TRAVEL_DURATION_MS
     : FIRST_TRAVEL_DURATION_MS[route.distanceClass] || FIRST_TRAVEL_DURATION_MS.medium;
-  return Math.max(1000, Math.round(base * normalizeTravelScale(scale)));
+  const speed = Number.isFinite(Number(speedMultiplier)) ? Math.min(2, Math.max(.5, Number(speedMultiplier))) : 1;
+  return Math.max(1000, Math.round(base * normalizeTravelScale(scale) / speed));
 }
 
 export function canBeginWorldTravel(world, routeId) {
@@ -44,12 +45,12 @@ export function canBeginWorldTravel(world, routeId) {
   return { ok: true, route, destinationId };
 }
 
-export function beginWorldTravel(world, routeId, now = Date.now(), { scale = 1 } = {}) {
+export function beginWorldTravel(world, routeId, now = Date.now(), { scale = 1, speedMultiplier = 1, shipId = null } = {}) {
   const availability = canBeginWorldTravel(world, routeId);
   if (!availability.ok) return { ...availability, world };
   const nowMs = validDateMs(now);
   if (nowMs === null) return { ...availability, ok: false, reason: "invalid-time", world };
-  const durationMs = getRouteTravelDurationMs(availability.route, world, scale);
+  const durationMs = getRouteTravelDurationMs(availability.route, world, scale, speedMultiplier);
   const travel = {
     routeId: availability.route.id,
     fromRegionId: world.currentRegionId,
@@ -59,6 +60,8 @@ export function beginWorldTravel(world, routeId, now = Date.now(), { scale = 1 }
     lastCheckedAt: isoAt(nowMs),
     durationMs,
     elapsedMs: 0,
+    shipId: typeof shipId === "string" ? shipId : null,
+    speedMultiplier: Math.min(2, Math.max(.5, Number(speedMultiplier) || 1)),
     observations: []
   };
   return {

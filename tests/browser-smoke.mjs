@@ -92,7 +92,7 @@ assert.match(await evaluate("document.querySelector('#time-label').innerText"), 
 assert.match(await evaluate("document.querySelector('.bay-event-card[data-bay-event=\"moonlit_tide\"]').innerText"), /月光潮汐[\s\S]*礁石邊緣／海灣深水區[\s\S]*0 \/ 2[\s\S]*目前生效/);
 assert.equal(await evaluate("document.querySelector('#developer-tools-button').hidden"), false);
 await click("#developer-tools-button");
-assert.match(await evaluate("document.querySelector('.developer-modal').innerText"), /v0.5 Slice A 整合控制[\s\S]*每日小目標[\s\S]*居民委託[\s\S]*正式航線[\s\S]*琉光群島內容[\s\S]*觀察、研究與澄野[\s\S]*潮光與事件帳本[\s\S]*整合與存檔/);
+assert.match(await evaluate("document.querySelector('.developer-modal').innerText"), /v0.5 Slice B 整合控制[\s\S]*每日小目標[\s\S]*居民委託[\s\S]*正式航線[\s\S]*琉光群島內容[\s\S]*觀察、研究與澄野[\s\S]*潮光與事件帳本[\s\S]*整合與存檔/);
 assert.equal(await evaluate("document.querySelectorAll('#developer-daily-template option').length"), 5);
 assert.equal(await evaluate("document.querySelectorAll('#developer-commission-template option').length"), 13);
 assert.equal(await evaluate("document.querySelectorAll('#developer-travel-scale option').length"), 3);
@@ -100,6 +100,8 @@ assert.equal(await evaluate("document.querySelectorAll('#developer-region option
 assert.equal(await evaluate("document.querySelectorAll('#developer-region-event option').length"), 3);
 assert.equal(await evaluate("document.querySelectorAll('#developer-observation-subject option').length"), 2);
 assert.equal(await evaluate("document.querySelectorAll('#developer-tideglow-source option').length"), 6);
+assert.equal(await evaluate("document.querySelectorAll('#developer-ship option').length"), 6);
+assert.match(await evaluate("document.querySelector('.developer-control-card:nth-last-child(2)').innerText"), /船隻、揭露與航速|整合與存檔/);
 await click('[data-action="developer-emit-tideglow"]');
 assert.equal(await evaluate("JSON.parse(localStorage.getItem('atlas-of-fins.dev-save')).tideglow.total"), 1);
 await click('[data-action="developer-emit-tideglow"]');
@@ -692,6 +694,40 @@ assert.deepEqual(migratedV4Save.residentStories.chengye.completedSceneIds, ["che
 assert.equal(migratedV4Save.tideglow.total, 0);
 assert.equal(migratedV4Save.journal.permanentEntries.length, 1);
 assert.equal(await evaluate(`localStorage.getItem("atlas-of-fins.backup")`), legacyV3Payload);
+
+await click("#menu-button");
+await click('[data-action="to-title"]');
+await evaluate(`(() => {
+  const save = JSON.parse(localStorage.getItem("atlas-of-fins.save"));
+  const fishIds = ${JSON.stringify(Array.from({ length: 20 }, (_, index) => `browser-fish-${index}`))};
+  save.money = 10000;
+  save.tideglow.ledgerBySourceId = Object.fromEntries(fishIds.map((fishId, index) => ["fish:" + fishId, {
+    sourceId: "fish:" + fishId,
+    eventId: "browser-ship:" + index,
+    eventType: "fish.discovered",
+    label: "新魚初遇",
+    points: 1,
+    awardedAt: "2026-07-18T00:00:00.000Z",
+    refs: { fishId }
+  }]));
+  save.tideglow.total = 20;
+  save.ships.revealedShipIds = ["drifting_home", "tidewhisper_residence"];
+  localStorage.setItem("atlas-of-fins.save", JSON.stringify(save));
+})()`);
+await click("#continue-button");
+await click('[data-view="shop"]');
+await click('[data-action="shop-tab"][data-id="ships"]');
+assert.equal(await evaluate("document.querySelectorAll('[data-ship-card]').length"), 6);
+assert.match(await evaluate("document.querySelector('[data-ship-card=\"tidewhisper_residence\"]').innerText"), /潮聲居所[\s\S]*20 潮光[\s\S]*1\.06×[\s\S]*1,800 金幣/);
+await click('[data-action="prepare-buy-ship"][data-id="tidewhisper_residence"]');
+assert.match(await evaluate("document.querySelector('.ship-purchase-modal').innerText"), /潮光只是解鎖門檻，不會被消耗[\s\S]*家具需依這艘船的樣式另外購買/);
+await click('[data-action="confirm-buy-ship"][data-id="tidewhisper_residence"]');
+assert.equal(await evaluate("JSON.parse(localStorage.getItem('atlas-of-fins.save')).ships.activeShipId"), "tidewhisper_residence");
+assert.equal(await evaluate("JSON.parse(localStorage.getItem('atlas-of-fins.save')).money"), 8200);
+assert.equal(await evaluate("JSON.parse(localStorage.getItem('atlas-of-fins.save')).tideglow.total"), 20);
+assert.equal(await evaluate("document.querySelector('#app').dataset.ship"), "tidewhisper_residence");
+await click('[data-action="switch-ship"][data-id="drifting_home"]');
+assert.equal(await evaluate("JSON.parse(localStorage.getItem('atlas-of-fins.save')).ships.activeShipId"), "drifting_home");
 assert.equal(exceptions.length, 0, `No uncaught browser exceptions: ${exceptions.join(", ")}`);
 
 if (process.env.SCREENSHOT) {
