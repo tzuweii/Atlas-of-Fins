@@ -195,4 +195,4 @@
 - [x] 560 次畫面重繪、61 次切區、12 次完整離線航程後，Documents 與監聽器不累積、heap 增加 331,252 bytes、未捕捉例外為 0
 - [x] 98 項核心單元測試、完整 Chromium 流程、語法、資料驗證與 `git diff --check` 通過
 
-完整壓測方法、門檻與首次基線見 [`SLICE_H_STRESS_REPORT.md`](SLICE_H_STRESS_REPORT.md)。
+完整壓測方法、門檻與首次基線見 [`SLICE_H_STRESS_REPORT.md`](versions/v0.4/SLICE_H_STRESS_REPORT.md)。

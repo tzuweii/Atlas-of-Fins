@@ -2,7 +2,7 @@
 
 根據《療癒釣魚養成遊戲｜初版開發規格書》製作的可玩瀏覽器遊戲，目前版本為 v0.4.0-alpha.8，第一趟遠航的 Slice A～H 已完成。玩家可從眠潮灣離線遠航、手動停泊風棲港，在琉光群島的三個釣點認識 15 種區域魚、安靜記錄兩種觀察魚，和生態研究員澄野逐步補完第一條研究航線。現有內容完整保留眠潮灣 30 種魚與三個事件，世界圖鑑目前共有 41 種不重複魚類。這是一段沒有時間壓力的海灣生活：釣魚、補完圖鑑、拜訪港口居民、販售漁獲，再把簡陋帆船慢慢整理成溫暖的家。
 
-長期方向已正式定案為療癒單機收藏遊戲：世界地理、港口與人物完全架空，洋流關係與魚類生態參照真實資料；玩家將帶著船屋沿六大海域航行，逐步建立約 100 種魚的世界圖鑑。每日三項小目標、兩地居民委託、古海圖、眠潮灣至琉光群島的離線航程、兩地釣魚、正式觀察、澄野故事、琉光研究航線與自由返航已可遊玩；潮光、自動日誌及進階船屋尚未完成，完整未來規格見 [`docs/FINAL_GAME_DESIGN.md`](docs/FINAL_GAME_DESIGN.md)。正式美術圖會在玩法完成後統一設計，目前維持既有 SVG 與程式化 HTML／CSS 視覺。
+長期方向已正式定案為療癒單機收藏遊戲：世界地理、港口與人物完全架空，洋流關係與魚類生態參照真實資料；玩家將帶著船屋沿六大海域航行，逐步建立約 100 種魚的世界圖鑑。每日三項小目標、兩地居民委託、古海圖、眠潮灣至琉光群島的離線航程、兩地釣魚、正式觀察、澄野故事、琉光研究航線與自由返航已可遊玩；潮光、自動日誌及進階船屋尚未完成，完整未來規格見 [`docs/FINAL_GAME_DESIGN.md`](docs/FINAL_GAME_DESIGN.md)。第一張航圖將維持既有 SVG 與程式化 HTML／CSS 視覺完成六海域及可出版版本，高畫質美術圖改於完整版本出版後逐步優化。
 
 ## 開始遊玩
 
@@ -68,7 +68,7 @@ npm test
 npm run test:browser:run
 ```
 
-Slice H 另提供 560 次畫面重繪、61 次切區、12 次完整離線航程與 240 趟序列化航程的壓測；量測方法與首次基線記錄於 [`docs/SLICE_H_STRESS_REPORT.md`](docs/SLICE_H_STRESS_REPORT.md)：
+Slice H 另提供 560 次畫面重繪、61 次切區、12 次完整離線航程與 240 趟序列化航程的壓測；量測方法與首次基線記錄於 [`docs/versions/v0.4/SLICE_H_STRESS_REPORT.md`](docs/versions/v0.4/SLICE_H_STRESS_REPORT.md)：
 
 ```bash
 npm run test:browser:stress
@@ -82,9 +82,10 @@ npm run test:browser:stress
 
 - 目前版本、測試與下一步：[`docs/DEVELOPMENT_PROGRESS.md`](docs/DEVELOPMENT_PROGRESS.md)
 - 長期遊戲正式定案：[`docs/FINAL_GAME_DESIGN.md`](docs/FINAL_GAME_DESIGN.md)
-- v0.4 實作拆分：[`docs/V0_4_IMPLEMENTATION_PLAN.md`](docs/V0_4_IMPLEMENTATION_PLAN.md)
+- 現行 v0.5 實作計畫：[`docs/versions/v0.5/V0_5_IMPLEMENTATION_PLAN.md`](docs/versions/v0.5/V0_5_IMPLEMENTATION_PLAN.md)
+- 已完成 v0.4 實作拆分：[`docs/versions/v0.4/V0_4_IMPLEMENTATION_PLAN.md`](docs/versions/v0.4/V0_4_IMPLEMENTATION_PLAN.md)
 - 長期產品方向與版本路線：[`docs/LONG_TERM_GAME_DESIGN.md`](docs/LONG_TERM_GAME_DESIGN.md)
 - 世界航線與區域資料架構：[`docs/WORLD_ROUTE_SYSTEM_DESIGN.md`](docs/WORLD_ROUTE_SYSTEM_DESIGN.md)
 - 研究、船屋、自動航行與詩意日誌：[`docs/COLLECTION_EXPERIENCE_SYSTEMS.md`](docs/COLLECTION_EXPERIENCE_SYSTEMS.md)
-- 已完成 v0.2／v0.3 規格：[`docs/PHASE_2_GAME_DESIGN.md`](docs/PHASE_2_GAME_DESIGN.md)、[`docs/PHASE_3_GAME_DESIGN.md`](docs/PHASE_3_GAME_DESIGN.md)
-- 10 種新魚設計與驗收：[`docs/FISH_EXPANSION_DESIGN.md`](docs/FISH_EXPANSION_DESIGN.md)
+- 已完成 v0.2／v0.3 規格：[`docs/versions/v0.2/PHASE_2_GAME_DESIGN.md`](docs/versions/v0.2/PHASE_2_GAME_DESIGN.md)、[`docs/versions/v0.3/PHASE_3_GAME_DESIGN.md`](docs/versions/v0.3/PHASE_3_GAME_DESIGN.md)
+- 10 種新魚設計與驗收：[`docs/versions/v0.3/FISH_EXPANSION_DESIGN.md`](docs/versions/v0.3/FISH_EXPANSION_DESIGN.md)
