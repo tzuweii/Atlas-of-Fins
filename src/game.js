@@ -1,4 +1,4 @@
-import { ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, BAITS, FISH, FURNITURE, MILESTONES, RARITY, RODS, SPOTS, TIMES } from "./data.js";
+import { ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, BAITS, CONTENT_VALIDATION, FISH, FURNITURE, MILESTONES, RARITY, RODS, SPOTS, TIMES } from "./data.js";
 import {
   BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, SAVE_KEY, advanceTime, applyMilestones, baitById, buyBait, buyFurniture, buyRod,
   chooseFish, claimAchievement, claimQuest, createDeveloperState, createInitialState, discoveredCount, equipTitle, fishById,
@@ -7,6 +7,7 @@ import {
   isBayEventConditionActive, recordCatch, removeFishFromAquarium, replaceAquariumFish, rodById, sellCatches,
   setAquariumDecoration, swapAquariumFish
 } from "./core.js";
+import { applyContentValidationGate, renderContentValidationReport } from "./ui/content-error-view.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -93,6 +94,10 @@ function loadGame() {
 }
 
 function startGame(isNew = false, mode = "normal") {
+  if (!CONTENT_VALIDATION.ok) {
+    renderContentValidationReport(CONTENT_VALIDATION, modalRoot);
+    return;
+  }
   activeSaveMode = mode;
   if (isNew) {
     state = mode === "developer" ? createDeveloperState() : createInitialState();
@@ -613,7 +618,7 @@ $("#continue-button").addEventListener("click",()=>startGame(false,"normal"));
 $("#new-game-button").addEventListener("click",()=>{
   if(hasSave("normal")) modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal"><h2>展開新旅程？</h2><p class="modal-copy">這會替換目前的航海紀錄與備份存檔。</p><div class="modal-actions"><button class="soft-button" data-action="close-modal">取消</button><button id="confirm-new" class="danger-button">開始新遊戲</button></div></div></div>`,$("#confirm-new").addEventListener("click",()=>{modalRoot.innerHTML="";startGame(true,"normal")}); else startGame(true,"normal");
 });
-$("#developer-mode-button").addEventListener("click",()=>showDeveloperLogin());
+$("#developer-mode-button").addEventListener("click",()=>CONTENT_VALIDATION.ok ? showDeveloperLogin() : renderContentValidationReport(CONTENT_VALIDATION, modalRoot));
 $("#title-settings-button").addEventListener("click",showSettings);
 $("#sound-button").addEventListener("click",()=>{state.settings.sound=!state.settings.sound;saveGame();syncWorld();if(state.settings.sound){sound.play("coin");sound.startAmbient();}else sound.stopAmbient();});
 $("#save-button").addEventListener("click",()=>saveGame(true));
@@ -628,4 +633,5 @@ setInterval(()=>{
   if(currentView==="home")renderHome();
 },300000);
 window.addEventListener("beforeunload",()=>saveGame());
-$("#continue-button").disabled=!hasSave();
+$("#continue-button").disabled=!CONTENT_VALIDATION.ok||!hasSave();
+applyContentValidationGate(CONTENT_VALIDATION);

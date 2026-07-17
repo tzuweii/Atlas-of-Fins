@@ -140,3 +140,16 @@ button.status-chip { cursor: pointer; }.status-chip > span:first-child { color: 
 @media (max-width:850px){.achievement-list{grid-template-columns:1fr}}
 @media (max-width:580px){.fishing-side{grid-template-columns:1fr}.journal-heading-actions{width:100%;justify-content:space-between}.aquarium-heading-status{min-width:70px}.achievement-item{grid-template-columns:27px minmax(0,1fr);min-height:0}.achievement-item .achievement-claim,.achievement-item .achievement-state{grid-column:2;justify-self:start}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}}
+.content-validation-report {
+  max-height: min(40vh, 22rem);
+  margin: 1rem 0;
+  padding: .9rem 1rem;
+  overflow: auto;
+  border: 1px solid rgba(127, 168, 160, .35);
+  border-radius: 12px;
+  background: rgba(12, 39, 52, .75);
+  color: #d9ebe7;
+  font: .78rem/1.6 ui-monospace, SFMono-Regular, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

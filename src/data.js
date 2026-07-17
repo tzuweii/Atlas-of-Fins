@@ -1,3 +1,8 @@
+import { validateContentCatalog } from "./data/content-validation.js";
+import { DAILY_GOAL_TEMPLATES, QUEST_TEMPLATES } from "./data/daily-goals.js";
+
+export { DAILY_GOAL_TEMPLATES, QUEST_TEMPLATES };
+
 export const TIMES = [
   { id: "dawn", name: "清晨", icon: "◒", line: "晨霧正沿著海面慢慢散去" },
   { id: "day", name: "白天", icon: "☀", line: "陽光在波紋上撒下碎金" },
@@ -82,14 +87,6 @@ export const RARITY = {
   uncommon: { name: "少見", multiplier: 1.8, color: "#5c91b9" },
   rare: { name: "稀有", multiplier: 4, color: "#d19b4a" }
 };
-
-export const QUEST_TEMPLATES = [
-  { id: "common3", text: "捕獲 3 條常見魚", type: "rarity", target: "common", goal: 3, reward: 85 },
-  { id: "night1", text: "捕獲 1 條夜間魚", type: "tag", target: "night", goal: 1, reward: 110 },
-  { id: "shrimp1", text: "使用小蝦捕獲任意魚類", type: "bait", target: "shrimp", goal: 1, reward: 80 },
-  { id: "sell100", text: "販售總值達 100 金幣", type: "sell", target: "coins", goal: 100, reward: 75 },
-  { id: "large1", text: "捕獲 1 條大型魚", type: "size", target: "large", goal: 1, reward: 105 }
-];
 
 export const BAY_EVENTS = [
   {
@@ -191,3 +188,20 @@ export const ACHIEVEMENTS = [
 export const AQUARIUM_DECORATIONS = [
   { id: "shimmer_specks", name: "水族箱光點", description: "讓收藏箱浮現柔和的金色光點。" }
 ];
+
+export const CONTENT_VALIDATION = validateContentCatalog({
+  times: TIMES,
+  spots: SPOTS,
+  rods: RODS,
+  baits: BAITS,
+  furniture: FURNITURE,
+  fish: FISH,
+  rarities: RARITY,
+  dailyGoals: DAILY_GOAL_TEMPLATES,
+  events: BAY_EVENTS,
+  achievements: ACHIEVEMENTS,
+  aquariumDecorations: AQUARIUM_DECORATIONS,
+  regions: [],
+  routes: [],
+  residents: []
+});

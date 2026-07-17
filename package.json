@@ -1,11 +1,11 @@
 {
   "name": "atlas-of-fins",
-  "version": "0.3.0-alpha.4",
+  "version": "0.4.0-alpha.1",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "python3 -m http.server 4173",
-    "test": "node --test",
+    "test": "node --test --test-isolation=none",
     "test:browser": "node tests/browser-smoke.mjs"
   }
 }

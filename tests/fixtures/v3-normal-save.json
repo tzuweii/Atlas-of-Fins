@@ -1,0 +1,53 @@
+{
+  "version": 3,
+  "money": 314,
+  "timeIndex": 2,
+  "weather": "sunny",
+  "day": 4,
+  "elapsed": 0,
+  "ownedRods": ["wood"],
+  "equippedRod": "wood",
+  "baitAmounts": { "bread": 6, "shrimp": 0, "worm": 0, "cutfish": 0, "glow": 0 },
+  "equippedBait": "bread",
+  "ownedFurniture": ["sleeping_bag"],
+  "placedFurniture": { "sleep": "sleeping_bag", "wall": null, "table": null, "light": null, "corner": null },
+  "discovered": {
+    "sardine": {
+      "count": 2,
+      "firstCaught": "2026-07-10T01:00:00.000Z",
+      "lastCaught": "2026-07-10T01:05:00.000Z",
+      "bestLength": 20,
+      "bestWeight": 0.2,
+      "spots": ["shore"],
+      "times": ["dawn"],
+      "weathers": ["sunny"],
+      "caughtShimmer": false,
+      "shimmerCount": 0,
+      "shimmerPity": 2
+    }
+  },
+  "catchInventory": [],
+  "aquarium": { "fish": [] },
+  "achievements": {},
+  "unlockedTitles": ["海灣旅人"],
+  "equippedTitle": "海灣旅人",
+  "unlockedAquariumDecor": [],
+  "aquariumDecoration": null,
+  "completedMilestones": [],
+  "completedTutorial": true,
+  "tutorialStep": 6,
+  "currentQuests": [
+    { "id": "sell100", "text": "販售總值達 100 金幣", "type": "sell", "target": "coins", "goal": 100, "reward": 75, "instanceId": "4-0-sell100", "progress": 42, "claimed": false },
+    { "id": "large1", "text": "捕獲 1 條大型魚", "type": "size", "target": "large", "goal": 1, "reward": 105, "instanceId": "4-1-large1", "progress": 0, "claimed": false },
+    { "id": "night1", "text": "捕獲 1 條夜間魚", "type": "tag", "target": "night", "goal": 1, "reward": 110, "instanceId": "4-2-night1", "progress": 1, "claimed": true }
+  ],
+  "questHistory": {},
+  "bayEvent": null,
+  "bayEventHistory": {},
+  "totalSold": 42,
+  "totalCaught": 2,
+  "recordCatches": 0,
+  "selectedSpot": "shore",
+  "settings": { "sound": true, "reducedMotion": false },
+  "lastSavedAt": "2026-07-10T01:10:00.000Z"
+}

@@ -1,10 +1,8 @@
-import { ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, AQUARIUM_DECORATIONS, BAITS, BAY_EVENTS, FISH, FURNITURE, MILESTONES, QUEST_TEMPLATES, RARITY, RODS, SPOTS, TIMES } from "./data.js";
+import { ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, AQUARIUM_DECORATIONS, BAITS, BAY_EVENTS, FISH, FURNITURE, MILESTONES, RARITY, RODS, SPOTS, TIMES } from "./data.js";
+import { BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, SAVE_KEY, SAVE_VERSION } from "./persistence/save-schema.js";
+import { applyDailyQuestProgress, claimDailyQuest, createDailyQuests } from "./systems/daily-board.js";
 
-export const SAVE_VERSION = 3;
-export const SAVE_KEY = "atlas-of-fins.save";
-export const BACKUP_KEY = "atlas-of-fins.backup";
-export const DEV_SAVE_KEY = "atlas-of-fins.dev-save";
-export const DEV_BACKUP_KEY = "atlas-of-fins.dev-backup";
+export { BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, SAVE_KEY, SAVE_VERSION, createDailyQuests };
 export const DEFAULT_TITLE = "海灣旅人";
 
 export const FAMILIARITY_LEVELS = [
@@ -333,14 +331,6 @@ function migrateDeveloperUnlocks(state, raw) {
   state.recordCatches = Math.max(state.recordCatches, full.recordCatches);
   evaluateAchievements(state);
   return state;
-}
-
-export function createDailyQuests(day) {
-  const offset = (day - 1) % QUEST_TEMPLATES.length;
-  return [0, 1, 3].map((step, index) => {
-    const template = QUEST_TEMPLATES[(offset + step) % QUEST_TEMPLATES.length];
-    return { ...template, instanceId: `${day}-${index}-${template.id}`, progress: 0, claimed: false };
-  });
 }
 
 export function migrateState(raw) {
@@ -722,25 +712,15 @@ export function buyFurniture(state, furnitureId) {
 }
 
 export function updateQuestProgress(state, event) {
-  for (const quest of state.currentQuests) {
-    if (quest.claimed || quest.progress >= quest.goal) continue;
-    let increment = 0;
-    if (event.type === "catch") {
-      if (quest.type === "rarity" && event.fish.rarity === quest.target) increment = 1;
-      if (quest.type === "tag" && event.fish.tags.includes(quest.target)) increment = 1;
-      if (quest.type === "bait" && event.baitId === quest.target) increment = 1;
-      if (quest.type === "size" && ["large", "record"].includes(event.caught.sizeTier)) increment = 1;
-    }
-    if (event.type === "sell" && quest.type === "sell") increment = event.amount;
-    quest.progress = Math.min(quest.goal, quest.progress + increment);
-  }
+  const nextEntries = applyDailyQuestProgress(state.currentQuests, event);
+  state.currentQuests.splice(0, state.currentQuests.length, ...nextEntries);
 }
 
 export function claimQuest(state, instanceId) {
-  const quest = state.currentQuests.find(item => item.instanceId === instanceId);
-  if (!quest || quest.claimed || quest.progress < quest.goal) return false;
-  quest.claimed = true;
-  state.money += quest.reward;
+  const result = claimDailyQuest(state.currentQuests, instanceId);
+  if (!result.ok) return false;
+  state.currentQuests.splice(0, state.currentQuests.length, ...result.entries);
+  state.money += result.reward;
   return true;
 }
 
