@@ -1,10 +1,12 @@
 const COLLECTION_NAMES = [
   "times", "spots", "rods", "baits", "furniture", "fish", "dailyGoals",
-  "events", "achievements", "aquariumDecorations", "regions", "routes", "residents", "commissions"
+  "events", "achievements", "aquariumDecorations", "regions", "routes", "residents", "commissions",
+  "chartRegions", "chartRoutes"
 ];
 
 const WEATHER_IDS = new Set(["sunny", "rain"]);
 const SIZE_TARGETS = new Set(["small", "standard", "large", "record"]);
+const isChartPosition = value => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100;
 
 const asArray = value => Array.isArray(value) ? value : [];
 
@@ -178,6 +180,18 @@ export function validateContentCatalog(content = {}) {
     validateProgressCondition("commissions", commission, commission?.condition);
     validateReward("commissions", commission, commission?.reward);
     if (!(Number(commission?.goal) > 0)) addError("invalid-goal", "commissions", commission?.id, `commissions[${commission?.id || "missing-id"}].goal`, "委託目標數量必須大於 0");
+  }
+  for (const point of collections.chartRegions) {
+    requireReference("chartRegions", point, "regionId", point?.regionId, ids.regions, "區域");
+    if (![point?.x, point?.y].every(isChartPosition)) {
+      addError("invalid-position", "chartRegions", point?.id, `chartRegions[${point?.id || "missing-id"}]`, "海圖節點座標必須位於 0～100 之間");
+    }
+  }
+  for (const path of collections.chartRoutes) {
+    requireReference("chartRoutes", path, "routeId", path?.routeId, ids.routes, "航線");
+    if (![path?.controlX, path?.controlY].every(isChartPosition)) {
+      addError("invalid-position", "chartRoutes", path?.id, `chartRoutes[${path?.id || "missing-id"}]`, "海圖航線控制點必須位於 0～100 之間");
+    }
   }
 
   return {

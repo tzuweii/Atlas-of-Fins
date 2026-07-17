@@ -18,10 +18,16 @@ import {
 import {
   createDeveloperWorldState, createInitialWorldState, normalizeWorldState, recordRegionalDiscovery
 } from "./systems/world-state.js";
+import {
+  CHART_VIEW_LIMITS, canBeginChartRoute, createDefaultChartView, normalizeChartView,
+  panChartView, requestChartRoute, zoomChartView
+} from "./systems/chart-view.js";
 
 export {
   BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, SAVE_KEY, SAVE_VERSION, createDailyQuests,
-  createDeveloperWorldState, createInitialWorldState, normalizeWorldState
+  CHART_VIEW_LIMITS, canBeginChartRoute, createDefaultChartView, createDeveloperWorldState,
+  createInitialWorldState, normalizeChartView, normalizeWorldState, panChartView,
+  requestChartRoute, zoomChartView
 };
 export const DEFAULT_TITLE = "海灣旅人";
 
@@ -265,6 +271,7 @@ export function createInitialState() {
     tutorialStep: 0,
     dailyBoard: null,
     residentCommissions: null,
+    chartView: createDefaultChartView(),
     world: createInitialWorldState(),
     bayEvent: createBayEventState(1),
     bayEventHistory: {},
@@ -464,6 +471,7 @@ export function migrateState(raw) {
   const progressAvailability = getProgressAvailabilityContext(merged);
   merged.dailyBoard = normalizeDailyBoard(raw.dailyBoard, merged.day, progressAvailability, raw.currentQuests);
   merged.residentCommissions = normalizeResidentCommissionState(raw.residentCommissions, merged.day, progressAvailability);
+  merged.chartView = normalizeChartView(raw.chartView);
   delete merged.currentQuests;
   delete merged.questHistory;
   merged.money = Math.max(0, Number(merged.money) || 0);
@@ -480,7 +488,8 @@ export function isCurrentSaveSchema(raw) {
   return Math.max(0, Math.floor(Number(raw?.version) || 0)) >= SAVE_VERSION
     && Number(raw?.dailyBoard?.day) >= 1
     && Array.isArray(raw?.dailyBoard?.entries)
-    && raw?.residentCommissions && typeof raw.residentCommissions === "object";
+    && raw?.residentCommissions && typeof raw.residentCommissions === "object"
+    && raw?.chartView && typeof raw.chartView === "object";
 }
 
 export function discoveredCount(state) {

@@ -1,10 +1,12 @@
 import {
-  ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, BAITS, COMMISSION_TEMPLATES, CONTENT_VALIDATION,
-  DAILY_GOAL_TEMPLATES, FISH, FURNITURE, MILESTONES, RARITY, RESIDENTS, RODS, SPOTS, TIMES,
-  getResidentCommissionTemplates, residentById
+  ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, BAITS, CHART_REGION_POINTS, CHART_ROUTE_PATHS,
+  COMMISSION_TEMPLATES, CONTENT_VALIDATION, DAILY_GOAL_TEMPLATES, FISH, FURNITURE, MILESTONES,
+  RARITY, RESIDENTS, RODS, SPOTS, TIMES, fishAssetSrcSet, getResidentCommissionTemplates,
+  regionById, resolveFishAsset, residentById, routeById
 } from "./data.js";
 import {
-  BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, SAVE_KEY, SAVE_VERSION, acceptResidentCommission, advanceTime,
+  BACKUP_KEY, CHART_VIEW_LIMITS, DEV_BACKUP_KEY, DEV_SAVE_KEY, SAVE_KEY, SAVE_VERSION,
+  acceptResidentCommission, advanceTime,
   applyMilestones, baitById, buyBait, buyFurniture, buyRod, chooseFish, claimAchievement,
   claimAllCompletedDailyGoals, claimQuest, createDeveloperState, createInitialState, deliverResidentCommission,
   developerClearResidentCommissionHistory, developerCompleteDailyGoals, developerCompleteResidentCommission,
@@ -13,7 +15,8 @@ import {
   furnitureById, generateCatch, getAchievementProgress, getActiveBayEvent, getAquariumCapacity, getBayEventHint, getFamiliarity,
   getTensionConfig, getUnclaimedAchievementCount, isUnlocked, migrateState, moveCatchToAquarium,
   isBayEventConditionActive, isCurrentSaveSchema, recordCatch, removeFishFromAquarium, replaceAquariumFish, rodById, sellCatches,
-  setAquariumDecoration, swapAquariumFish
+  normalizeChartView, panChartView, requestChartRoute, setAquariumDecoration, swapAquariumFish,
+  zoomChartView
 } from "./core.js";
 import { loadStoredState } from "./persistence/migrations.js";
 import { applyContentValidationGate, renderContentValidationReport } from "./ui/content-error-view.js";
@@ -33,6 +36,8 @@ let activeSaveMode = "normal";
 let journalFilter = "all";
 let selectedJournalFish = null;
 let shopTab = "rods";
+let chartPointer = null;
+let chartSaveTimer = null;
 let preserveBackupOnNextSave = false;
 let shouldRewriteLoadedSave = false;
 let fishing = { phase: "idle", fish: null, caught: null, context: null, timer: null, raf: null, held: false, tension: .38, progress: 0, danger: 0, last: 0 };
@@ -174,6 +179,7 @@ function render() {
   if (currentView === "catch") renderCatch();
   if (currentView === "shop") renderShop();
   if (currentView === "residents") renderResidents();
+  if (currentView === "chart") renderChart();
   if (currentView === "home") renderHome();
 }
 
@@ -261,6 +267,106 @@ function renderResidents() {
     ? `<div class="resident-grid">${residents.map(residentCard).join("")}</div>`
     : `<div class="card resident-empty"><span class="resident-icon">⌂</span><h3>先回港停泊</h3><p class="modal-copy">居民只在自己的港口生活，不會跨海追蹤旅程。回到有效港口後再來聊聊吧。</p></div>`;
   content.innerHTML = `${panelHeading("港口居民", "沒有好感度、連續拜訪或期限。接受後的委託會安靜保留，直到你回來交付或自行放下。")} ${body}`;
+}
+
+function chartTransform(view = state.chartView) {
+  const normalized = normalizeChartView(view);
+  return `translate(${normalized.x}%, ${normalized.y}%) scale(${normalized.zoom})`;
+}
+
+function chartRegionNode(point) {
+  const region = regionById(point.regionId);
+  if (!region) return "";
+  const current = state.world.currentRegionId === region.id;
+  const visited = state.world.visitedRegionIds.includes(region.id);
+  const preview = region.status !== "available";
+  const statusIcon = current ? "⚓" : visited ? "✓" : "🔒";
+  const statusText = current ? "船隻目前停泊" : visited ? "已到訪" : "尚未開放";
+  return `<div class="chart-region-node ${current ? "is-current" : ""} ${preview ? "is-preview" : ""}" style="left:${point.x}%;top:${point.y}%" role="group" aria-label="${region.name}，${statusText}"><span class="chart-region-marker" aria-hidden="true">${point.marker === "harbor" ? "◉" : "◌"}</span><span class="chart-region-copy"><b>${region.name}</b><small>${statusIcon} ${statusText}</small></span>${preview ? '<i class="chart-mist" aria-hidden="true"></i>' : ""}</div>`;
+}
+
+function chartRouteMarkup() {
+  const entries = CHART_ROUTE_PATHS.map(path => {
+    const route = routeById(path.routeId);
+    const from = CHART_REGION_POINTS.find(point => point.regionId === route?.fromRegionId);
+    const to = CHART_REGION_POINTS.find(point => point.regionId === route?.toRegionId);
+    if (!route || !from || !to) return null;
+    const available = route.status === "available" && state.world.unlockedRouteIds.includes(route.id);
+    return {
+      path: `<path class="chart-route-path ${available ? "is-available" : "is-preview"}" d="M ${from.x} ${from.y} Q ${path.controlX} ${path.controlY} ${to.x} ${to.y}" vector-effect="non-scaling-stroke"/>`,
+      label: `<div class="chart-route-label ${available ? "is-available" : "is-preview"}" style="left:${(from.x + to.x + path.controlX) / 3}%;top:${(from.y + to.y + path.controlY) / 3}%">${available ? "✓ 可航行" : "🔒 測繪中"}</div>`
+    };
+  }).filter(Boolean);
+  return `<svg class="chart-route-layer" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${entries.map(entry => entry.path).join("")}</svg>${entries.map(entry => entry.label).join("")}`;
+}
+
+function chartDestinationCards() {
+  return CHART_ROUTE_PATHS.map(path => {
+    const route = routeById(path.routeId);
+    if (!route) return "";
+    const destinationId = route.fromRegionId === state.world.currentRegionId ? route.toRegionId : route.fromRegionId;
+    const destination = regionById(destinationId);
+    const available = route.status === "available" && state.world.unlockedRouteIds.includes(route.id);
+    return `<article class="card chart-route-card ${available ? "is-available" : "is-preview"}" data-route="${route.id}"><span class="section-label">相鄰航線</span><h3>${route.name}</h3><p>${destination?.name || "未知海域"} · ${route.travelSegments} 段航程</p><div class="chart-route-state"><span aria-hidden="true">${available ? "✓" : "🔒"}</span><b>${available ? "航線已完成測繪" : "航線尚未完成"}</b></div><button class="${available ? "primary-button" : "soft-button"}" data-action="chart-route" data-id="${route.id}" ${available ? "" : "disabled"}>${available ? "準備啟航" : "🔒 尚未完成，無法啟航"}</button></article>`;
+  }).join("");
+}
+
+function applyChartView() {
+  const stage = $("#chart-stage");
+  if (stage) stage.style.transform = chartTransform();
+  const output = $("#chart-zoom-output");
+  if (output) output.textContent = `${Math.round(state.chartView.zoom * 100)}%`;
+}
+
+function scheduleChartSave() {
+  clearTimeout(chartSaveTimer);
+  chartSaveTimer = setTimeout(() => saveGame(), 180);
+}
+
+function updateChartView(next, { persist = true } = {}) {
+  state.chartView = normalizeChartView(next);
+  applyChartView();
+  if (persist) scheduleChartSave();
+}
+
+function bindChartInteractions() {
+  const viewport = $("#chart-viewport");
+  if (!viewport) return;
+  viewport.addEventListener("wheel", event => {
+    event.preventDefault();
+    updateChartView(zoomChartView(state.chartView, event.deltaY < 0 ? 1 : -1));
+  }, { passive: false });
+  viewport.addEventListener("pointerdown", event => {
+    if (event.button !== 0 || event.target.closest("button")) return;
+    chartPointer = { id: event.pointerId, x: event.clientX, y: event.clientY, view: { ...state.chartView } };
+    try { viewport.setPointerCapture(event.pointerId); } catch { /* synthetic test pointers are not active browser pointers */ }
+    viewport.classList.add("is-dragging");
+  });
+  viewport.addEventListener("pointermove", event => {
+    if (!chartPointer || chartPointer.id !== event.pointerId) return;
+    const bounds = viewport.getBoundingClientRect();
+    updateChartView(panChartView(
+      chartPointer.view,
+      (event.clientX - chartPointer.x) / Math.max(1, bounds.width) * 100,
+      (event.clientY - chartPointer.y) / Math.max(1, bounds.height) * 100
+    ), { persist: false });
+  });
+  const finish = event => {
+    if (!chartPointer || chartPointer.id !== event.pointerId) return;
+    chartPointer = null;
+    viewport.classList.remove("is-dragging");
+    saveGame();
+  };
+  viewport.addEventListener("pointerup", finish);
+  viewport.addEventListener("pointercancel", finish);
+}
+
+function renderChart() {
+  state.chartView = normalizeChartView(state.chartView);
+  const currentRegion = regionById(state.world.currentRegionId);
+  const currentPoint = CHART_REGION_POINTS.find(point => point.regionId === state.world.currentRegionId) || CHART_REGION_POINTS[0];
+  content.innerHTML = `${panelHeading("古海圖", "在航圖桌上確認港口、船位與相鄰海流。未完成的航線只會顯示預告，不能建立航行狀態。")}<div class="chart-layout"><section class="card chart-panel"><div class="chart-toolbar" aria-label="海圖操作"><div class="chart-zoom-controls"><button class="soft-button" data-action="chart-zoom" data-direction="-1" aria-label="縮小海圖">−</button><output id="chart-zoom-output" aria-live="polite">${Math.round(state.chartView.zoom * 100)}%</output><button class="soft-button" data-action="chart-zoom" data-direction="1" aria-label="放大海圖">＋</button><button class="soft-button" data-action="chart-reset">回到船位</button></div><div class="chart-pan-controls" aria-label="平移海圖"><button data-action="chart-pan" data-x="0" data-y="-${CHART_VIEW_LIMITS.panStep}" aria-label="向上移動海圖">↑</button><button data-action="chart-pan" data-x="-${CHART_VIEW_LIMITS.panStep}" data-y="0" aria-label="向左移動海圖">←</button><button data-action="chart-pan" data-x="${CHART_VIEW_LIMITS.panStep}" data-y="0" aria-label="向右移動海圖">→</button><button data-action="chart-pan" data-x="0" data-y="${CHART_VIEW_LIMITS.panStep}" aria-label="向下移動海圖">↓</button></div></div><div id="chart-viewport" class="chart-viewport" tabindex="0" role="application" aria-label="可縮放的古海圖。可用方向鍵平移，加號與減號縮放，數字零回到船位。"><div id="chart-stage" class="chart-stage" style="transform:${chartTransform()}"><div class="chart-paper" aria-hidden="true"><i class="chart-land chart-land-bay"></i><i class="chart-land chart-land-islands"></i><i class="chart-compass">✥</i><i class="chart-water-lines"></i></div>${chartRouteMarkup()}${CHART_REGION_POINTS.map(chartRegionNode).join("")}<div class="chart-ship-marker" style="left:${currentPoint.x}%;top:${currentPoint.y}%" role="img" aria-label="船隻目前位於${currentRegion?.name || "眠潮灣"}"><span aria-hidden="true">▰</span><small>我的船</small></div></div></div><p class="chart-help">滑鼠：拖曳／滾輪 · 鍵盤：方向鍵／＋／−／0 · 觸控：單指拖曳與畫面按鈕。海圖不使用快速晃動或大幅視差。</p></section><aside class="chart-side"><div class="card chart-current-card"><span class="section-label">目前船位</span><h3>⚓ ${currentRegion?.name || "眠潮灣"}</h3><p>${currentRegion?.portName || "眠潮泊地"} · 已安全停泊</p></div>${chartDestinationCards()}</aside></div>`;
+  bindChartInteractions();
 }
 
 function showResidentDialogue(residentId, deliveredDialogue = null) {
@@ -368,7 +474,7 @@ function showCatchModal(fish,caught,result,milestones) {
   const rewards=[result.isNew?"首次發現獎勵已收入錢袋":null,result.isFirstShimmer?"首次閃光研究獎勵 75 金幣":null].filter(Boolean).join(" · ");
   const eventUpdate=result.bayEventUpdate;
   const eventFeedback=eventUpdate?.updated?`<div class="catch-event ${eventUpdate.completed?"is-complete":""}"><span>${eventUpdate.completed?"事件完成":"海灣事件進度"}</span><b>${eventUpdate.event.name} · ${eventUpdate.progress} / ${eventUpdate.event.goal}</b><small>${eventUpdate.completed?`獲得 ${eventUpdate.reward.label}`:getBayEventHint(state)}</small></div>`:"";
-  modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal catch-modal ${isShimmer?"is-shimmer":""}"><div class="catch-hero">${fishArt(fish,false,caught.variant)}</div>${ribbon}<h2>${fish.name}</h2><p class="catch-subtitle">${fish.english}</p><p class="modal-copy">${fish.short}</p><div class="catch-stats"><div><small>體長</small><b>${caught.length} cm</b></div><div><small>重量</small><b>${caught.weight} kg</b></div><div><small>售價</small><b>${caught.price} 金幣</b></div></div>${tags?`<div class="record-tag">✦ ${tags}</div>`:""}<div class="catch-familiarity ${result.familiarityChanged?"is-level-up":""}"><span>${result.familiarityChanged?"熟悉度提升":"圖鑑熟悉度"}</span><b>${result.familiarity.name}</b><small>${familiarityText}</small></div>${eventFeedback}${rewards?`<p class="record-tag">${rewards}</p>`:""}<div class="modal-actions"><button class="soft-button" data-action="modal-journal" data-id="${fish.id}">查看圖鑑</button><button class="primary-button" data-action="close-catch">收進漁獲箱</button></div></div></div>`;
+  modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal catch-modal ${isShimmer?"is-shimmer":""}"><div class="catch-hero">${fishArt(fish,false,caught.variant,"scene")}</div>${ribbon}<h2>${fish.name}</h2><p class="catch-subtitle">${fish.english}</p><p class="modal-copy">${fish.short}</p><div class="catch-stats"><div><small>體長</small><b>${caught.length} cm</b></div><div><small>重量</small><b>${caught.weight} kg</b></div><div><small>售價</small><b>${caught.price} 金幣</b></div></div>${tags?`<div class="record-tag">✦ ${tags}</div>`:""}<div class="catch-familiarity ${result.familiarityChanged?"is-level-up":""}"><span>${result.familiarityChanged?"熟悉度提升":"圖鑑熟悉度"}</span><b>${result.familiarity.name}</b><small>${familiarityText}</small></div>${eventFeedback}${rewards?`<p class="record-tag">${rewards}</p>`:""}<div class="modal-actions"><button class="soft-button" data-action="modal-journal" data-id="${fish.id}">查看圖鑑</button><button class="primary-button" data-action="close-catch">收進漁獲箱</button></div></div></div>`;
   for(const milestone of milestones) {
     const aquariumCapacity=AQUARIUM_CAPACITY_MILESTONES.find(item=>item.discoveries===milestone.count)?.capacity;
     const aquariumReward=aquariumCapacity?`${milestone.count===5?"海灣觀察箱":"水族箱擴建至"} ${aquariumCapacity} 格`:"";
@@ -401,7 +507,7 @@ function showAchievementsModal() {
 function fishCard(fish) {
   const found=state.discovered[fish.id];
   const familiarity=getFamiliarity(found?.count || 0);
-  return `<button class="fish-card ${found?"":"is-unknown"} ${found?.caughtShimmer?"has-shimmer":""} ${selectedJournalFish===fish.id?"is-active":""}" data-action="select-fish" data-id="${fish.id}">${found?.caughtShimmer?'<span class="shimmer-mark" title="曾捕獲閃光個體">✦</span>':""}${fishArt(fish,!found)}<b>${found?fish.name:"未發現"}</b><small>${found?`${RARITY[fish.rarity].name} · 捕獲 ${found.count} 次`:unknownHint(fish)}</small>${found?`<span class="familiarity-chip is-${familiarity.id}">${familiarity.name}</span>`:""}</button>`;
+  return `<button class="fish-card ${found?"":"is-unknown"} ${found?.caughtShimmer?"has-shimmer":""} ${selectedJournalFish===fish.id?"is-active":""}" data-action="select-fish" data-id="${fish.id}">${found?.caughtShimmer?'<span class="shimmer-mark" title="曾捕獲閃光個體">✦</span>':""}${fishArt(fish,!found,"normal",found?"journal":"silhouette")}<b>${found?fish.name:"未發現"}</b><small>${found?`${RARITY[fish.rarity].name} · 捕獲 ${found.count} 次`:unknownHint(fish)}</small>${found?`<span class="familiarity-chip is-${familiarity.id}">${familiarity.name}</span>`:""}</button>`;
 }
 function unknownHint(fish){ return fish.spots.includes("deep")?"深藍水域的神秘剪影":fish.spots.includes("reef")?"礁石間似乎有什麼身影":"近岸水光中的小小身影"; }
 function formatCatchDate(value) {
@@ -416,14 +522,18 @@ function recordedConditionNames(record) {
   return `<div class="journal-history"><div><small>曾相遇地點</small><b>${spots.join("、")||"尚未記錄"}</b></div><div><small>曾相遇時段</small><b>${times.join("、")||"尚未記錄"}</b></div><div><small>曾相遇天氣</small><b>${weathers.join("、")||"尚未記錄"}</b></div></div>`;
 }
 function fishDetail(fish,record) {
-  if(!record) return `<aside class="card fish-detail"><div class="fish-detail-hero unknown-hero">${fishArt(fish,true)}</div><h3>尚未相遇</h3><p class="fish-detail-copy">${unknownHint(fish)}。試著改變釣點、時段或魚餌，也許下一竿就會認識牠。</p></aside>`;
+  if(!record) return `<aside class="card fish-detail"><div class="fish-detail-hero unknown-hero">${fishArt(fish,true,"normal","silhouette")}</div><h3>尚未相遇</h3><p class="fish-detail-copy">${unknownHint(fish)}。試著改變釣點、時段或魚餌，也許下一竿就會認識牠。</p></aside>`;
   const full=record.count>=3;
   const familiarity=getFamiliarity(record.count);
   const progress=familiarity.nextCount?`${record.count} / ${familiarity.nextCount}`:"已完成全部熟悉度階段";
-  return `<aside class="card fish-detail"><div class="fish-detail-hero ${record.caughtShimmer?"has-shimmer":""}">${fishArt(fish,false,record.caughtShimmer?"shimmer":"normal")}</div><h3>${fish.name}</h3><span class="latin">${fish.english} · ${fish.scientific}</span><span class="rarity-pill" style="background:${RARITY[fish.rarity].color}">${RARITY[fish.rarity].name}</span>${record.caughtShimmer?`<span class="shimmer-record">✦ 閃光紀錄 ${record.shimmerCount} 次</span>`:""}<div class="familiarity-summary"><span>${familiarity.name}</span><b>${progress}</b></div><p class="fish-detail-copy">${full?fish.detail:fish.short}</p><div class="detail-stats"><div><small>捕獲次數</small><b>${record.count}</b></div><div><small>最長紀錄</small><b>${record.bestLength} cm</b></div><div><small>最重紀錄</small><b>${record.bestWeight} kg</b></div></div><div class="catch-dates"><span>初次：${formatCatchDate(record.firstCaught)}</span><span>最近：${formatCatchDate(record.lastCaught)}</span></div>${full?`<div class="fact-box">✦ ${fish.fact}</div><div class="fact-box">推薦：${fish.baits.map(id=>baitById(id).name).join("、")} · ${fish.times.map(id=>TIMES.find(t=>t.id===id).name).join("／")}</div>`:`<div class="fact-box">再捕獲 ${3-record.count} 次，解鎖偏好魚餌、活躍時間與有趣知識。</div>`}${record.count>=5?recordedConditionNames(record):`<div class="fact-box">再捕獲 ${5-record.count} 次，整理完整的相遇地點、時段與天氣紀錄。</div>`}</aside>`;
+  return `<aside class="card fish-detail"><div class="fish-detail-hero ${record.caughtShimmer?"has-shimmer":""}">${fishArt(fish,false,record.caughtShimmer?"shimmer":"normal","journal")}</div><h3>${fish.name}</h3><span class="latin">${fish.english} · ${fish.scientific}</span><span class="rarity-pill" style="background:${RARITY[fish.rarity].color}">${RARITY[fish.rarity].name}</span>${record.caughtShimmer?`<span class="shimmer-record">✦ 閃光紀錄 ${record.shimmerCount} 次</span>`:""}<div class="familiarity-summary"><span>${familiarity.name}</span><b>${progress}</b></div><p class="fish-detail-copy">${full?fish.detail:fish.short}</p><div class="detail-stats"><div><small>捕獲次數</small><b>${record.count}</b></div><div><small>最長紀錄</small><b>${record.bestLength} cm</b></div><div><small>最重紀錄</small><b>${record.bestWeight} kg</b></div></div><div class="catch-dates"><span>初次：${formatCatchDate(record.firstCaught)}</span><span>最近：${formatCatchDate(record.lastCaught)}</span></div>${full?`<div class="fact-box">✦ ${fish.fact}</div><div class="fact-box">推薦：${fish.baits.map(id=>baitById(id).name).join("、")} · ${fish.times.map(id=>TIMES.find(t=>t.id===id).name).join("／")}</div>`:`<div class="fact-box">再捕獲 ${3-record.count} 次，解鎖偏好魚餌、活躍時間與有趣知識。</div>`}${record.count>=5?recordedConditionNames(record):`<div class="fact-box">再捕獲 ${5-record.count} 次，整理完整的相遇地點、時段與天氣紀錄。</div>`}</aside>`;
 }
 
-function fishArt(fish,silhouette=false,variant="normal") {
+function fishArt(fish,silhouette=false,variant="normal",purpose="card") {
+  const resolvedAsset=resolveFishAsset(fish,{purpose:silhouette?"silhouette":purpose,variant});
+  if(resolvedAsset.source==="raster"){
+    return `<div class="fish-art fish-raster ${silhouette?"is-silhouette":""} ${variant==="shimmer"?"is-shimmer":""}" data-body-plan="${resolvedAsset.bodyPlan}"><img class="fish-image" src="${resolvedAsset.derivatives[resolvedAsset.width]}" srcset="${fishAssetSrcSet(resolvedAsset)}" sizes="${resolvedAsset.width}px" width="1024" height="1024" loading="${resolvedAsset.loading}" decoding="${resolvedAsset.decoding}" alt=""></div>`;
+  }
   const paths={
     slender:`<path class="body" d="M22 53 Q48 27 91 47 Q106 35 121 28 L116 51 L124 70 Q105 66 91 57 Q47 76 22 53Z"/><path class="fin" d="M56 41 L69 22 L80 45Z"/>`,
     torpedo:`<path class="body" d="M18 53 Q51 22 100 43 L126 25 L119 52 L127 76 L99 61 Q53 82 18 53Z"/><path class="accent" d="M43 41 Q70 30 102 44 Q75 43 47 51Z"/>`,
@@ -445,7 +555,7 @@ function renderCatch() {
   const total=state.catchInventory.reduce((sum,item)=>sum+item.price,0);
   const aquariumCapacity=getAquariumCapacity(state), aquariumFull=state.aquarium.fish.length>=aquariumCapacity;
   const actions=state.catchInventory.length?`<button class="primary-button" data-action="sell-all">全部販售 · ${total} 金幣</button>`:"";
-  content.innerHTML=`${panelHeading("今日漁獲","漁獲箱會好好保管每次相遇；可以販售，也能將喜歡的標本放進船屋水族箱。",actions)}<div class="catch-list">${state.catchInventory.length?state.catchInventory.map(caught=>{const fish=fishById(caught.fishId),isShimmer=caught.variant==="shimmer";const aquariumButton=!aquariumCapacity?`<button class="soft-button" disabled title="發現 5 種魚後解鎖">水族箱未解鎖</button>`:aquariumFull?`<button class="soft-button" data-action="show-aquarium-replace" data-id="${caught.uid}">替換展示</button>`:`<button class="soft-button" data-action="move-aquarium" data-id="${caught.uid}">放入水族箱</button>`;return `<article class="card catch-row ${isShimmer?"is-shimmer":""}">${fishArt(fish,false,caught.variant)}<div><h3>${fish.name}${isShimmer?'<span class="inline-shimmer">✦ 閃光</span>':""}</h3><div class="catch-meta"><span>${RARITY[fish.rarity].name}</span><span>${caught.length} cm</span><span>${caught.weight} kg</span><span>${sizeName(caught.sizeTier)}</span></div></div><div class="sell-one"><b>${caught.price} 金幣</b><div class="catch-actions">${aquariumButton}<button class="soft-button" data-action="sell-one" data-id="${caught.uid}">販售</button></div></div></article>`}).join(""):`<div class="empty-state"><span>⌁</span><h3>漁獲箱還空著</h3><p>回到甲板，向海灣拋下今天的第一竿吧。</p></div>`}</div>`;
+  content.innerHTML=`${panelHeading("今日漁獲","漁獲箱會好好保管每次相遇；可以販售，也能將喜歡的標本放進船屋水族箱。",actions)}<div class="catch-list">${state.catchInventory.length?state.catchInventory.map(caught=>{const fish=fishById(caught.fishId),isShimmer=caught.variant==="shimmer";const aquariumButton=!aquariumCapacity?`<button class="soft-button" disabled title="發現 5 種魚後解鎖">水族箱未解鎖</button>`:aquariumFull?`<button class="soft-button" data-action="show-aquarium-replace" data-id="${caught.uid}">替換展示</button>`:`<button class="soft-button" data-action="move-aquarium" data-id="${caught.uid}">放入水族箱</button>`;return `<article class="card catch-row ${isShimmer?"is-shimmer":""}">${fishArt(fish,false,caught.variant,"card")}<div><h3>${fish.name}${isShimmer?'<span class="inline-shimmer">✦ 閃光</span>':""}</h3><div class="catch-meta"><span>${RARITY[fish.rarity].name}</span><span>${caught.length} cm</span><span>${caught.weight} kg</span><span>${sizeName(caught.sizeTier)}</span></div></div><div class="sell-one"><b>${caught.price} 金幣</b><div class="catch-actions">${aquariumButton}<button class="soft-button" data-action="sell-one" data-id="${caught.uid}">販售</button></div></div></article>`}).join(""):`<div class="empty-state"><span>⌁</span><h3>漁獲箱還空著</h3><p>回到甲板，向海灣拋下今天的第一竿吧。</p></div>`}</div>`;
 }
 function sizeName(tier){return({small:"小型",standard:"標準",large:"大型",record:"紀錄級"})[tier]}
 
@@ -475,7 +585,7 @@ function shopItem(item,type) {
 
 function aquariumChoice(caught, action, extra = "") {
   const fish=fishById(caught.fishId), isShimmer=caught.variant==="shimmer";
-  return `<button class="aquarium-choice ${isShimmer?"is-shimmer":""}" data-action="${action}" data-id="${caught.uid}" ${extra}>${fishArt(fish,false,caught.variant)}<span><b>${fish.name}${isShimmer?" · 閃光":""}</b><small>${caught.length} cm · ${caught.weight} kg · ${sizeName(caught.sizeTier)}</small></span></button>`;
+  return `<button class="aquarium-choice ${isShimmer?"is-shimmer":""}" data-action="${action}" data-id="${caught.uid}" ${extra}>${fishArt(fish,false,caught.variant,"aquarium")}<span><b>${fish.name}${isShimmer?" · 閃光":""}</b><small>${caught.length} cm · ${caught.weight} kg · ${sizeName(caught.sizeTier)}</small></span></button>`;
 }
 
 function renderAquariumPanel() {
@@ -489,7 +599,7 @@ function renderAquariumPanel() {
     const caught=displayed[index];
     if(!caught) return `<button class="aquarium-slot is-empty" data-action="open-aquarium-add"><span>＋</span><small>選擇標本</small></button>`;
     const fish=fishById(caught.fishId), isShimmer=caught.variant==="shimmer";
-    return `<article class="aquarium-slot has-fish ${isShimmer?"is-shimmer":""}"><button class="aquarium-specimen" data-action="aquarium-view" data-id="${caught.uid}" aria-label="查看${fish.name}標本">${fishArt(fish,false,caught.variant)}<b>${fish.name}</b><small>${caught.length} cm${isShimmer?" · 閃光":""}</small></button><div class="aquarium-controls"><button data-action="aquarium-move" data-id="${index}" data-direction="-1" aria-label="向左移動" ${index===0?"disabled":""}>←</button><button data-action="aquarium-move" data-id="${index}" data-direction="1" aria-label="向右移動" ${index===displayed.length-1?"disabled":""}>→</button><button data-action="aquarium-remove" data-id="${caught.uid}">取回</button></div></article>`;
+    return `<article class="aquarium-slot has-fish ${isShimmer?"is-shimmer":""}"><button class="aquarium-specimen" data-action="aquarium-view" data-id="${caught.uid}" aria-label="查看${fish.name}標本">${fishArt(fish,false,caught.variant,"aquarium")}<b>${fish.name}</b><small>${caught.length} cm${isShimmer?" · 閃光":""}</small></button><div class="aquarium-controls"><button data-action="aquarium-move" data-id="${index}" data-direction="-1" aria-label="向左移動" ${index===0?"disabled":""}>←</button><button data-action="aquarium-move" data-id="${index}" data-direction="1" aria-label="向右移動" ${index===displayed.length-1?"disabled":""}>→</button><button data-action="aquarium-remove" data-id="${caught.uid}">取回</button></div></article>`;
   }).join("");
   const next=AQUARIUM_CAPACITY_MILESTONES.find(item=>item.discoveries>found);
   return `<section class="card aquarium-panel"><div class="aquarium-heading"><div><span class="section-label">海灣觀察箱</span><h3>把喜歡的相遇留在船屋</h3><p>標本不需餵食，也不會消失；隨時可以免費取回漁獲箱。</p></div><div class="aquarium-heading-status"><b>${displayed.length} / ${capacity}</b>${decorToggle}</div></div><div class="aquarium-tank ${shimmerSpecksActive?"has-shimmer-specks":""}" style="--aquarium-columns:${Math.min(capacity,5)}">${slots}</div>${next?`<p class="quiet-note">發現 ${next.discoveries} 種魚後，水族箱將擴建到 ${next.capacity} 格。</p>`:`<p class="quiet-note">完成型展示箱已解鎖。</p>`}</section>`;
@@ -520,7 +630,7 @@ function specimenContext(caught) {
 function showSpecimenModal(uid) {
   const caught=state.aquarium.fish.find(item=>item.uid===uid); if(!caught)return;
   const fish=fishById(caught.fishId), isShimmer=caught.variant==="shimmer";
-  modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal specimen-modal ${isShimmer?"is-shimmer":""}"><div class="specimen-hero">${fishArt(fish,false,caught.variant)}</div>${isShimmer?'<span class="new-ribbon is-shimmer">✦ 閃光標本</span>':""}<h2>${fish.name}</h2><p class="catch-subtitle">${fish.english}</p><div class="catch-stats"><div><small>體長</small><b>${caught.length} cm</b></div><div><small>重量</small><b>${caught.weight} kg</b></div><div><small>尺寸</small><b>${sizeName(caught.sizeTier)}</b></div></div>${specimenContext(caught)}<div class="modal-actions"><button class="soft-button" data-action="close-modal">關閉</button></div></div></div>`;
+  modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal specimen-modal ${isShimmer?"is-shimmer":""}"><div class="specimen-hero">${fishArt(fish,false,caught.variant,"scene")}</div>${isShimmer?'<span class="new-ribbon is-shimmer">✦ 閃光標本</span>':""}<h2>${fish.name}</h2><p class="catch-subtitle">${fish.english}</p><div class="catch-stats"><div><small>體長</small><b>${caught.length} cm</b></div><div><small>重量</small><b>${caught.weight} kg</b></div><div><small>尺寸</small><b>${sizeName(caught.sizeTier)}</b></div></div>${specimenContext(caught)}<div class="modal-actions"><button class="soft-button" data-action="close-modal">關閉</button></div></div></div>`;
 }
 
 function finishAquariumAction(result,message) {
@@ -531,7 +641,7 @@ function finishAquariumAction(result,message) {
 function renderHome() {
   content.innerHTML=`${panelHeading("我的船屋","外面是未知的海，這裡是永遠為你亮著燈的家。")}
     ${renderAquariumPanel()}<div class="home-layout"><div class="cabin-view"><div class="cabin-glow"></div><div class="cabin-window"><i class="window-rain"></i></div>${["sleep","wall","table","light","corner"].map(slot=>{const id=state.placedFurniture[slot],item=furnitureById(id);return `<button class="home-slot slot-${slot} ${item?"":"is-empty"}" data-action="slot" data-id="${slot}" title="${item?item.name:"空插槽"}">${item?`<span>${item.icon}</span>`:""}</button>`}).join("")}</div>
-    <aside class="home-side"><div class="card home-card"><span class="section-label">休息一下</span><h3>${TIMES[state.timeIndex].name}的船屋</h3><p>${state.weather==="rain"?"細雨落在窗上，提燈讓木牆顯得更加溫暖。":"光線從舷窗落進來，船身隨著海面緩緩呼吸。"}</p><button class="primary-button sleep-button" data-action="sleep">睡到下一個時段</button></div><div class="card home-card"><span class="section-label">已擁有的家具</span><div class="owned-list">${state.ownedFurniture.map(id=>{const item=furnitureById(id);return `<button class="owned-chip ${state.placedFurniture[item.slot]===id?"is-placed":""}" data-action="place-furniture" data-id="${id}">${item.icon} ${item.name}</button>`}).join("")}</div></div><div class="card home-card"><span class="section-label">圖鑑里程碑</span><div class="milestone-list">${MILESTONES.map(m=>`<div class="milestone-row ${state.completedMilestones.includes(m.count)?"is-done":""}"><i></i><span>${m.count} 種 · ${m.reward}</span></div>`).join("")}</div></div></aside></div>`;
+    <aside class="home-side"><div class="card home-card chart-table-card"><span class="section-label">船屋航圖桌</span><h3>攤開古海圖</h3><p>看看船停在哪裡，也預先記下琉光群島的方向。尚未完成的航線不會讓船出發。</p><button class="soft-button" data-action="open-chart">查看古海圖</button></div><div class="card home-card"><span class="section-label">休息一下</span><h3>${TIMES[state.timeIndex].name}的船屋</h3><p>${state.weather==="rain"?"細雨落在窗上，提燈讓木牆顯得更加溫暖。":"光線從舷窗落進來，船身隨著海面緩緩呼吸。"}</p><button class="primary-button sleep-button" data-action="sleep">睡到下一個時段</button></div><div class="card home-card"><span class="section-label">已擁有的家具</span><div class="owned-list">${state.ownedFurniture.map(id=>{const item=furnitureById(id);return `<button class="owned-chip ${state.placedFurniture[item.slot]===id?"is-placed":""}" data-action="place-furniture" data-id="${id}">${item.icon} ${item.name}</button>`}).join("")}</div></div><div class="card home-card"><span class="section-label">圖鑑里程碑</span><div class="milestone-list">${MILESTONES.map(m=>`<div class="milestone-row ${state.completedMilestones.includes(m.count)?"is-done":""}"><i></i><span>${m.count} 種 · ${m.reward}</span></div>`).join("")}</div></div></aside></div>`;
 }
 
 function placeFurniture(id) {
@@ -624,7 +734,7 @@ function showMainMenuConfirm() {
 
 document.addEventListener("click", event => {
   const target=event.target.closest("[data-action]"); if(!target)return;
-  const {action,id,direction,incoming,replace}=target.dataset;
+  const {action,id,direction,incoming,replace,x,y}=target.dataset;
   if(action==="cast")castLine();
   if(action==="hook")startReeling();
   if(action==="reset-fishing")resetFishing();
@@ -694,6 +804,14 @@ document.addEventListener("click", event => {
   if(action==="slot")showSlotModal(id);
   if(action==="modal-place"){modalRoot.innerHTML="";placeFurniture(id);}
   if(action==="sleep")sleep();
+  if(action==="open-chart")setView("chart");
+  if(action==="chart-zoom")updateChartView(zoomChartView(state.chartView,Number(direction)));
+  if(action==="chart-pan")updateChartView(panChartView(state.chartView,Number(x),Number(y)));
+  if(action==="chart-reset")updateChartView({zoom:1,x:0,y:0});
+  if(action==="chart-route"){
+    const result=requestChartRoute(state.world,id);
+    toast(result.reason==="route-unavailable"?"這條航線仍在測繪，現在不能建立航行狀態":"航行功能會在下一個開發階段接上");
+  }
   if(action==="dismiss-tutorial")tutorialEl.classList.add("is-hidden");
   if(action==="tutorial-go-fishing")setView("fishing");
   if(action==="show-developer-tools")showDeveloperTools();
@@ -751,6 +869,15 @@ content.addEventListener("change",event=>{
 });
 
 document.addEventListener("keydown",event=>{
+  const chartViewport=event.target.closest?.(".chart-viewport");
+  if(chartViewport){
+    const key=event.key;
+    const panByKey={ArrowUp:[0,-CHART_VIEW_LIMITS.panStep],ArrowDown:[0,CHART_VIEW_LIMITS.panStep],ArrowLeft:[-CHART_VIEW_LIMITS.panStep,0],ArrowRight:[CHART_VIEW_LIMITS.panStep,0]}[key];
+    if(panByKey){event.preventDefault();updateChartView(panChartView(state.chartView,...panByKey));return;}
+    if(key==="+"||key==="="){event.preventDefault();updateChartView(zoomChartView(state.chartView,1));return;}
+    if(key==="-"||key==="_"){event.preventDefault();updateChartView(zoomChartView(state.chartView,-1));return;}
+    if(key==="0"){event.preventDefault();updateChartView({zoom:1,x:0,y:0});return;}
+  }
   if(event.code==="Space"&&fishing.phase==="reeling"){event.preventDefault();fishing.held=true;$("#reel-button")?.classList.add("is-held");}
 });
 document.addEventListener("keyup",event=>{if(event.code==="Space"){fishing.held=false;$("#reel-button")?.classList.remove("is-held");}});

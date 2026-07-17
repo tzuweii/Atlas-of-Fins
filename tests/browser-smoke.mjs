@@ -137,6 +137,56 @@ assert.match(await evaluate("document.querySelector('.bay-event-card[data-bay-ev
 assert.match(await evaluate("document.querySelector('#scene-caption').innerText"), /銀潮靠岸/);
 assert.match(await evaluate("document.querySelector('#tutorial').innerText"), /航海教學 · 1 \/ 6[\s\S]*去釣魚/);
 assert.equal(await evaluate("Boolean(document.querySelector('[data-action=\\\"tutorial-go-fishing\\\"]'))"), true);
+assert.equal(await evaluate("document.querySelectorAll('.main-nav [data-view]').length"), 7);
+await click('[data-view="chart"]');
+const chartText = await evaluate("document.querySelector('#content-panel').innerText");
+assert.match(chartText, /古海圖/);
+assert.match(chartText, /眠潮灣[\s\S]*船隻目前停泊/);
+assert.match(chartText, /琉光群島[\s\S]*尚未開放/);
+assert.match(chartText, /測繪中/);
+assert.equal(await evaluate("document.querySelectorAll('.chart-region-node').length"), 2);
+assert.equal(await evaluate("document.querySelectorAll('.chart-route-card').length"), 1);
+assert.equal(await evaluate("document.querySelector('[data-action=\"chart-route\"]').disabled"), true);
+assert.match(await evaluate("document.querySelector('[data-action=\"chart-route\"]').innerText"), /尚未完成，無法啟航/);
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).world.travel`), null);
+
+await evaluate(`document.querySelector('#chart-viewport').dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: -100 }))`);
+await evaluate(`document.querySelector('#chart-viewport').focus(); document.querySelector('#chart-viewport').dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }))`);
+await wait(240);
+assert.deepEqual(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).chartView`), { zoom: 1.2, x: 4, y: 0 });
+
+const touchDragChartView = await evaluate(`(() => {
+  const viewport = document.querySelector('#chart-viewport');
+  viewport.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 7, pointerType: 'touch', button: 0, clientX: 100, clientY: 100 }));
+  viewport.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerId: 7, pointerType: 'touch', button: 0, clientX: 140, clientY: 120 }));
+  viewport.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 7, pointerType: 'touch', button: 0, clientX: 140, clientY: 120 }));
+  return JSON.parse(localStorage.getItem('atlas-of-fins.save')).chartView;
+})()`);
+assert.ok(touchDragChartView.x > 4);
+assert.ok(touchDragChartView.y > 0);
+
+await command("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+await wait(120);
+const narrowChart = await evaluate(`(() => {
+  const viewport = document.querySelector('#chart-viewport').getBoundingClientRect();
+  const route = document.querySelector('.chart-route-card').getBoundingClientRect();
+  return {
+    documentFits: document.documentElement.scrollWidth <= window.innerWidth,
+    viewportFits: viewport.left >= 0 && viewport.right <= window.innerWidth,
+    routeFits: route.left >= 0 && route.right <= window.innerWidth,
+    viewportWidth: viewport.width
+  };
+})()`);
+assert.equal(narrowChart.documentFits, true);
+assert.equal(narrowChart.viewportFits, true);
+assert.equal(narrowChart.routeFits, true);
+assert.ok(narrowChart.viewportWidth >= 300);
+await command("Emulation.clearDeviceMetricsOverride");
+await wait(120);
+await click('[data-action="chart-reset"]');
+await wait(240);
+assert.deepEqual(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).chartView`), { zoom: 1, x: 0, y: 0 });
+
 await click('[data-view="residents"]');
 assert.equal(await evaluate("document.querySelectorAll('.resident-card').length"), 2);
 assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /沒有好感度[\s\S]*燈塔守望者[\s\S]*魚市場老闆/);
@@ -265,6 +315,10 @@ await click('[data-action="shop-tab"][data-id="baits"]');
 await click('[data-action="buy-bait"]');
 await click('[data-view="home"]');
 assert.equal(await evaluate("document.querySelectorAll('.home-slot').length"), 5);
+assert.match(await evaluate("document.querySelector('.chart-table-card').innerText"), /船屋航圖桌[\s\S]*查看古海圖/);
+await click('[data-action="open-chart"]');
+assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /古海圖[\s\S]*目前船位/);
+await click('[data-view="home"]');
 await click('[data-action="sleep"]');
 assert.match(await evaluate("document.querySelector('#time-label').innerText"), /白天/);
 
@@ -276,6 +330,7 @@ assert.deepEqual(saved.world.visitedRegionIds, ["sleeping_tide_bay"]);
 assert.deepEqual(saved.world.unlockedRouteIds, []);
 assert.deepEqual(saved.world.docking, { status: "docked", regionId: "sleeping_tide_bay" });
 assert.equal(saved.world.travel, null);
+assert.deepEqual(saved.chartView, { zoom: 1, x: 0, y: 0 });
 assert.ok(saved.world.regionProgress.sleeping_tide_bay.discoveredFishIds.includes(Object.keys(saved.discovered)[0]));
 assert.ok(saved.totalCaught >= 1);
 assert.ok(saved.totalSold > 0);

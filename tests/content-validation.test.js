@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   ACHIEVEMENTS, AQUARIUM_DECORATIONS, BAITS, BAY_EVENTS, COMMISSION_TEMPLATES, CONTENT_VALIDATION,
-  DAILY_GOAL_TEMPLATES, FISH, FURNITURE, RARITY, REGIONS, RESIDENTS, RODS, ROUTES, SPOTS, TIMES
+  CHART_REGION_POINTS, CHART_ROUTE_PATHS, DAILY_GOAL_TEMPLATES, FISH, FURNITURE, RARITY,
+  REGIONS, RESIDENTS, RODS, ROUTES, SPOTS, TIMES
 } from "../src/data.js";
 import { formatContentValidationErrors, validateContentCatalog } from "../src/data/content-validation.js";
 
@@ -21,7 +22,9 @@ const currentCatalog = () => ({
   regions: structuredClone(REGIONS),
   routes: structuredClone(ROUTES),
   residents: structuredClone(RESIDENTS),
-  commissions: structuredClone(COMMISSION_TEMPLATES)
+  commissions: structuredClone(COMMISSION_TEMPLATES),
+  chartRegions: structuredClone(CHART_REGION_POINTS),
+  chartRoutes: structuredClone(CHART_ROUTE_PATHS)
 });
 
 test("current content catalog has unique IDs and valid references", () => {
@@ -53,9 +56,17 @@ test("future region, route, and resident references use the same validation boun
   catalog.residents = [{ id: "watcher", regionId: "sleeping_tide_bay" }];
   catalog.commissions = [];
   catalog.routes = [{ id: "first_route", fromRegionId: "sleeping_tide_bay", toRegionId: "missing-region" }];
+  catalog.chartRegions = [{ id: "missing-point", regionId: "missing-region", x: 101, y: 50 }];
+  catalog.chartRoutes = [{ id: "missing-path", routeId: "missing-route", controlX: 50, controlY: -1 }];
 
   const report = validateContentCatalog(catalog);
   assert.equal(report.ok, false);
   assert.ok(report.errors.some(error => error.path === "routes[first_route].toRegionId"));
+  assert.ok(report.errors.some(error => error.path === "chartRegions[missing-point].regionId"));
+  assert.ok(report.errors.some(error => error.path === "chartRegions[missing-point]" && error.code === "invalid-position"));
+  assert.ok(report.errors.some(error => error.path === "chartRoutes[missing-path].routeId"));
+  assert.ok(report.errors.some(error => error.path === "chartRoutes[missing-path]" && error.code === "invalid-position"));
   assert.ok(report.disabledIds.routes.includes("first_route"));
+  assert.ok(report.disabledIds.chartRegions.includes("missing-point"));
+  assert.ok(report.disabledIds.chartRoutes.includes("missing-path"));
 });

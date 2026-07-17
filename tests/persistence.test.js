@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, SAVE_KEY, SAVE_VERSION, isCurrentSaveSchema, migrateState
+  BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, SAVE_KEY, SAVE_VERSION, createInitialState,
+  isCurrentSaveSchema, migrateState
 } from "../src/core.js";
 import { loadStoredState } from "../src/persistence/migrations.js";
 
@@ -71,12 +72,9 @@ test("normal and developer migration keys remain completely isolated", () => {
 });
 
 test("current v4 primary reload does not rotate or rewrite its backup", () => {
-  const v4Text = JSON.stringify({
-    version: 4,
-    money: 222,
-    dailyBoard: { day: 1, entries: [] },
-    residentCommissions: { offerDayByResident: {}, offersByResident: {}, active: null, history: {} }
-  });
+  const current = createInitialState();
+  current.money = 222;
+  const v4Text = JSON.stringify(current);
   const storage = new MemoryStorage({ [SAVE_KEY]: v4Text, [BACKUP_KEY]: "recovery" });
   const result = load(storage);
   assert.equal(result.state.version, 4);
@@ -84,6 +82,22 @@ test("current v4 primary reload does not rotate or rewrite its backup", () => {
   assert.equal(result.preserveBackupOnWrite, false);
   assert.equal(result.shouldRewritePrimary, false);
   assert.equal(storage.getItem(BACKUP_KEY), "recovery");
+});
+
+test("Slice C v4 state is backed up byte-for-byte before same-version Slice D chart normalization", () => {
+  const alpha3 = createInitialState();
+  alpha3.money = 444;
+  delete alpha3.chartView;
+  const alpha3Text = JSON.stringify(alpha3);
+  const storage = new MemoryStorage({ [SAVE_KEY]: alpha3Text, [BACKUP_KEY]: "older-alpha" });
+  const result = load(storage);
+
+  assert.equal(storage.getItem(BACKUP_KEY), alpha3Text);
+  assert.equal(result.migratedFromVersion, 4);
+  assert.equal(result.preserveBackupOnWrite, true);
+  assert.equal(result.shouldRewritePrimary, true);
+  assert.deepEqual(result.state.chartView, { zoom: 1, x: 0, y: 0 });
+  assert.equal(result.state.money, 444);
 });
 
 test("Slice B v4 state is backed up byte-for-byte before same-version Slice C normalization", () => {

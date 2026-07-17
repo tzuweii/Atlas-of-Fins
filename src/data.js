@@ -2,6 +2,13 @@ import { validateContentCatalog } from "./data/content-validation.js";
 import { DAILY_GOAL_TEMPLATES, QUEST_TEMPLATES } from "./data/daily-goals.js";
 import { COMMISSION_TEMPLATES, commissionTemplateById, getResidentCommissionTemplates } from "./data/commissions.js";
 import {
+  FISH_ASSET_PURPOSES, FISH_ASSET_REPRESENTATIVES, FISH_ASSET_SPEC, FISH_BODY_PLANS,
+  fishAssetSrcSet, resolveFishAsset
+} from "./data/fish-assets.js";
+import {
+  CHART_LAYOUT, CHART_REGION_POINTS, CHART_ROUTE_PATHS, chartRegionPointById, chartRoutePathById
+} from "./data/chart.js";
+import {
   FISH_MARKET_OWNER_ID, LIGHTHOUSE_KEEPER_ID, RESIDENTS, getRegionResidents, residentById
 } from "./data/residents.js";
 import {
@@ -14,12 +21,16 @@ import {
 } from "./data/routes.js";
 
 export {
-  COMMISSION_TEMPLATES, DAILY_GOAL_TEMPLATES, FISH_MARKET_OWNER_ID, LIGHTHOUSE_KEEPER_ID,
-  QUEST_TEMPLATES, RESIDENTS, commissionTemplateById, getRegionResidents, getResidentCommissionTemplates,
+  CHART_LAYOUT, CHART_REGION_POINTS, CHART_ROUTE_PATHS, COMMISSION_TEMPLATES, DAILY_GOAL_TEMPLATES,
+  FISH_MARKET_OWNER_ID, LIGHTHOUSE_KEEPER_ID,
+  FISH_ASSET_PURPOSES, FISH_ASSET_REPRESENTATIVES, FISH_ASSET_SPEC, FISH_BODY_PLANS,
+  QUEST_TEMPLATES, RESIDENTS, commissionTemplateById, fishAssetSrcSet, getRegionResidents,
+  getResidentCommissionTemplates, resolveFishAsset,
   LUMINOUS_ARCHIPELAGO_ID, REGIONS, REGION_SPOTS, ROUTES, SLEEPING_TIDE_BAY_ID,
   SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID, SPOTS, getFishHabitat, getRegionFish,
   getRegionSpots, getRouteDestination, getRoutesForRegion, isRegionAvailable,
-  isRouteAvailable, regionById, regionSpotById, residentById, routeById
+  isRouteAvailable, regionById, regionSpotById, residentById, routeById,
+  chartRegionPointById, chartRoutePathById
 };
 
 export const TIMES = [
@@ -228,5 +239,7 @@ export const CONTENT_VALIDATION = validateContentCatalog({
   regions: REGIONS,
   routes: ROUTES,
   residents: RESIDENTS,
-  commissions: COMMISSION_TEMPLATES
+  commissions: COMMISSION_TEMPLATES,
+  chartRegions: CHART_REGION_POINTS,
+  chartRoutes: CHART_ROUTE_PATHS
 });
