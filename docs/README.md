@@ -1,7 +1,7 @@
 # Atlas of Fins｜專案文件總覽
 
 > 最後整理：2026-07-17
-> 對應程式版本：v0.3.0-alpha.4
+> 對應程式版本：v0.4.0-alpha.8
 > 用途：說明每份文件的權責、完成狀態與閱讀順序，避免歷史規格、正式定案與尚未實作內容混淆。
 
 ## 1. 文件狀態定義
@@ -38,6 +38,7 @@
 |---|---|---|
 | [`DEVELOPMENT_PROGRESS.md`](DEVELOPMENT_PROGRESS.md) | 現況 | 版本、完成項目、測試結果、下一階段與開發紀錄 |
 | [`TEST_CHECKLIST.md`](TEST_CHECKLIST.md) | 現況 | 已實作功能的回歸驗收清單，不收錄尚未開發功能 |
+| [`SLICE_H_STRESS_REPORT.md`](SLICE_H_STRESS_REPORT.md) | 現況 | v0.4 程式化 SVG、長時間航行、反覆切區、離線回報與記憶體壓測基線 |
 | [`ASSET_LICENSES.md`](ASSET_LICENSES.md) | 現況 | 第三方素材、授權政策與新增素材時的登錄規則 |
 | [`FINAL_GAME_DESIGN.md`](FINAL_GAME_DESIGN.md) | 正式定案 | v0.4～v1.0 產品、世界、收藏、居民、視聽、存檔、後期與版本順序的最高權威 |
 | [`V0_4_IMPLEMENTATION_PLAN.md`](V0_4_IMPLEMENTATION_PLAN.md) | 正式實作計畫 | v0.4 Slice A～H、模組邊界、每日／居民委託契約、相依順序與驗收條件 |

@@ -39,6 +39,7 @@ import {
   advanceResidentStory as advanceResidentStoryState, createResidentStoryState,
   getResidentStoryStatus, normalizeResidentStoryState, resetResidentStory
 } from "./systems/resident-stories.js";
+import { normalizeDisplaySettings } from "./systems/accessibility.js";
 
 export {
   BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, SAVE_KEY, SAVE_VERSION, createDailyQuests,
@@ -320,7 +321,7 @@ export function createInitialState() {
     totalCaught: 0,
     recordCatches: 0,
     selectedSpot: "shore",
-    settings: { sound: true, reducedMotion: false },
+    settings: normalizeDisplaySettings(),
     lastSavedAt: null
   };
   const availability = getProgressAvailabilityContext(state);
@@ -482,7 +483,7 @@ export function migrateState(raw) {
   merged.weather = ["sunny", "rain"].includes(merged.weather) ? merged.weather : base.weather;
   merged.baitAmounts = { ...base.baitAmounts, ...(raw.baitAmounts || {}) };
   merged.placedFurniture = { ...base.placedFurniture, ...(raw.placedFurniture || {}) };
-  merged.settings = { ...base.settings, ...(raw.settings || {}) };
+  merged.settings = normalizeDisplaySettings({ ...base.settings, ...(raw.settings || {}) });
   merged.travelSettings = {
     ...base.travelSettings,
     ...(raw.travelSettings && typeof raw.travelSettings === "object" ? raw.travelSettings : {}),
@@ -574,6 +575,8 @@ export function isCurrentSaveSchema(raw) {
     && raw?.residentCommissions && typeof raw.residentCommissions === "object"
     && raw?.observations && typeof raw.observations === "object"
     && raw?.residentStories && typeof raw.residentStories === "object"
+    && ["small", "standard", "large"].includes(raw?.settings?.textScale)
+    && ["compact", "standard", "large"].includes(raw?.settings?.uiScale)
     && raw?.chartView && typeof raw.chartView === "object"
     && raw?.travelSettings && typeof raw.travelSettings === "object"
     && Number.isFinite(Number(raw.travelSettings.developerDurationScale))

@@ -159,6 +159,24 @@ test("Slice F v4 state is backed up before Slice G observation and story normali
   assert.equal(result.state.money, 777);
 });
 
+test("Slice G v4 state is backed up before Slice H display setting normalization", () => {
+  const alpha7 = createInitialState();
+  alpha7.money = 888;
+  delete alpha7.settings.textScale;
+  delete alpha7.settings.uiScale;
+  const alpha7Text = JSON.stringify(alpha7);
+  const storage = new MemoryStorage({ [SAVE_KEY]: alpha7Text, [BACKUP_KEY]: "older-alpha" });
+  const result = load(storage);
+
+  assert.equal(storage.getItem(BACKUP_KEY), alpha7Text);
+  assert.equal(result.migratedFromVersion, 4);
+  assert.equal(result.preserveBackupOnWrite, true);
+  assert.equal(result.shouldRewritePrimary, true);
+  assert.equal(result.state.settings.textScale, "standard");
+  assert.equal(result.state.settings.uiScale, "standard");
+  assert.equal(result.state.money, 888);
+});
+
 test("Slice B v4 state is backed up byte-for-byte before same-version Slice C normalization", () => {
   const alpha2Text = JSON.stringify({
     version: 4,

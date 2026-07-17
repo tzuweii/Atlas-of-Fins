@@ -142,6 +142,8 @@ export function dockWorldAtDestination(world, now = Date.now()) {
   const previousProgress = world.regionProgress?.[destinationId];
   const regionProgress = {
     discoveredFishIds: uniqueStrings(previousProgress?.discoveredFishIds),
+    caughtSpotIds: uniqueStrings(previousProgress?.caughtSpotIds),
+    caughtTimeIds: uniqueStrings(previousProgress?.caughtTimeIds),
     completedResearchIds: uniqueStrings(previousProgress?.completedResearchIds),
     mainResearchCompletedDay: previousProgress?.mainResearchCompletedDay || null,
     fullResearchCompletedDay: previousProgress?.fullResearchCompletedDay || null,

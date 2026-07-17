@@ -8,8 +8,14 @@ import { setTimeout as wait } from "node:timers/promises";
 const projectRoot = new URL("../", import.meta.url);
 const gameUrl = "http://127.0.0.1:4173/";
 const cdpEndpoint = "http://127.0.0.1:9223";
+const browserTestFile = process.argv[2] || "tests/browser-smoke.mjs";
 const chromeCandidates = [
   process.env.CHROME_PATH,
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "/Applications/Chromium.app/Contents/MacOS/Chromium",
+  "/usr/bin/google-chrome",
+  "/usr/bin/chromium",
+  "/usr/bin/chromium-browser",
   "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
   "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
   "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe"
@@ -42,6 +48,14 @@ async function waitForEndpoint(url, attempts = 60) {
   throw new Error(`Timed out waiting for ${url}`);
 }
 
+async function waitForEndpointRelease(url, attempts = 20) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (!await endpointAvailable(url)) return true;
+    await wait(150);
+  }
+  return false;
+}
+
 function run(command, args, options = {}) {
   return spawn(command, args, { windowsHide: true, ...options });
 }
@@ -60,8 +74,9 @@ async function stop(child) {
   if (child.exitCode === null) child.kill("SIGKILL");
 }
 
-if (await endpointAvailable(gameUrl) || await endpointAvailable(`${cdpEndpoint}/json/version`)) {
-  throw new Error("Browser smoke test ports 4173 or 9223 are already in use.");
+const reuseProjectServer = await endpointAvailable(gameUrl);
+if (!await waitForEndpointRelease(`${cdpEndpoint}/json/version`)) {
+  throw new Error("Browser smoke test port 9223 is already in use.");
 }
 
 const chromePath = await firstExecutable(chromeCandidates);
@@ -71,10 +86,12 @@ const profilePath = await mkdtemp(join(tmpdir(), "atlas-of-fins-chrome-"));
 let server;
 let chrome;
 try {
-  server = run(process.platform === "win32" ? "python" : "python3", ["-m", "http.server", "4173", "--bind", "127.0.0.1"], {
-    cwd: projectRoot,
-    stdio: "ignore"
-  });
+  if (!reuseProjectServer) {
+    server = run(process.platform === "win32" ? "python" : "python3", ["-m", "http.server", "4173", "--bind", "127.0.0.1"], {
+      cwd: projectRoot,
+      stdio: "ignore"
+    });
+  }
   chrome = run(chromePath, [
     "--headless=new",
     "--disable-gpu",
@@ -84,7 +101,7 @@ try {
   ], { stdio: "ignore" });
 
   await waitForEndpoint(`${cdpEndpoint}/json/version`);
-  const smoke = run(process.execPath, ["tests/browser-smoke.mjs"], {
+  const smoke = run(process.execPath, [browserTestFile], {
     cwd: projectRoot,
     env: { ...process.env, CDP_ENDPOINT: cdpEndpoint },
     stdio: "inherit"

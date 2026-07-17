@@ -26,6 +26,10 @@ import {
   zoomChartView
 } from "./core.js";
 import { loadStoredState } from "./persistence/migrations.js";
+import { createPortableSave, parsePortableSave } from "./persistence/portable-save.js";
+import {
+  TEXT_SCALE_OPTIONS, UI_SCALE_OPTIONS, displayScaleValue, normalizeDisplaySettings
+} from "./systems/accessibility.js";
 import { applyContentValidationGate, renderContentValidationReport } from "./ui/content-error-view.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -49,6 +53,7 @@ let travelClockTimer = null;
 let lastPersistedTravelElapsed = 0;
 let preserveBackupOnNextSave = false;
 let shouldRewriteLoadedSave = false;
+let pendingPortableImport = null;
 let fishing = { phase: "idle", fish: null, caught: null, context: null, timer: null, raf: null, held: false, tension: .38, progress: 0, danger: 0, last: 0 };
 
 class Sound {
@@ -98,9 +103,34 @@ class Sound {
 const sound = new Sound();
 
 const DEVELOPER_PASSWORD = "atlas-dev";
+const PREFERENCES_KEY = "atlas-of-fins.preferences";
 
 function saveKeys(mode = activeSaveMode) {
   return mode === "developer" ? [DEV_SAVE_KEY, DEV_BACKUP_KEY] : [SAVE_KEY, BACKUP_KEY];
+}
+function gameIsActive() { return !gameShell.classList.contains("is-hidden"); }
+function loadPreferences(fallback = state.settings) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PREFERENCES_KEY) || "null");
+    return normalizeDisplaySettings(saved || fallback);
+  } catch { return normalizeDisplaySettings(fallback); }
+}
+function savePreferences() {
+  try { localStorage.setItem(PREFERENCES_KEY, JSON.stringify(normalizeDisplaySettings(state.settings))); }
+  catch { /* the active save still retains the same settings */ }
+}
+function applyDisplaySettings() {
+  state.settings = normalizeDisplaySettings(state.settings);
+  app.dataset.textScale = state.settings.textScale;
+  app.dataset.uiScale = state.settings.uiScale;
+  app.style.setProperty("--text-scale", displayScaleValue(TEXT_SCALE_OPTIONS, state.settings.textScale));
+  app.style.setProperty("--ui-scale", displayScaleValue(UI_SCALE_OPTIONS, state.settings.uiScale));
+}
+function persistDisplaySettings() {
+  state.settings = normalizeDisplaySettings(state.settings);
+  savePreferences();
+  applyDisplaySettings();
+  if (gameIsActive()) saveGame();
 }
 function hasSave(mode = "normal") {
   const [primaryKey, backupKey] = saveKeys(mode);
@@ -158,6 +188,9 @@ function startGame(isNew = false, mode = "normal") {
     const travelUpdate = progressTravel(state, Date.now());
     if (!hasSave(mode) || shouldRewriteLoadedSave || travelUpdate.changed) saveGame();
   }
+  state.settings = normalizeDisplaySettings({ ...state.settings, ...loadPreferences(state.settings) });
+  savePreferences();
+  applyDisplaySettings();
   titleScreen.classList.add("is-hidden");
   gameShell.classList.remove("is-hidden");
   app.classList.toggle("is-developer-mode", mode === "developer");
@@ -166,6 +199,7 @@ function startGame(isNew = false, mode = "normal") {
 }
 
 function syncWorld() {
+  applyDisplaySettings();
   const time = TIMES[state.timeIndex];
   app.dataset.time = time.id; app.dataset.weather = state.weather;
   const sceneRegionId = state.world?.docking?.status === "offshore"
@@ -990,8 +1024,69 @@ function notifyCompletedAchievements(achievements=[]) {
   achievements.forEach((achievement,index)=>setTimeout(()=>toast(`成就完成「${achievement.name}」：獎勵可在圖鑑領取`,"gold"),index*360));
 }
 
+function settingsChoices(options, selectedId, action) {
+  return `<div class="settings-choices">${options.map(option => `<button class="settings-choice ${selectedId === option.id ? "is-selected" : ""}" data-action="${action}" data-id="${option.id}" aria-pressed="${selectedId === option.id}"><span>${selectedId === option.id ? "✓" : "○"}</span><b>${option.label}</b><small>${Math.round(option.scale * 100)}%</small></button>`).join("")}</div>`;
+}
+
 function showSettings() {
-  modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal"><h2>聲音與旅程</h2><p class="modal-copy">所有音效皆由瀏覽器即時合成，不使用外部音訊素材。</p><div class="settings-row"><span>操作與捕獲音效</span><button class="toggle ${state.settings.sound?"is-on":""}" data-action="toggle-sound"><i></i></button></div><div class="modal-actions"><button class="soft-button" data-action="close-modal">關閉</button></div></div></div>`;
+  const saveTools = gameIsActive() ? `<section class="settings-save-tools"><span class="section-label">本機存檔備份</span><p>匯出內容只會顯示在這台裝置上；匯入前，現有主要存檔會先保留到備份槽。</p><div class="developer-control-actions"><button class="soft-button" data-action="show-save-export">匯出目前航程</button><button class="soft-button" data-action="show-save-import">匯入同模式航程</button></div></section>` : "";
+  modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal settings-modal"><span class="section-label">資訊無障礙</span><h2>聲音與顯示</h2><p class="modal-copy">文字與介面可分開調整。遊戲預設動態保持柔和，沒有高頻閃爍或快速鏡頭晃動。</p><div class="settings-row"><span><b>操作與捕獲音效</b><small>由瀏覽器即時合成</small></span><button class="toggle ${state.settings.sound?"is-on":""}" data-action="toggle-sound" role="switch" aria-checked="${state.settings.sound}" aria-label="操作與捕獲音效"><i></i></button></div><div class="settings-group"><span><b>文字大小</b><small>只放大標題、說明與按鈕文字</small></span>${settingsChoices(TEXT_SCALE_OPTIONS,state.settings.textScale,"set-text-scale")}</div><div class="settings-group"><span><b>介面縮放</b><small>調整卡片、按鈕與操作區域的整體尺寸</small></span>${settingsChoices(UI_SCALE_OPTIONS,state.settings.uiScale,"set-ui-scale")}</div>${saveTools}<div class="modal-actions"><button class="soft-button" data-action="close-modal">關閉</button></div></div></div>`;
+}
+
+function showPortableExport() {
+  if (!gameIsActive()) return;
+  const text = createPortableSave(state, { mode: activeSaveMode });
+  modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal portable-save-modal"><span class="section-label">${activeSaveMode === "developer" ? "開發者" : "一般"}航程 · v${SAVE_VERSION}</span><h2>匯出航海紀錄</h2><p class="modal-copy">複製下方完整文字並妥善保存。它不包含密碼，也不會傳送到網路。</p><label for="save-export-text">航程備份文字</label><textarea id="save-export-text" class="portable-save-text" readonly spellcheck="false"></textarea><div class="modal-actions"><button class="soft-button" data-action="show-settings">返回設定</button><button class="primary-button" data-action="select-save-export">全選備份文字</button></div></div></div>`;
+  const textarea = $("#save-export-text");
+  textarea.value = text;
+}
+
+function portableImportError(reason) {
+  return ({
+    empty: "請先貼上完整的航程備份文字。",
+    "invalid-json": "這段文字不是完整的 JSON 備份。",
+    "invalid-format": "找不到 Atlas of Fins 的備份格式標記。",
+    "mode-mismatch": activeSaveMode === "developer" ? "一般航程不能匯入開發者存檔。" : "開發者存檔不能匯入一般航程。",
+    "invalid-version": "備份中的存檔版本無法辨識。",
+    "unsupported-version": "這份備份來自較新的遊戲版本，請先更新遊戲再匯入。",
+    "invalid-state": "備份內容不完整，現有航程沒有被改動。"
+  })[reason] || "無法讀取這份備份，現有航程沒有被改動。";
+}
+
+function showPortableImport(error = "", draft = "") {
+  if (!gameIsActive()) return;
+  pendingPortableImport = null;
+  modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal portable-save-modal"><span class="section-label">只接受${activeSaveMode === "developer" ? "開發者" : "一般"}航程</span><h2>匯入航海紀錄</h2><p class="modal-copy">貼上由遊戲匯出的完整文字。確認前不會覆寫任何內容。</p><label for="save-import-text">航程備份文字</label><textarea id="save-import-text" class="portable-save-text" spellcheck="false" aria-describedby="save-import-error"></textarea><p id="save-import-error" class="developer-error" aria-live="polite">${error}</p><div class="modal-actions"><button class="soft-button" data-action="show-settings">取消</button><button class="primary-button" data-action="preview-save-import">檢查備份</button></div></div></div>`;
+  $("#save-import-text").value = draft;
+}
+
+function previewPortableImport() {
+  const draft = $("#save-import-text")?.value || "";
+  const result = parsePortableSave(draft, { expectedMode: activeSaveMode, maxSaveVersion: SAVE_VERSION, migrate: migrateState });
+  if (!result.ok) { showPortableImport(portableImportError(result.reason), draft); return; }
+  pendingPortableImport = { ...result, draft };
+  modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal portable-save-modal"><span class="section-label">備份檢查完成</span><h2>替換目前航程？</h2><p class="modal-copy">將匯入第 ${result.state.day} 航海日、${discoveredCount(result.state)}／${FISH.length} 種世界魚誌的${activeSaveMode === "developer" ? "開發者" : "一般"}航程。現有主要存檔會先放入備份槽，可由備份回復。</p><div class="modal-actions"><button class="soft-button" data-action="show-save-import">返回</button><button class="danger-button" data-action="confirm-save-import">確認匯入</button></div></div></div>`;
+}
+
+function confirmPortableImport() {
+  if (!pendingPortableImport?.ok) return;
+  const [primaryKey, backupKey] = saveKeys();
+  const previous = localStorage.getItem(primaryKey);
+  if (previous) localStorage.setItem(backupKey, previous);
+  state = pendingPortableImport.state;
+  state.settings = normalizeDisplaySettings(state.settings);
+  pendingPortableImport = null;
+  preserveBackupOnNextSave = true;
+  savePreferences();
+  applyDisplaySettings();
+  saveGame();
+  syncTravelClock();
+  currentView = "fishing";
+  modalRoot.innerHTML = "";
+  render();
+  updateTutorial();
+  sound.startAmbient();
+  toast("航海紀錄已匯入；原本的主要存檔仍保留在備份槽", "gold");
 }
 
 function showDeveloperTools() {
@@ -1003,7 +1098,8 @@ function showDeveloperTools() {
   modalRoot.innerHTML = `<div class="modal-backdrop"><div class="modal developer-modal"><span class="section-label">資料驅動測試入口</span><h2>Slice C 開發者控制</h2><p class="modal-copy">每日模板與居民委託選項直接由正式內容資料產生；所有操作只寫入獨立開發者存檔。</p><div class="developer-control-grid"><section class="developer-control-card"><h3>每日小目標</h3><label>卡片位置<select id="developer-daily-slot"><option value="0">第 1 張</option><option value="1">第 2 張</option><option value="2">第 3 張</option></select></label><label>正式模板<select id="developer-daily-template">${dailyOptions}</select></label><div class="developer-control-actions"><button class="soft-button" data-action="developer-set-daily">指定模板</button><button class="soft-button" data-action="developer-complete-daily">全部完成</button><button class="soft-button" data-action="developer-claim-daily">領取完成</button><button class="soft-button" data-action="developer-next-day">推進航海日</button><button class="soft-button" data-action="developer-reset-daily">重置今日</button></div></section><section class="developer-control-card"><h3>居民委託</h3><label>居民<select id="developer-resident">${residentOptions}</select></label><label>正式模板<select id="developer-commission-template">${commissionOptions}</select></label><p class="quiet-note">${active ? `進行中：${active.title} · ${active.progress}/${active.goal}` : "目前沒有 active 委託"}</p><div class="developer-control-actions"><button class="soft-button" data-action="developer-set-offer">指定提案</button><button class="soft-button" data-action="developer-accept-offer">接受提案</button><button class="soft-button" data-action="developer-complete-commission">完成進度</button><button class="soft-button" data-action="developer-deliver-commission">交付</button><button class="soft-button" data-action="developer-drop-commission">放下</button><button class="soft-button" data-action="developer-clear-commission-history">清除歷史</button></div></section></div><div class="modal-actions"><button class="primary-button" data-action="close-modal">完成測試</button></div></div></div>`;
   const travelStatus = getTravelStatus(state.world);
   const scaleOptions = DEVELOPER_TRAVEL_SCALES.map(scale => `<option value="${scale}" ${state.travelSettings.developerDurationScale === scale ? "selected" : ""}>${scale === 1 ? "正式速度 100%" : `測試速度 ${Math.round(scale * 100)}%`}</option>`).join("");
-  $(".developer-modal h2")?.replaceChildren("Slice G 開發者控制");
+  $(".developer-modal h2")?.replaceChildren("Slice H 整合控制");
+  $(".developer-modal .modal-copy")?.replaceChildren("Slice A～G 的每日、居民、航線、區域事件、觀察、研究與故事控制集中於此；全部操作只寫入獨立開發者存檔。");
   $(".developer-control-grid")?.insertAdjacentHTML("beforeend", `<section class="developer-control-card"><h3>正式航線</h3><label>航程時間比例<select id="developer-travel-scale">${scaleOptions}</select></label><p class="quiet-note">${travelStatus ? `航行中：${travelStatus.route.name} · ${travelStatus.segment}/${travelStatus.totalSegments}` : state.world.docking?.status === "offshore" ? `已抵達${regionById(state.world.docking.regionId)?.name || "目的地"}外海` : "目前安全停泊"}</p><div class="developer-control-actions"><button class="soft-button" data-action="developer-set-travel-scale">套用比例</button><button class="soft-button" data-action="developer-arrive-travel" ${travelStatus ? "" : "disabled"}>立即抵達外海</button><button class="soft-button" data-action="developer-reset-route">重置首條航線</button></div></section>`);
   const regionOptions = REGIONS.filter(region => region.status === "available").map(region => `<option value="${region.id}" ${state.world.currentRegionId === region.id ? "selected" : ""}>${region.name} · ${region.portName}</option>`).join("");
   const eventOptions = BAY_EVENTS.filter(event => event.regionId === state.world.currentRegionId).map(event => `<option value="${event.id}">${event.id} · ${event.name}</option>`).join("");
@@ -1012,6 +1108,7 @@ function showDeveloperTools() {
   const luminousResearch = getRegionResearchStatus(state, LUMINOUS_ARCHIPELAGO_ID);
   const chengyeStory = getResidentStoryStatus(state, CHENGYE_ID);
   $(".developer-control-grid")?.insertAdjacentHTML("beforeend", `<section class="developer-control-card"><h3>觀察、研究與澄野</h3><label>正式觀察魚<select id="developer-observation-subject">${observationOptions}</select></label><p class="quiet-note">觀察 ${Object.keys(state.observations?.recordsById || {}).length}/${OBSERVATION_SUBJECTS.length} · 研究 ${luminousResearch?.speciesCount || 0}/${luminousResearch?.research.fullSpeciesGoal || 15} · 澄野 ${chengyeStory.completedSceneIds.length}/${chengyeStory.scenes.length}</p><div class="developer-control-actions"><button class="soft-button" data-action="developer-record-observation">直接記錄</button><button class="soft-button" data-action="developer-reset-observations">重置觀察</button><button class="soft-button" data-action="developer-complete-research">完成研究</button><button class="soft-button" data-action="developer-reset-chengye">重置澄野故事</button></div></section>`);
+  $(".developer-control-grid")?.insertAdjacentHTML("beforeend", `<section class="developer-control-card"><h3>整合與存檔</h3><p class="quiet-note">存檔 v${SAVE_VERSION} · ${regionById(state.world.currentRegionId)?.name || state.world.currentRegionId} · DOM ${document.querySelectorAll("*").length} 節點 · SVG ${document.querySelectorAll("svg").length} 個</p><div class="developer-control-actions"><button class="soft-button" data-action="show-settings">顯示與縮放</button><button class="soft-button" data-action="show-save-export">匯出開發者存檔</button><button class="soft-button" data-action="show-save-import">匯入開發者存檔</button></div></section>`);
 }
 
 function finishDeveloperAction(message) {
@@ -1178,7 +1275,19 @@ document.addEventListener("click", event => {
   if(action==="developer-reset-observations"&&developerResetObservations(state))finishDeveloperAction("正式觀察與奇景紀錄已重置");
   if(action==="developer-complete-research"&&developerCompleteRegionResearch(state,LUMINOUS_ARCHIPELAGO_ID))finishDeveloperAction("琉光研究節點與外觀獎勵已完成");
   if(action==="developer-reset-chengye"&&developerResetChengyeStory(state))finishDeveloperAction("澄野故事已回到初遇前");
-  if(action==="toggle-sound"){state.settings.sound=!state.settings.sound;saveGame();showSettings();syncWorld();if(state.settings.sound){sound.play("coin");sound.startAmbient();}else sound.stopAmbient();}
+  if(action==="show-settings")showSettings();
+  if(action==="show-save-export")showPortableExport();
+  if(action==="show-save-import")showPortableImport("",pendingPortableImport?.draft||"");
+  if(action==="select-save-export"){const textarea=$("#save-export-text");textarea?.focus();textarea?.select();}
+  if(action==="preview-save-import")previewPortableImport();
+  if(action==="confirm-save-import")confirmPortableImport();
+  if(action==="set-text-scale"){
+    state.settings.textScale=id;persistDisplaySettings();showSettings();toast(`文字大小已調整為「${TEXT_SCALE_OPTIONS.find(option=>option.id===id)?.label||"標準"}」`);
+  }
+  if(action==="set-ui-scale"){
+    state.settings.uiScale=id;persistDisplaySettings();showSettings();toast(`介面縮放已調整為「${UI_SCALE_OPTIONS.find(option=>option.id===id)?.label||"標準"}」`);
+  }
+  if(action==="toggle-sound"){state.settings.sound=!state.settings.sound;persistDisplaySettings();showSettings();syncWorld();if(state.settings.sound){sound.play("coin");sound.startAmbient();}else sound.stopAmbient();}
   if(action==="close-modal")modalRoot.innerHTML="";
   if(action==="to-title"){if(state.world?.travel)travelClockTick({forceSave:true});clearInterval(travelClockTimer);travelClockTimer=null;clearFishing();sound.stopAmbient();modalRoot.innerHTML="";gameShell.classList.add("is-hidden");titleScreen.classList.remove("is-hidden");app.classList.remove("is-developer-mode");$("#developer-tools-button").hidden=true;$("#continue-button").disabled=!hasSave("normal");}
 });
@@ -1226,7 +1335,7 @@ $("#new-game-button").addEventListener("click",()=>{
 });
 $("#developer-mode-button").addEventListener("click",()=>CONTENT_VALIDATION.ok ? showDeveloperLogin() : renderContentValidationReport(CONTENT_VALIDATION, modalRoot));
 $("#title-settings-button").addEventListener("click",showSettings);
-$("#sound-button").addEventListener("click",()=>{state.settings.sound=!state.settings.sound;saveGame();syncWorld();if(state.settings.sound){sound.play("coin");sound.startAmbient();}else sound.stopAmbient();});
+$("#sound-button").addEventListener("click",showSettings);
 $("#save-button").addEventListener("click",()=>saveGame(true));
 $("#menu-button").addEventListener("click",showMainMenuConfirm);
 $("#time-chip").addEventListener("click",()=>toast("回到船屋使用床鋪，就能切換到下一個時段"));
@@ -1240,5 +1349,7 @@ setInterval(()=>{
   if(currentView==="home")renderHome();
 },300000);
 window.addEventListener("beforeunload",()=>saveGame());
+state.settings=loadPreferences(state.settings);
+applyDisplaySettings();
 $("#continue-button").disabled=!CONTENT_VALIDATION.ok||!hasSave();
 applyContentValidationGate(CONTENT_VALIDATION);
