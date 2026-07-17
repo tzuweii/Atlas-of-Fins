@@ -94,7 +94,7 @@ test("v1 through v3 migration adds v4 world state without changing collection va
     }]
   };
   const migrated = migrateState(raw);
-  assert.equal(migrated.version, 4);
+  assert.equal(migrated.version, 5);
   assert.equal(migrated.money, raw.money);
   assert.equal(migrated.totalCaught, raw.totalCaught);
   assert.deepEqual(Object.keys(migrated.discovered), ["sardine", "anchovy"]);

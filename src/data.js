@@ -1,4 +1,5 @@
 import { validateContentCatalog } from "./data/content-validation.js";
+import { TIDEGLOW_SOURCES, tideglowSourceByEventType, tideglowSourceId } from "./data/tideglow.js";
 import { DAILY_GOAL_TEMPLATES, QUEST_TEMPLATES } from "./data/daily-goals.js";
 import { COMMISSION_TEMPLATES, commissionTemplateById, getResidentCommissionTemplates } from "./data/commissions.js";
 import {
@@ -48,7 +49,8 @@ export {
   getRegionFishingSpots, getRegionObservationSpots, getRegionSpots,
   getRouteDestination, getRoutesForRegion, isRegionAvailable,
   isRouteAvailable, regionById, regionSpotById, residentById, routeById,
-  chartRegionPointById, chartRoutePathById
+  chartRegionPointById, chartRoutePathById,
+  TIDEGLOW_SOURCES, tideglowSourceByEventType, tideglowSourceId
 };
 
 export const TIMES = [
@@ -457,5 +459,6 @@ export const CONTENT_VALIDATION = validateContentCatalog({
   researchNodes: RESEARCH_NODES,
   residentStoryScenes: RESIDENT_STORY_SCENES,
   chartRegions: CHART_REGION_POINTS,
-  chartRoutes: CHART_ROUTE_PATHS
+  chartRoutes: CHART_ROUTE_PATHS,
+  tideglowSources: TIDEGLOW_SOURCES
 });

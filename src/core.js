@@ -1,10 +1,12 @@
 import {
   ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, AQUARIUM_DECORATIONS, BAITS, BAY_EVENTS,
   CHENGYE_ID, DAILY_GOAL_TEMPLATES, FISH, FURNITURE, LUMINOUS_ARCHIPELAGO_ID, MILESTONES, RARITY,
-  REGIONS, RODS, ROUTES, SLEEPING_TIDE_BAY_ID, SPOTS, TIMES,
+  REGIONS, RODS, ROUTES, SLEEPING_TIDE_BAY_ID, SPOTS, TIDEGLOW_SOURCES, TIMES,
   getFishHabitat, getRegionFishingSpots, isRegionAvailable
 } from "./data.js";
-import { BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, SAVE_KEY, SAVE_VERSION } from "./persistence/save-schema.js";
+import {
+  BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, DEV_TEMP_SAVE_KEY, SAVE_KEY, SAVE_VERSION, TEMP_SAVE_KEY
+} from "./persistence/save-schema.js";
 import {
   applyDailyGoalProgress, claimCompletedDailyGoals, claimDailyGoal, createDailyBoard,
   createDailyGoalEntry, createDailyQuests, normalizeDailyBoard
@@ -40,9 +42,16 @@ import {
   getResidentStoryStatus, normalizeResidentStoryState, resetResidentStory
 } from "./systems/resident-stories.js";
 import { normalizeDisplaySettings } from "./systems/accessibility.js";
+import {
+  consumeGameEvent, createGameEventState, enqueueGameEvent, normalizeGameEventState
+} from "./systems/game-events.js";
+import {
+  adjustDeveloperTideglow, applyTideglowEvent, createTideglowState, normalizeTideglowState
+} from "./systems/tideglow.js";
 
 export {
-  BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, SAVE_KEY, SAVE_VERSION, createDailyQuests,
+  BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, DEV_TEMP_SAVE_KEY, SAVE_KEY, SAVE_VERSION, TEMP_SAVE_KEY,
+  TIDEGLOW_SOURCES, createDailyQuests,
   CHART_VIEW_LIMITS, canBeginChartRoute, createDefaultChartView, createDeveloperWorldState,
   createInitialWorldState, DEVELOPER_TRAVEL_SCALES, FAMILIAR_TRAVEL_DURATION_MS,
   FIRST_TRAVEL_DURATION_MS, getObservationHint, getRegionResearchStatus, getResidentStoryStatus,
@@ -50,6 +59,48 @@ export {
   normalizeTravelScale, normalizeWorldState, panChartView, requestChartRoute, zoomChartView
 };
 export const DEFAULT_TITLE = "海灣旅人";
+export const STARTER_SHIP_ID = "drifting_home";
+
+function createShipShell(ownedFurniture = ["sleeping_bag"], placedFurniture = { sleep: "sleeping_bag", wall: null, table: null, light: null, corner: null }) {
+  return {
+    activeShipId: STARTER_SHIP_ID,
+    ownedShipIds: [STARTER_SHIP_ID],
+    purchasedAtByShipId: {},
+    revealedShipIds: [STARTER_SHIP_ID],
+    interiorsByShipId: {
+      [STARTER_SHIP_ID]: {
+        ownedFurnitureIds: [...ownedFurniture],
+        placedFurniture: { ...placedFurniture },
+        lightingId: "default",
+        aquariumFrameId: "default"
+      }
+    }
+  };
+}
+
+function createJournalShell() {
+  return {
+    introCreated: true,
+    fishEncounterLineById: {},
+    permanentEntries: [{
+      id: "journal:intro",
+      eventId: null,
+      type: "intro",
+      sailingDay: 1,
+      occurredAt: null,
+      title: "把潮聲整理成冊",
+      body: "今天，我開始把走過的潮聲整理成冊。",
+      refs: {}
+    }],
+    dailyEntries: [],
+    dailyArchives: [],
+    unreadEntryIds: ["journal:intro"]
+  };
+}
+
+function createAutoFishingShell() {
+  return { owned: false, activeSession: null, lastSummary: null, settledSessionIds: [] };
+}
 
 export const FAMILIARITY_LEVELS = [
   { id: "unknown", name: "未發現", minCount: 0 },
@@ -296,6 +347,11 @@ export function createInitialState() {
     equippedBait: "bread",
     ownedFurniture: ["sleeping_bag"],
     placedFurniture: { sleep: "sleeping_bag", wall: null, table: null, light: null, corner: null },
+    gameEvents: createGameEventState(),
+    tideglow: createTideglowState(),
+    ships: createShipShell(),
+    journal: createJournalShell(),
+    autoFishing: createAutoFishingShell(),
     discovered: {},
     catchInventory: [],
     aquarium: { fish: [] },
@@ -467,7 +523,14 @@ function migrateDeveloperUnlocks(state, raw) {
       }];
     }))
   };
-  state.observations = createDeveloperObservationState({ day: state.day, observedAt: state.lastSavedAt || new Date().toISOString() });
+  state.observations = raw?.observations && typeof raw.observations === "object"
+    ? normalizeObservationState(raw.observations, state.day)
+    : createDeveloperObservationState({ day: state.day, observedAt: state.lastSavedAt || new Date().toISOString() });
+  state.residentCommissions = normalizeResidentCommissionState(
+    state.residentCommissions,
+    state.day,
+    getProgressAvailabilityContext(state)
+  );
   state.residentStories = normalizeResidentStoryState(state.residentStories);
   evaluateResearchProgress(state, LUMINOUS_ARCHIPELAGO_ID);
   evaluateAchievements(state);
@@ -483,6 +546,57 @@ export function migrateState(raw) {
   merged.weather = ["sunny", "rain"].includes(merged.weather) ? merged.weather : base.weather;
   merged.baitAmounts = { ...base.baitAmounts, ...(raw.baitAmounts || {}) };
   merged.placedFurniture = { ...base.placedFurniture, ...(raw.placedFurniture || {}) };
+  const rawVersion = Math.max(0, Math.floor(Number(raw.version) || 0));
+  if (rawVersion < SAVE_VERSION) {
+    merged.gameEvents = createGameEventState();
+    merged.tideglow = createTideglowState();
+    merged.ships = createShipShell(
+      uniqueKnownIds(raw.ownedFurniture, FURNITURE).length ? uniqueKnownIds(raw.ownedFurniture, FURNITURE) : base.ownedFurniture,
+      merged.placedFurniture
+    );
+    merged.journal = createJournalShell();
+    merged.autoFishing = createAutoFishingShell();
+  } else {
+    merged.gameEvents = normalizeGameEventState(raw.gameEvents);
+    merged.tideglow = normalizeTideglowState(raw.tideglow, { allowDeveloperAdjustment: raw.developerMode === true });
+    const sourceShips = raw.ships && typeof raw.ships === "object" ? raw.ships : {};
+    const starterInterior = sourceShips.interiorsByShipId?.[STARTER_SHIP_ID];
+    merged.ships = {
+      ...createShipShell(),
+      ...sourceShips,
+      activeShipId: typeof sourceShips.activeShipId === "string" ? sourceShips.activeShipId : STARTER_SHIP_ID,
+      ownedShipIds: [...new Set(Array.isArray(sourceShips.ownedShipIds) ? sourceShips.ownedShipIds.filter(id => typeof id === "string") : [STARTER_SHIP_ID])],
+      purchasedAtByShipId: sourceShips.purchasedAtByShipId && typeof sourceShips.purchasedAtByShipId === "object" ? { ...sourceShips.purchasedAtByShipId } : {},
+      revealedShipIds: [...new Set(Array.isArray(sourceShips.revealedShipIds) ? sourceShips.revealedShipIds.filter(id => typeof id === "string") : [STARTER_SHIP_ID])],
+      interiorsByShipId: {
+        ...(sourceShips.interiorsByShipId && typeof sourceShips.interiorsByShipId === "object" ? sourceShips.interiorsByShipId : {}),
+        [STARTER_SHIP_ID]: {
+          ownedFurnitureIds: uniqueKnownIds(starterInterior?.ownedFurnitureIds, FURNITURE).length
+            ? uniqueKnownIds(starterInterior.ownedFurnitureIds, FURNITURE)
+            : [...base.ownedFurniture],
+          placedFurniture: { ...base.placedFurniture, ...(starterInterior?.placedFurniture || {}) },
+          lightingId: typeof starterInterior?.lightingId === "string" ? starterInterior.lightingId : "default",
+          aquariumFrameId: typeof starterInterior?.aquariumFrameId === "string" ? starterInterior.aquariumFrameId : "default"
+        }
+      }
+    };
+    if (!merged.ships.ownedShipIds.includes(STARTER_SHIP_ID)) merged.ships.ownedShipIds.unshift(STARTER_SHIP_ID);
+    if (!merged.ships.ownedShipIds.includes(merged.ships.activeShipId)) merged.ships.activeShipId = STARTER_SHIP_ID;
+    const journal = raw.journal && typeof raw.journal === "object" ? raw.journal : {};
+    merged.journal = {
+      ...createJournalShell(),
+      ...journal,
+      fishEncounterLineById: journal.fishEncounterLineById && typeof journal.fishEncounterLineById === "object" ? { ...journal.fishEncounterLineById } : {},
+      permanentEntries: Array.isArray(journal.permanentEntries) ? journal.permanentEntries.filter(entry => entry && typeof entry === "object") : createJournalShell().permanentEntries,
+      dailyEntries: Array.isArray(journal.dailyEntries) ? journal.dailyEntries.filter(entry => entry && typeof entry === "object") : [],
+      dailyArchives: Array.isArray(journal.dailyArchives) ? journal.dailyArchives.filter(entry => entry && typeof entry === "object") : [],
+      unreadEntryIds: [...new Set(Array.isArray(journal.unreadEntryIds) ? journal.unreadEntryIds.filter(id => typeof id === "string") : [])]
+    };
+    merged.autoFishing = {
+      ...createAutoFishingShell(),
+      ...(raw.autoFishing && typeof raw.autoFishing === "object" ? raw.autoFishing : {})
+    };
+  }
   merged.settings = normalizeDisplaySettings({ ...base.settings, ...(raw.settings || {}) });
   merged.travelSettings = {
     ...base.travelSettings,
@@ -493,7 +607,6 @@ export function migrateState(raw) {
     .filter(([fishId]) => isKnownId(FISH, fishId))
     .map(([fishId, record]) => [fishId, migrateDiscovery(record)])
     .filter(([, record]) => record.count > 0));
-  const rawVersion = Math.max(0, Math.floor(Number(raw.version) || 0));
   merged.world = normalizeWorldState(raw.world, {
     legacyDiscoveredFishIds: Object.keys(merged.discovered),
     backfillLegacyDiscoveries: rawVersion < SAVE_VERSION || !raw.world,
@@ -585,7 +698,12 @@ export function isCurrentSaveSchema(raw) {
       Array.isArray(progress?.caughtSpotIds) && Array.isArray(progress?.caughtTimeIds)
     ))
     && raw?.regionEvents && typeof raw.regionEvents === "object"
-    && Object.hasOwn(raw.regionEvents, LUMINOUS_ARCHIPELAGO_ID);
+    && Object.hasOwn(raw.regionEvents, LUMINOUS_ARCHIPELAGO_ID)
+    && raw?.gameEvents && Array.isArray(raw.gameEvents.pending) && Array.isArray(raw.gameEvents.recent)
+    && raw?.tideglow && Number.isFinite(Number(raw.tideglow.total))
+    && raw?.ships && Array.isArray(raw.ships.ownedShipIds)
+    && raw?.journal && Array.isArray(raw.journal.permanentEntries)
+    && raw?.autoFishing && typeof raw.autoFishing === "object";
 }
 
 export function discoveredCount(state) {
@@ -775,6 +893,85 @@ export function generateCatch(fish, contextOrRandom = {}, stateOrRandom = null, 
   };
 }
 
+function gameEventContext(state, overrides = {}) {
+  return {
+    source: overrides.source || "manual",
+    occurredAt: overrides.occurredAt || new Date().toISOString(),
+    sailingDay: state.day,
+    timeId: overrides.timeId ?? TIMES[state.timeIndex]?.id ?? null,
+    weatherId: overrides.weatherId ?? overrides.weather ?? state.weather ?? null,
+    regionId: overrides.regionId ?? state.world?.currentRegionId ?? null,
+    spotId: overrides.spotId ?? state.selectedSpot ?? null,
+    shipId: overrides.shipId ?? state.ships?.activeShipId ?? STARTER_SHIP_ID
+  };
+}
+
+function legacyProgressFromGameEvent(event) {
+  if (event.type === "fish.caught") return { type: "catch", source: event.source, ...event.payload };
+  if (event.type === "fish.sold") return { type: "sell", source: event.source, ...event.payload };
+  if (event.type === "observation.recorded") return { type: "observe", source: event.source, ...event.payload };
+  return null;
+}
+
+function gameEventConsumers(state) {
+  return {
+    progress: event => {
+      const legacy = legacyProgressFromGameEvent(event);
+      if (legacy) {
+        state.dailyBoard = applyDailyGoalProgress(state.dailyBoard, legacy);
+        state.residentCommissions = applyResidentCommissionProgress(state.residentCommissions, legacy);
+      }
+      return { ok: true };
+    },
+    tideglow: event => {
+      const result = applyTideglowEvent(state.tideglow, event, {
+        allowDeveloperAdjustment: state.developerMode === true,
+        allowDeveloperSource: state.developerMode === true
+      });
+      state.tideglow = result.state;
+      return { ok: true, ...result };
+    }
+  };
+}
+
+export function dispatchGameEvent(state, input, { consumerIds = [] } = {}) {
+  const enqueued = enqueueGameEvent(state.gameEvents, { ...gameEventContext(state, input), ...input }, { consumerIds });
+  state.gameEvents = enqueued.state;
+  if (!enqueued.event || enqueued.duplicate) return { ...enqueued, complete: Boolean(enqueued.duplicate), results: {} };
+  const consumed = consumeGameEvent(state.gameEvents, enqueued.event.eventId, gameEventConsumers(state));
+  state.gameEvents = consumed.state;
+  return { ...enqueued, ...consumed };
+}
+
+export function retryPendingGameEvents(state) {
+  const eventIds = normalizeGameEventState(state.gameEvents).pending.map(event => event.eventId);
+  const results = [];
+  for (const eventId of eventIds) {
+    const result = consumeGameEvent(state.gameEvents, eventId, gameEventConsumers(state));
+    state.gameEvents = result.state;
+    results.push(result);
+  }
+  return results;
+}
+
+function emitTideglowEvent(state, type, refs, context = {}) {
+  return dispatchGameEvent(state, { ...context, type, refs, payload: {} }, { consumerIds: ["tideglow"] });
+}
+
+function evaluateResearchWithEvents(state, regionId, source = "manual") {
+  const before = getRegionResearchStatus(state, regionId);
+  const result = evaluateResearchProgress(state, regionId);
+  const tideglowEvents = [];
+  for (const node of result.completedNodes || []) {
+    tideglowEvents.push(emitTideglowEvent(state, "research.node.completed", { nodeId: node.id, regionId }, { source, regionId }));
+  }
+  const after = getRegionResearchStatus(state, regionId);
+  if (after?.fullComplete && !before?.fullComplete) {
+    tideglowEvents.push(emitTideglowEvent(state, "research.region.completed", { regionId }, { source, regionId }));
+  }
+  return { ...result, tideglowEvents };
+}
+
 export function recordCatch(state, caught, baitId = state.equippedBait) {
   const fish = FISH.find(item => item.id === caught.fishId);
   const prior = state.discovered[caught.fishId];
@@ -811,7 +1008,7 @@ export function recordCatch(state, caught, baitId = state.equippedBait) {
   if (caught.sizeTier === "record") state.recordCatches = (state.recordCatches || 0) + 1;
   if (isNew) state.money += 35 + ({ common: 0, uncommon: 30, rare: 100 }[fish.rarity]);
   if (isFirstShimmer) state.money += SHIMMER_CONFIG.researchReward;
-  const researchUpdate = updateProgressEvent(state, {
+  const progressUpdate = updateProgressEvent(state, {
     type: "catch",
     source: "manual",
     fish,
@@ -822,6 +1019,16 @@ export function recordCatch(state, caught, baitId = state.equippedBait) {
     timeId: context.timeId,
     weather: context.weather
   });
+  const discoveryEvent = isNew
+    ? emitTideglowEvent(state, "fish.discovered", { fishId: fish.id }, {
+      source: "manual",
+      occurredAt: caught.caughtAt,
+      regionId: context.regionId,
+      spotId: context.spotId,
+      timeId: context.timeId,
+      weatherId: context.weather
+    })
+    : null;
   const bayEventUpdate = updateBayEventProgress(state, caught);
   const completedAchievements = evaluateAchievements(state);
   return {
@@ -832,7 +1039,8 @@ export function recordCatch(state, caught, baitId = state.equippedBait) {
     isWeightRecord,
     familiarity,
     familiarityChanged: familiarity.id !== priorFamiliarity.id,
-    researchUpdate,
+    researchUpdate: progressUpdate.researchUpdate,
+    tideglowEvents: [discoveryEvent, ...(progressUpdate.researchUpdate?.tideglowEvents || [])].filter(Boolean),
     bayEventUpdate,
     completedAchievements,
     record: state.discovered[caught.fishId]
@@ -941,9 +1149,27 @@ export function claimQuest(state, instanceId) {
 }
 
 export function updateProgressEvent(state, event) {
-  state.dailyBoard = applyDailyGoalProgress(state.dailyBoard, event);
-  state.residentCommissions = applyResidentCommissionProgress(state.residentCommissions, event);
-  return evaluateResearchProgress(state, event?.regionId || state.world?.currentRegionId);
+  const type = event?.type === "catch" ? "fish.caught" : event?.type === "sell" ? "fish.sold" : "observation.recorded";
+  const dispatched = dispatchGameEvent(state, {
+    type,
+    source: event?.source || "manual",
+    occurredAt: event?.caught?.caughtAt,
+    regionId: event?.regionId,
+    spotId: event?.spotId,
+    timeId: event?.timeId,
+    weatherId: event?.weather,
+    refs: {
+      ...(event?.fish?.id ? { fishId: event.fish.id } : {}),
+      ...(event?.observationId ? { observationId: event.observationId } : {})
+    },
+    payload: { ...event }
+  }, { consumerIds: ["progress"] });
+  const researchUpdate = evaluateResearchWithEvents(
+    state,
+    event?.regionId || state.world?.currentRegionId,
+    event?.source || "manual"
+  );
+  return { dispatched, researchUpdate, ...researchUpdate };
 }
 
 export function observeAtSpot(state, spotId, random = Math.random, observedAt = new Date().toISOString()) {
@@ -958,7 +1184,7 @@ export function observeAtSpot(state, spotId, random = Math.random, observedAt = 
   }, random);
   if (!result.ok) return result;
   state.observations = result.state;
-  const researchUpdate = result.kind === "subject"
+  const progressUpdate = result.kind === "subject"
     ? updateProgressEvent(state, {
       type: "observe",
       source: "manual",
@@ -968,12 +1194,27 @@ export function observeAtSpot(state, spotId, random = Math.random, observedAt = 
       timeId: TIMES[state.timeIndex]?.id,
       weather: state.weather
     })
-    : evaluateResearchProgress(state, state.world.currentRegionId);
-  return { ...result, researchUpdate };
+    : { researchUpdate: evaluateResearchWithEvents(state, state.world.currentRegionId) };
+  const observationEvent = result.kind === "subject"
+    ? emitTideglowEvent(state, "observation.recorded", { observationId: result.subject.id }, {
+      source: "manual", occurredAt: observedAt, regionId: state.world.currentRegionId, spotId
+    })
+    : null;
+  return {
+    ...result,
+    researchUpdate: progressUpdate.researchUpdate,
+    tideglowEvents: [observationEvent, ...(progressUpdate.researchUpdate?.tideglowEvents || [])].filter(Boolean)
+  };
 }
 
 export function advanceResidentStory(state, residentId) {
-  return advanceResidentStoryState(state, residentId);
+  const result = advanceResidentStoryState(state, residentId);
+  if (!result.ok) return result;
+  const tideglowEvent = emitTideglowEvent(state, "resident.story.completed", {
+    residentId,
+    milestoneId: result.scene.id
+  });
+  return { ...result, tideglowEvent };
 }
 
 export function acceptResidentCommission(state, residentId) {
@@ -1033,9 +1274,23 @@ export function dockAtDestination(state, now = Date.now()) {
     state.day,
     getProgressAvailabilityContext(state)
   );
-  const researchUpdate = evaluateResearchProgress(state, result.destinationId);
+  const arrivalEvent = result.firstArrival
+    ? emitTideglowEvent(state, "region.arrived", { regionId: result.destinationId }, { regionId: result.destinationId })
+    : null;
+  const researchUpdate = evaluateResearchWithEvents(state, result.destinationId);
   applyBayEventWorldConditions(state);
-  return { ...result, researchUpdate };
+  return { ...result, researchUpdate, tideglowEvents: [arrivalEvent, ...(researchUpdate.tideglowEvents || [])].filter(Boolean) };
+}
+
+export function developerAdjustTideglow(state, delta) {
+  if (!state?.developerMode) return false;
+  state.tideglow = adjustDeveloperTideglow(state.tideglow, delta);
+  return true;
+}
+
+export function developerEmitTideglowEvent(state, eventType, refs = {}) {
+  if (!state?.developerMode || !TIDEGLOW_SOURCES.some(source => source.eventType === eventType)) return null;
+  return emitTideglowEvent(state, eventType, refs, { source: "developer" });
 }
 
 export function developerSetTravelScale(state, scale) {

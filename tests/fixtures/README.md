@@ -7,3 +7,5 @@ These JSON files are immutable inputs captured for the v0.4 Slice A migration su
 - **v3-developer-save.json**: the legacy 20-species developer-save shape that must be backfilled without touching the normal save.
 
 Keep these files at schema version 3. Add new fixtures instead of rewriting them when the save schema changes.
+
+The v4 baselines add four immutable inputs for v0.5 Slice A: normal, progressed, developer, and intentionally missing-field saves. They must all migrate to v5 without retroactive Tideglow or journal encounters.

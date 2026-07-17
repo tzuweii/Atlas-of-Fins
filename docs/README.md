@@ -1,7 +1,7 @@
 # Atlas of Fins｜專案文件總覽
 
 > 最後整理：2026-07-18
-> 對應程式版本：v0.4.0-alpha.8
+> 對應程式版本：v0.5.0-alpha.1
 > 現行實作計畫：v0.5「船屋與航程記憶」
 > 用途：區分跨版本權威文件、現行計畫與已完成版本紀錄。
 
@@ -29,7 +29,7 @@
 1. [`../README.md`](../README.md)：安裝、遊玩方式與目前可玩功能。
 2. [`DEVELOPMENT_PROGRESS.md`](DEVELOPMENT_PROGRESS.md)：唯一的版本與開發進度總表。
 3. [`FINAL_GAME_DESIGN.md`](FINAL_GAME_DESIGN.md)：長期正式定案與第一張航圖版本順序。
-4. [`versions/v0.5/V0_5_IMPLEMENTATION_PLAN.md`](versions/v0.5/V0_5_IMPLEMENTATION_PLAN.md)：下一版本的 Slice、存檔、相依順序與驗收門檻。
+4. [`versions/v0.5/V0_5_IMPLEMENTATION_PLAN.md`](versions/v0.5/V0_5_IMPLEMENTATION_PLAN.md)：現行版本的 Slice、存檔、相依順序與驗收門檻；Slice A 已完成。
 5. [`COLLECTION_EXPERIENCE_SYSTEMS.md`](COLLECTION_EXPERIENCE_SYSTEMS.md)：v0.5 潮光、船隻、日誌與自動釣魚的架構背景。
 6. [`LONG_TERM_GAME_DESIGN.md`](LONG_TERM_GAME_DESIGN.md) 與 [`WORLD_ROUTE_SYSTEM_DESIGN.md`](WORLD_ROUTE_SYSTEM_DESIGN.md)：產品方向及世界航線架構。
 7. `versions/` 內對應版本的歷史規格、完成計畫與驗收報告。

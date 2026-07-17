@@ -1,7 +1,8 @@
 const COLLECTION_NAMES = [
   "times", "spots", "rods", "baits", "furniture", "fish", "dailyGoals",
   "events", "achievements", "aquariumDecorations", "regions", "routes", "residents", "commissions",
-  "observations", "wonders", "researchNodes", "residentStoryScenes", "chartRegions", "chartRoutes"
+  "observations", "wonders", "researchNodes", "residentStoryScenes", "chartRegions", "chartRoutes",
+  "tideglowSources"
 ];
 
 const WEATHER_IDS = new Set(["sunny", "rain"]);
@@ -292,6 +293,22 @@ export function validateContentCatalog(content = {}) {
     requireReference("chartRoutes", path, "routeId", path?.routeId, ids.routes, "航線");
     if (![path?.controlX, path?.controlY].every(isChartPosition)) {
       addError("invalid-position", "chartRoutes", path?.id, `chartRoutes[${path?.id || "missing-id"}]`, "海圖航線控制點必須位於 0～100 之間");
+    }
+  }
+  const eventTypes = new Set();
+  for (const source of collections.tideglowSources) {
+    if (typeof source?.eventType !== "string" || !source.eventType.trim()) {
+      addError("invalid-type", "tideglowSources", source?.id, `tideglowSources[${source?.id || "missing-id"}].eventType`, "潮光來源需要事件類型");
+    } else if (eventTypes.has(source.eventType)) {
+      addError("duplicate-event-type", "tideglowSources", source?.id, `tideglowSources[${source.id}].eventType`, `事件類型「${source.eventType}」重複`);
+    } else eventTypes.add(source.eventType);
+    if (!(Number(source?.points) > 0)) {
+      addError("invalid-points", "tideglowSources", source?.id, `tideglowSources[${source?.id || "missing-id"}].points`, "潮光分值必須大於 0");
+    }
+    for (const key of ["refKey", "sourcePrefix"]) {
+      if (typeof source?.[key] !== "string" || !source[key].trim()) {
+        addError("missing-source-key", "tideglowSources", source?.id, `tideglowSources[${source?.id || "missing-id"}].${key}`, "潮光來源需要穩定的去重鍵");
+      }
     }
   }
 

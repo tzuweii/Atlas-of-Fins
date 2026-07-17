@@ -4,7 +4,7 @@ import {
   LUMINOUS_ARCHIPELAGO_ID, SLEEPING_TIDE_BAY_ID, SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID
 } from "../src/data.js";
 import {
-  beginRouteTravel, createDeveloperState, createInitialState, dockAtDestination,
+  SAVE_VERSION, beginRouteTravel, createDeveloperState, createInitialState, dockAtDestination,
   migrateState, progressTravel
 } from "../src/core.js";
 import {
@@ -31,7 +31,7 @@ test("portable saves round-trip current and legacy state without crossing save m
   normal.money = 4321;
   normal.settings.textScale = "large";
   const encoded = createPortableSave(normal, { mode: "normal", exportedAt: "2026-07-17T00:00:00.000Z" });
-  const imported = parsePortableSave(encoded, { expectedMode: "normal", maxSaveVersion: 4, migrate: migrateState });
+  const imported = parsePortableSave(encoded, { expectedMode: "normal", maxSaveVersion: SAVE_VERSION, migrate: migrateState });
   assert.equal(imported.ok, true);
   assert.equal(imported.state.money, 4321);
   assert.equal(imported.state.settings.textScale, "large");
@@ -47,16 +47,16 @@ test("portable saves round-trip current and legacy state without crossing save m
   const legacyEnvelope = JSON.parse(encoded);
   legacyEnvelope.saveVersion = 1;
   legacyEnvelope.state = { version: 1, money: 246, discovered: {} };
-  const legacy = parsePortableSave(JSON.stringify(legacyEnvelope), { expectedMode: "normal", maxSaveVersion: 4, migrate: migrateState });
+  const legacy = parsePortableSave(JSON.stringify(legacyEnvelope), { expectedMode: "normal", maxSaveVersion: SAVE_VERSION, migrate: migrateState });
   assert.equal(legacy.ok, true);
-  assert.equal(legacy.state.version, 4);
+  assert.equal(legacy.state.version, SAVE_VERSION);
   assert.equal(legacy.state.money, 246);
 
   const futureEnvelope = JSON.parse(encoded);
   futureEnvelope.saveVersion = 99;
   futureEnvelope.state.version = 99;
   assert.equal(parsePortableSave(JSON.stringify(futureEnvelope), {
-    expectedMode: "normal", maxSaveVersion: 4, migrate: migrateState
+    expectedMode: "normal", maxSaveVersion: SAVE_VERSION, migrate: migrateState
   }).reason, "unsupported-version");
 });
 

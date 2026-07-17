@@ -92,13 +92,18 @@ assert.match(await evaluate("document.querySelector('#time-label').innerText"), 
 assert.match(await evaluate("document.querySelector('.bay-event-card[data-bay-event=\"moonlit_tide\"]').innerText"), /月光潮汐[\s\S]*礁石邊緣／海灣深水區[\s\S]*0 \/ 2[\s\S]*目前生效/);
 assert.equal(await evaluate("document.querySelector('#developer-tools-button').hidden"), false);
 await click("#developer-tools-button");
-assert.match(await evaluate("document.querySelector('.developer-modal').innerText"), /Slice H 整合控制[\s\S]*每日小目標[\s\S]*居民委託[\s\S]*正式航線[\s\S]*琉光群島內容[\s\S]*觀察、研究與澄野[\s\S]*整合與存檔/);
+assert.match(await evaluate("document.querySelector('.developer-modal').innerText"), /v0.5 Slice A 整合控制[\s\S]*每日小目標[\s\S]*居民委託[\s\S]*正式航線[\s\S]*琉光群島內容[\s\S]*觀察、研究與澄野[\s\S]*潮光與事件帳本[\s\S]*整合與存檔/);
 assert.equal(await evaluate("document.querySelectorAll('#developer-daily-template option').length"), 5);
 assert.equal(await evaluate("document.querySelectorAll('#developer-commission-template option').length"), 13);
 assert.equal(await evaluate("document.querySelectorAll('#developer-travel-scale option').length"), 3);
 assert.equal(await evaluate("document.querySelectorAll('#developer-region option').length"), 2);
 assert.equal(await evaluate("document.querySelectorAll('#developer-region-event option').length"), 3);
 assert.equal(await evaluate("document.querySelectorAll('#developer-observation-subject option').length"), 2);
+assert.equal(await evaluate("document.querySelectorAll('#developer-tideglow-source option').length"), 6);
+await click('[data-action="developer-emit-tideglow"]');
+assert.equal(await evaluate("JSON.parse(localStorage.getItem('atlas-of-fins.dev-save')).tideglow.total"), 1);
+await click('[data-action="developer-emit-tideglow"]');
+assert.equal(await evaluate("JSON.parse(localStorage.getItem('atlas-of-fins.dev-save')).tideglow.total"), 1);
 await click('[data-action="show-settings"]');
 const standardHeadingSize = await evaluate("parseFloat(getComputedStyle(document.querySelector('.settings-modal h2')).fontSize)");
 await click('[data-action="set-text-scale"][data-id="large"]');
@@ -291,12 +296,14 @@ const narrowChart = await evaluate(`(() => {
   const route = document.querySelector('.chart-route-card').getBoundingClientRect();
   return {
     documentFits: document.documentElement.scrollWidth <= window.innerWidth,
+    topbarFits: document.querySelector('.topbar').getBoundingClientRect().right <= window.innerWidth,
     viewportFits: viewport.left >= 0 && viewport.right <= window.innerWidth,
     routeFits: route.left >= 0 && route.right <= window.innerWidth,
     viewportWidth: viewport.width
   };
 })()`);
 assert.equal(narrowChart.documentFits, true);
+assert.equal(narrowChart.topbarFits, true);
 assert.equal(narrowChart.viewportFits, true);
 assert.equal(narrowChart.routeFits, true);
 assert.ok(narrowChart.viewportWidth >= 300);
@@ -443,7 +450,10 @@ assert.match(await evaluate("document.querySelector('#time-label').innerText"), 
 
 const saved = await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save"))`);
 const savedCatchRecord = Object.values(saved.discovered)[0];
-assert.equal(saved.version, 4);
+assert.equal(saved.version, 5);
+assert.ok(saved.tideglow.total >= 1);
+assert.equal(Number(await evaluate("document.querySelector('#tideglow-label').innerText.replaceAll(',', '')")), saved.tideglow.total);
+assert.equal(saved.gameEvents.pending.length, 0);
 assert.equal(saved.world.currentRegionId, "sleeping_tide_bay");
 assert.deepEqual(saved.world.visitedRegionIds, ["sleeping_tide_bay"]);
 assert.deepEqual(saved.world.unlockedRouteIds, ["sleeping_tide_to_luminous_archipelago"]);
@@ -667,7 +677,7 @@ const legacyV3Payload = await evaluate(`(() => {
 await click("#continue-button");
 await waitFor(`!document.querySelector("#game-shell").classList.contains("is-hidden")`);
 const migratedV4Save = await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save"))`);
-assert.equal(migratedV4Save.version, 4);
+assert.equal(migratedV4Save.version, 5);
 assert.equal(migratedV4Save.money, 2468);
 assert.equal(migratedV4Save.world.currentRegionId, "sleeping_tide_bay");
 assert.equal(migratedV4Save.world.docking.status, "docked");
@@ -679,6 +689,8 @@ assert.equal(migratedV4Save.dailyBoard.entries[0].progress, 1);
 assert.equal(migratedV4Save.residentCommissions.offerDayByResident.lighthouse_keeper, migratedV4Save.day);
 assert.deepEqual(migratedV4Save.observations.recordsById, {});
 assert.deepEqual(migratedV4Save.residentStories.chengye.completedSceneIds, ["chengye_drifting_observer"]);
+assert.equal(migratedV4Save.tideglow.total, 0);
+assert.equal(migratedV4Save.journal.permanentEntries.length, 1);
 assert.equal(await evaluate(`localStorage.getItem("atlas-of-fins.backup")`), legacyV3Payload);
 assert.equal(exceptions.length, 0, `No uncaught browser exceptions: ${exceptions.join(", ")}`);
 

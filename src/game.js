@@ -2,12 +2,13 @@ import {
   ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, BAITS, BAY_EVENTS, CHART_REGION_POINTS, CHART_ROUTE_PATHS,
   CHENGYE_ID, COMMISSION_TEMPLATES, CONTENT_VALIDATION, DAILY_GOAL_TEMPLATES, FISH, FURNITURE, MILESTONES,
   LUMINOUS_ARCHIPELAGO_ID, OBSERVATION_SUBJECTS, RARITY, REGIONS, RESEARCH_NODES, RESIDENTS, RODS,
-  SLEEPING_TIDE_BAY_ID, SPOTS, TIMES, WONDERS,
+  SLEEPING_TIDE_BAY_ID, SPOTS, TIDEGLOW_SOURCES, TIMES, WONDERS,
   fishAssetSrcSet, getFishHabitat, getResidentCommissionTemplates, getRegionFishingSpots, getRegionObservationSpots,
   regionById, resolveFishAsset, residentById, routeById
 } from "./data.js";
 import {
-  BACKUP_KEY, CHART_VIEW_LIMITS, DEVELOPER_TRAVEL_SCALES, DEV_BACKUP_KEY, DEV_SAVE_KEY, SAVE_KEY, SAVE_VERSION,
+  BACKUP_KEY, CHART_VIEW_LIMITS, DEVELOPER_TRAVEL_SCALES, DEV_BACKUP_KEY, DEV_SAVE_KEY, DEV_TEMP_SAVE_KEY,
+  SAVE_KEY, SAVE_VERSION, TEMP_SAVE_KEY,
   acceptResidentCommission, advanceResidentStory, advanceTime,
   applyMilestones, baitById, beginRouteTravel, buyBait, buyFurniture, buyRod, chooseFish, claimAchievement,
   claimAllCompletedDailyGoals, claimQuest, createDeveloperState, createInitialState, deliverResidentCommission,
@@ -15,7 +16,7 @@ import {
   developerCompleteRegionResearch, developerCompleteResidentCommission, developerRecordObservation,
   developerResetChengyeStory, developerResetDailyBoard, developerResetObservations, developerResetRouteState,
   developerDockRegion, developerSetDailyGoal, developerSetRegionEvent, developerSetResidentOffer,
-  developerSetTravelScale, discoveredCount,
+  developerSetTravelScale, developerAdjustTideglow, developerEmitTideglowEvent, discoveredCount,
   dockAtDestination, dropResidentCommission, equipTitle, fishById,
   furnitureById, generateCatch, getAchievementProgress, getActiveBayEvent, getActiveBayEventState,
   getAquariumCapacity, getBayEventHint, getFamiliarity, getObservationHint,
@@ -25,7 +26,7 @@ import {
   normalizeChartView, panChartView, progressTravel, setAquariumDecoration, swapAquariumFish,
   zoomChartView
 } from "./core.js";
-import { loadStoredState } from "./persistence/migrations.js";
+import { loadStoredState, writeStoredState } from "./persistence/migrations.js";
 import { createPortableSave, parsePortableSave } from "./persistence/portable-save.js";
 import {
   TEXT_SCALE_OPTIONS, UI_SCALE_OPTIONS, displayScaleValue, normalizeDisplaySettings
@@ -106,7 +107,9 @@ const DEVELOPER_PASSWORD = "atlas-dev";
 const PREFERENCES_KEY = "atlas-of-fins.preferences";
 
 function saveKeys(mode = activeSaveMode) {
-  return mode === "developer" ? [DEV_SAVE_KEY, DEV_BACKUP_KEY] : [SAVE_KEY, BACKUP_KEY];
+  return mode === "developer"
+    ? [DEV_SAVE_KEY, DEV_BACKUP_KEY, DEV_TEMP_SAVE_KEY]
+    : [SAVE_KEY, BACKUP_KEY, TEMP_SAVE_KEY];
 }
 function gameIsActive() { return !gameShell.classList.contains("is-hidden"); }
 function loadPreferences(fallback = state.settings) {
@@ -138,23 +141,33 @@ function hasSave(mode = "normal") {
 }
 function saveGame(showToast = false) {
   try {
-    const [primaryKey, backupKey] = saveKeys();
-    const previous = localStorage.getItem(primaryKey);
-    if (previous && !preserveBackupOnNextSave) localStorage.setItem(backupKey, previous);
+    const [primaryKey, backupKey, temporaryKey] = saveKeys();
     state.lastSavedAt = new Date().toISOString();
-    localStorage.setItem(primaryKey, JSON.stringify(state));
+    const result = writeStoredState(localStorage, state, {
+      primaryKey,
+      backupKey,
+      temporaryKey,
+      preserveBackup: preserveBackupOnNextSave,
+      validate: isCurrentSaveSchema
+    });
+    if (!result.ok) throw new Error(result.reason);
     preserveBackupOnNextSave = false;
     shouldRewriteLoadedSave = false;
     lastPersistedTravelElapsed = getTravelStatus(state.world)?.elapsedMs || 0;
     if (showToast) toast(activeSaveMode === "developer" ? "開發者測試紀錄已儲存" : "航海日誌已妥善收好");
-  } catch { if (showToast) toast("無法使用本機存檔，請檢查瀏覽器設定"); }
+    return true;
+  } catch {
+    if (showToast) toast("無法使用本機存檔，請檢查瀏覽器設定");
+    return false;
+  }
 }
 function loadGame() {
-  const [primaryKey, backupKey] = saveKeys();
+  const [primaryKey, backupKey, temporaryKey] = saveKeys();
   try {
     const loaded = loadStoredState(localStorage, {
       primaryKey,
       backupKey,
+      temporaryKey,
       targetVersion: SAVE_VERSION,
       migrate: migrateState,
       requiresMigration: raw => !isCurrentSaveSchema(raw)
@@ -180,8 +193,8 @@ function startGame(isNew = false, mode = "normal") {
   shouldRewriteLoadedSave = false;
   if (isNew) {
     state = mode === "developer" ? createDeveloperState() : createInitialState();
-    const [primaryKey, backupKey] = saveKeys();
-    localStorage.removeItem(primaryKey); localStorage.removeItem(backupKey);
+    const [primaryKey, backupKey, temporaryKey] = saveKeys();
+    localStorage.removeItem(primaryKey); localStorage.removeItem(backupKey); localStorage.removeItem(temporaryKey);
     saveGame();
   } else {
     state = loadGame();
@@ -210,6 +223,7 @@ function syncWorld() {
   $("#weather-icon").textContent = state.weather === "rain" ? "☂" : "☀";
   $("#weather-label").textContent = state.weather === "rain" ? "細雨" : "晴朗";
   $("#money-label").textContent = state.money.toLocaleString("zh-TW");
+  $("#tideglow-label").textContent = (state.tideglow?.total || 0).toLocaleString("zh-TW");
   const unclaimed=getUnclaimedAchievementCount(state);
   $("#journal-badge").textContent = `${discoveredCount(state)}/${FISH.length}${unclaimed?` · ${unclaimed}`:""}`;
   $("#journal-badge").title = unclaimed?`${unclaimed} 項成就獎勵待領取`:"圖鑑探索進度";
@@ -628,7 +642,7 @@ function showObservationPreview(spotId) {
   if (!spot) return;
   const result = observeAtSpot(state, spotId);
   if (!result.ok) { toast("需要先在這片海域安全停泊，才能前往觀察點"); return; }
-  saveGame(); render();
+  saveGame(); render(); notifyTideglow(result.tideglowEvents);
   const newNodes = result.researchUpdate?.completedNodes || [];
   const researchNote = newNodes.length ? `<p class="observation-research-note">研究冊亮起：${newNodes.map(node => node.name).join("、")}</p>` : "";
   if (result.kind === "subject") {
@@ -651,7 +665,7 @@ function showResidentDialogue(residentId, deliveredDialogue = null) {
   if (!deliveredDialogue) {
     const storyResult = advanceResidentStory(state, residentId);
     if (storyResult.ok) {
-      saveGame(); render();
+      saveGame(); render(); notifyTideglow([storyResult.tideglowEvent]);
       const scene = storyResult.scene;
       modalRoot.innerHTML = `<div class="modal-backdrop resident-story-backdrop"><div class="modal resident-story-modal"><span class="section-label">${scene.locationName} · 港口相遇 ${storyResult.status.completedSceneIds.length} / ${storyResult.status.scenes.length}</span><h2>${scene.title}</h2><div class="resident-story-lines">${scene.lines.map(line => `<p>「${line}」</p>`).join("")}</div>${scene.reward ? `<div class="resident-story-reward"><span>旅程紀念</span><b>${scene.reward.label}</b></div>` : ""}<p class="quiet-note">故事只由旅程、觀察與研究自然推進；居民委託、好感度或拜訪次數都不是門檻。</p><div class="modal-actions"><button class="primary-button" data-action="close-modal">${scene.jointObservation ? "讓礁影繼續安靜" : "和澄野道別"}</button></div></div></div>`;
       return;
@@ -747,6 +761,7 @@ function completeCatch() {
   if (!state.completedTutorial && state.tutorialStep < 2) state.tutorialStep=2;
   saveGame(); syncWorld(); showCatchModal(fishing.fish,caught,result,milestones); updateTutorial();
   notifyCompletedAchievements(result.completedAchievements);
+  notifyTideglow(result.tideglowEvents);
   if(result.bayEventUpdate?.completed) setTimeout(()=>toast(`事件完成「${result.bayEventUpdate.event.name}」：${result.bayEventUpdate.reward.label}`,"gold"),420);
   if(result.researchUpdate?.completedNodes?.length) setTimeout(()=>toast(`研究冊亮起：${result.researchUpdate.completedNodes.map(node=>node.name).join("、")}`,"gold"),520);
   if(result.researchUpdate?.rewards?.length) setTimeout(()=>toast(`研究紀念已收好：${result.researchUpdate.rewards.map(reward=>reward.label).join("、")}`,"gold"),720);
@@ -1020,6 +1035,14 @@ function toast(message,kind="") {
   const el=document.createElement("div");el.className=`toast ${kind?`is-${kind}`:""}`;el.textContent=message;root.append(el);setTimeout(()=>el.remove(),3200);
 }
 
+function notifyTideglow(events = []) {
+  const points = events.reduce((sum, event) => {
+    const result = event?.results?.tideglow;
+    return sum + (result?.awarded ? Number(result.points) || 0 : 0);
+  }, 0);
+  if (points > 0) setTimeout(() => toast(`潮光悄悄亮起了 +${points}`, "gold"), 260);
+}
+
 function notifyCompletedAchievements(achievements=[]) {
   achievements.forEach((achievement,index)=>setTimeout(()=>toast(`成就完成「${achievement.name}」：獎勵可在圖鑑領取`,"gold"),index*360));
 }
@@ -1070,16 +1093,18 @@ function previewPortableImport() {
 
 function confirmPortableImport() {
   if (!pendingPortableImport?.ok) return;
-  const [primaryKey, backupKey] = saveKeys();
-  const previous = localStorage.getItem(primaryKey);
-  if (previous) localStorage.setItem(backupKey, previous);
+  const previousState = state;
   state = pendingPortableImport.state;
   state.settings = normalizeDisplaySettings(state.settings);
+  preserveBackupOnNextSave = false;
+  if (!saveGame(true)) {
+    state = previousState;
+    showPortableImport("本機空間不足，原本的航程沒有被改動。", pendingPortableImport.draft);
+    return;
+  }
   pendingPortableImport = null;
-  preserveBackupOnNextSave = true;
   savePreferences();
   applyDisplaySettings();
-  saveGame();
   syncTravelClock();
   currentView = "fishing";
   modalRoot.innerHTML = "";
@@ -1087,6 +1112,21 @@ function confirmPortableImport() {
   updateTutorial();
   sound.startAmbient();
   toast("航海紀錄已匯入；原本的主要存檔仍保留在備份槽", "gold");
+}
+
+function developerTideglowRefs(eventType) {
+  const source = TIDEGLOW_SOURCES.find(entry => entry.eventType === eventType);
+  const valueBySourceId = {
+    fish_discovery: FISH[0]?.id,
+    region_arrival: LUMINOUS_ARCHIPELAGO_ID,
+    formal_observation: OBSERVATION_SUBJECTS[0]?.id,
+    research_node: RESEARCH_NODES[0]?.id,
+    region_research: LUMINOUS_ARCHIPELAGO_ID,
+    resident_story: getResidentStoryStatus(state, CHENGYE_ID).scenes[0]?.id
+  };
+  const refs = source ? { [source.refKey]: valueBySourceId[source.id] } : {};
+  if (source?.id === "resident_story") refs.residentId = CHENGYE_ID;
+  return refs;
 }
 
 function showDeveloperTools() {
@@ -1098,8 +1138,8 @@ function showDeveloperTools() {
   modalRoot.innerHTML = `<div class="modal-backdrop"><div class="modal developer-modal"><span class="section-label">資料驅動測試入口</span><h2>Slice C 開發者控制</h2><p class="modal-copy">每日模板與居民委託選項直接由正式內容資料產生；所有操作只寫入獨立開發者存檔。</p><div class="developer-control-grid"><section class="developer-control-card"><h3>每日小目標</h3><label>卡片位置<select id="developer-daily-slot"><option value="0">第 1 張</option><option value="1">第 2 張</option><option value="2">第 3 張</option></select></label><label>正式模板<select id="developer-daily-template">${dailyOptions}</select></label><div class="developer-control-actions"><button class="soft-button" data-action="developer-set-daily">指定模板</button><button class="soft-button" data-action="developer-complete-daily">全部完成</button><button class="soft-button" data-action="developer-claim-daily">領取完成</button><button class="soft-button" data-action="developer-next-day">推進航海日</button><button class="soft-button" data-action="developer-reset-daily">重置今日</button></div></section><section class="developer-control-card"><h3>居民委託</h3><label>居民<select id="developer-resident">${residentOptions}</select></label><label>正式模板<select id="developer-commission-template">${commissionOptions}</select></label><p class="quiet-note">${active ? `進行中：${active.title} · ${active.progress}/${active.goal}` : "目前沒有 active 委託"}</p><div class="developer-control-actions"><button class="soft-button" data-action="developer-set-offer">指定提案</button><button class="soft-button" data-action="developer-accept-offer">接受提案</button><button class="soft-button" data-action="developer-complete-commission">完成進度</button><button class="soft-button" data-action="developer-deliver-commission">交付</button><button class="soft-button" data-action="developer-drop-commission">放下</button><button class="soft-button" data-action="developer-clear-commission-history">清除歷史</button></div></section></div><div class="modal-actions"><button class="primary-button" data-action="close-modal">完成測試</button></div></div></div>`;
   const travelStatus = getTravelStatus(state.world);
   const scaleOptions = DEVELOPER_TRAVEL_SCALES.map(scale => `<option value="${scale}" ${state.travelSettings.developerDurationScale === scale ? "selected" : ""}>${scale === 1 ? "正式速度 100%" : `測試速度 ${Math.round(scale * 100)}%`}</option>`).join("");
-  $(".developer-modal h2")?.replaceChildren("Slice H 整合控制");
-  $(".developer-modal .modal-copy")?.replaceChildren("Slice A～G 的每日、居民、航線、區域事件、觀察、研究與故事控制集中於此；全部操作只寫入獨立開發者存檔。");
+  $(".developer-modal h2")?.replaceChildren("v0.5 Slice A 整合控制");
+  $(".developer-modal .modal-copy")?.replaceChildren("既有旅程控制與 v5 事件、潮光帳本集中於此；全部操作只寫入獨立開發者存檔。");
   $(".developer-control-grid")?.insertAdjacentHTML("beforeend", `<section class="developer-control-card"><h3>正式航線</h3><label>航程時間比例<select id="developer-travel-scale">${scaleOptions}</select></label><p class="quiet-note">${travelStatus ? `航行中：${travelStatus.route.name} · ${travelStatus.segment}/${travelStatus.totalSegments}` : state.world.docking?.status === "offshore" ? `已抵達${regionById(state.world.docking.regionId)?.name || "目的地"}外海` : "目前安全停泊"}</p><div class="developer-control-actions"><button class="soft-button" data-action="developer-set-travel-scale">套用比例</button><button class="soft-button" data-action="developer-arrive-travel" ${travelStatus ? "" : "disabled"}>立即抵達外海</button><button class="soft-button" data-action="developer-reset-route">重置首條航線</button></div></section>`);
   const regionOptions = REGIONS.filter(region => region.status === "available").map(region => `<option value="${region.id}" ${state.world.currentRegionId === region.id ? "selected" : ""}>${region.name} · ${region.portName}</option>`).join("");
   const eventOptions = BAY_EVENTS.filter(event => event.regionId === state.world.currentRegionId).map(event => `<option value="${event.id}">${event.id} · ${event.name}</option>`).join("");
@@ -1108,6 +1148,9 @@ function showDeveloperTools() {
   const luminousResearch = getRegionResearchStatus(state, LUMINOUS_ARCHIPELAGO_ID);
   const chengyeStory = getResidentStoryStatus(state, CHENGYE_ID);
   $(".developer-control-grid")?.insertAdjacentHTML("beforeend", `<section class="developer-control-card"><h3>觀察、研究與澄野</h3><label>正式觀察魚<select id="developer-observation-subject">${observationOptions}</select></label><p class="quiet-note">觀察 ${Object.keys(state.observations?.recordsById || {}).length}/${OBSERVATION_SUBJECTS.length} · 研究 ${luminousResearch?.speciesCount || 0}/${luminousResearch?.research.fullSpeciesGoal || 15} · 澄野 ${chengyeStory.completedSceneIds.length}/${chengyeStory.scenes.length}</p><div class="developer-control-actions"><button class="soft-button" data-action="developer-record-observation">直接記錄</button><button class="soft-button" data-action="developer-reset-observations">重置觀察</button><button class="soft-button" data-action="developer-complete-research">完成研究</button><button class="soft-button" data-action="developer-reset-chengye">重置澄野故事</button></div></section>`);
+  const tideglowOptions = TIDEGLOW_SOURCES.map(source => `<option value="${source.eventType}">${source.label} · +${source.points}</option>`).join("");
+  const ledger = Object.values(state.tideglow?.ledgerBySourceId || {}).slice(-5).reverse();
+  $(".developer-control-grid")?.insertAdjacentHTML("beforeend", `<section class="developer-control-card"><h3>潮光與事件帳本</h3><label>合法來源<select id="developer-tideglow-source">${tideglowOptions}</select></label><p class="quiet-note">顯示 ${state.tideglow?.total || 0} · 帳本 ${Object.keys(state.tideglow?.ledgerBySourceId || {}).length} · pending ${state.gameEvents?.pending?.length || 0} · recent ${state.gameEvents?.recent?.length || 0}</p><div class="developer-ledger">${ledger.length ? ledger.map(entry => `<small>${entry.sourceId} · +${entry.points}</small>`).join("") : "<small>帳本尚未留下光點</small>"}</div><div class="developer-control-actions"><button class="soft-button" data-action="developer-tideglow-down">−10 顯示值</button><button class="soft-button" data-action="developer-tideglow-up">+10 顯示值</button><button class="soft-button" data-action="developer-emit-tideglow">發送來源</button><button class="soft-button" data-action="developer-emit-tideglow">重送驗證去重</button></div></section>`);
   $(".developer-control-grid")?.insertAdjacentHTML("beforeend", `<section class="developer-control-card"><h3>整合與存檔</h3><p class="quiet-note">存檔 v${SAVE_VERSION} · ${regionById(state.world.currentRegionId)?.name || state.world.currentRegionId} · DOM ${document.querySelectorAll("*").length} 節點 · SVG ${document.querySelectorAll("svg").length} 個</p><div class="developer-control-actions"><button class="soft-button" data-action="show-settings">顯示與縮放</button><button class="soft-button" data-action="show-save-export">匯出開發者存檔</button><button class="soft-button" data-action="show-save-import">匯入開發者存檔</button></div></section>`);
 }
 
@@ -1210,7 +1253,7 @@ document.addEventListener("click", event => {
   }
   if(action==="dock-arrival"){
     const result=dockAtDestination(state,Date.now());
-    if(result.ok){saveGame();syncTravelClock();render();sound.startAmbient();showDockingScene(result);}
+    if(result.ok){saveGame();syncTravelClock();render();sound.startAmbient();showDockingScene(result);notifyTideglow(result.tideglowEvents);}
     else toast("船目前還沒有抵達可停泊的外海");
   }
   if(action==="dismiss-tutorial")tutorialEl.classList.add("is-hidden");
@@ -1275,6 +1318,13 @@ document.addEventListener("click", event => {
   if(action==="developer-reset-observations"&&developerResetObservations(state))finishDeveloperAction("正式觀察與奇景紀錄已重置");
   if(action==="developer-complete-research"&&developerCompleteRegionResearch(state,LUMINOUS_ARCHIPELAGO_ID))finishDeveloperAction("琉光研究節點與外觀獎勵已完成");
   if(action==="developer-reset-chengye"&&developerResetChengyeStory(state))finishDeveloperAction("澄野故事已回到初遇前");
+  if(action==="developer-tideglow-down"&&developerAdjustTideglow(state,-10))finishDeveloperAction("潮光測試顯示值已減少 10");
+  if(action==="developer-tideglow-up"&&developerAdjustTideglow(state,10))finishDeveloperAction("潮光測試顯示值已增加 10");
+  if(action==="developer-emit-tideglow"){
+    const eventType=$("#developer-tideglow-source")?.value;
+    const result=developerEmitTideglowEvent(state,eventType,developerTideglowRefs(eventType));
+    if(result)finishDeveloperAction(result.results?.tideglow?.awarded?"合法潮光來源已入帳":"來源已存在，帳本正確阻止重複入帳");
+  }
   if(action==="show-settings")showSettings();
   if(action==="show-save-export")showPortableExport();
   if(action==="show-save-import")showPortableImport("",pendingPortableImport?.draft||"");

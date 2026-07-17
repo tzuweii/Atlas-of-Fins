@@ -27,7 +27,7 @@ const load = (storage, primaryKey = SAVE_KEY, backupKey = BACKUP_KEY) => loadSto
   requiresMigration: raw => !isCurrentSaveSchema(raw)
 });
 
-test("v3 primary save is copied byte-for-byte before v4 migration", () => {
+test("v3 primary save is copied byte-for-byte before v5 migration", () => {
   const rawText = JSON.stringify({
     version: 3,
     money: 432,
@@ -35,7 +35,7 @@ test("v3 primary save is copied byte-for-byte before v4 migration", () => {
   });
   const storage = new MemoryStorage({ [SAVE_KEY]: rawText, [BACKUP_KEY]: "older-backup" });
   const result = load(storage);
-  assert.equal(result.state.version, 4);
+  assert.equal(result.state.version, SAVE_VERSION);
   assert.equal(result.state.money, 432);
   assert.equal(result.state.dailyBoard.entries[0].templateId, "common3");
   assert.equal(result.state.dailyBoard.entries[0].progress, 2);
@@ -72,13 +72,13 @@ test("normal and developer migration keys remain completely isolated", () => {
   assert.equal(storage.getItem(BACKUP_KEY), "normal-old");
 });
 
-test("current v4 primary reload does not rotate or rewrite its backup", () => {
+test("current v5 primary reload does not rotate or rewrite its backup", () => {
   const current = createInitialState();
   current.money = 222;
-  const v4Text = JSON.stringify(current);
-  const storage = new MemoryStorage({ [SAVE_KEY]: v4Text, [BACKUP_KEY]: "recovery" });
+  const v5Text = JSON.stringify(current);
+  const storage = new MemoryStorage({ [SAVE_KEY]: v5Text, [BACKUP_KEY]: "recovery" });
   const result = load(storage);
-  assert.equal(result.state.version, 4);
+  assert.equal(result.state.version, SAVE_VERSION);
   assert.equal(result.migratedFromVersion, null);
   assert.equal(result.preserveBackupOnWrite, false);
   assert.equal(result.shouldRewritePrimary, false);
@@ -87,6 +87,7 @@ test("current v4 primary reload does not rotate or rewrite its backup", () => {
 
 test("Slice C v4 state is backed up byte-for-byte before same-version Slice D chart normalization", () => {
   const alpha3 = createInitialState();
+  alpha3.version = 4;
   alpha3.money = 444;
   delete alpha3.chartView;
   const alpha3Text = JSON.stringify(alpha3);
@@ -103,6 +104,7 @@ test("Slice C v4 state is backed up byte-for-byte before same-version Slice D ch
 
 test("Slice D v4 state is backed up before Slice E travel history normalization", () => {
   const alpha4 = createInitialState();
+  alpha4.version = 4;
   alpha4.money = 555;
   delete alpha4.travelSettings;
   delete alpha4.world.completedRouteIds;
@@ -121,6 +123,7 @@ test("Slice D v4 state is backed up before Slice E travel history normalization"
 
 test("Slice E v4 state is backed up before Slice F regional event normalization", () => {
   const alpha5 = createInitialState();
+  alpha5.version = 4;
   alpha5.money = 666;
   delete alpha5.regionEvents;
   const alpha5Text = JSON.stringify(alpha5);
@@ -138,6 +141,7 @@ test("Slice E v4 state is backed up before Slice F regional event normalization"
 
 test("Slice F v4 state is backed up before Slice G observation and story normalization", () => {
   const alpha6 = createInitialState();
+  alpha6.version = 4;
   alpha6.money = 777;
   delete alpha6.observations;
   delete alpha6.residentStories;
@@ -161,6 +165,7 @@ test("Slice F v4 state is backed up before Slice G observation and story normali
 
 test("Slice G v4 state is backed up before Slice H display setting normalization", () => {
   const alpha7 = createInitialState();
+  alpha7.version = 4;
   alpha7.money = 888;
   delete alpha7.settings.textScale;
   delete alpha7.settings.uiScale;

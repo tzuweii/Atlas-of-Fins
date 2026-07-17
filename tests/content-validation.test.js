@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   ACHIEVEMENTS, AQUARIUM_DECORATIONS, BAITS, BAY_EVENTS, COMMISSION_TEMPLATES, CONTENT_VALIDATION,
   CHART_REGION_POINTS, CHART_ROUTE_PATHS, DAILY_GOAL_TEMPLATES, FISH, FURNITURE, RARITY,
-  REGIONS, RESIDENTS, RODS, ROUTES, SPOTS, TIMES
+  REGIONS, RESIDENTS, RODS, ROUTES, SPOTS, TIDEGLOW_SOURCES, TIMES
 } from "../src/data.js";
 import { formatContentValidationErrors, validateContentCatalog } from "../src/data/content-validation.js";
 
@@ -24,7 +24,8 @@ const currentCatalog = () => ({
   residents: structuredClone(RESIDENTS),
   commissions: structuredClone(COMMISSION_TEMPLATES),
   chartRegions: structuredClone(CHART_REGION_POINTS),
-  chartRoutes: structuredClone(CHART_ROUTE_PATHS)
+  chartRoutes: structuredClone(CHART_ROUTE_PATHS),
+  tideglowSources: structuredClone(TIDEGLOW_SOURCES)
 });
 
 test("current content catalog has unique IDs and valid references", () => {
@@ -83,4 +84,15 @@ test("luminous fish cannot use observation points or omit ecology and SVG fallba
   assert.ok(report.errors.some(error => error.code === "invalid-activity" && error.path.includes("bluegreen_chromis")));
   assert.ok(report.errors.some(error => error.code === "invalid-shape" && error.path === "fish[bluegreen_chromis].shape"));
   assert.ok(report.errors.some(error => error.code === "missing-ecology" && error.path === "fish[bluegreen_chromis].ecologySource"));
+});
+
+test("Tideglow sources require unique event types, positive points, and stable reference keys", () => {
+  const catalog = currentCatalog();
+  catalog.tideglowSources[1].eventType = catalog.tideglowSources[0].eventType;
+  catalog.tideglowSources[2].points = 0;
+  catalog.tideglowSources[3].refKey = "";
+  const report = validateContentCatalog(catalog);
+  assert.ok(report.errors.some(error => error.code === "duplicate-event-type"));
+  assert.ok(report.errors.some(error => error.code === "invalid-points"));
+  assert.ok(report.errors.some(error => error.code === "missing-source-key"));
 });
