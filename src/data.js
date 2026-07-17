@@ -9,8 +9,19 @@ import {
   CHART_LAYOUT, CHART_REGION_POINTS, CHART_ROUTE_PATHS, chartRegionPointById, chartRoutePathById
 } from "./data/chart.js";
 import {
-  FISH_MARKET_OWNER_ID, LIGHTHOUSE_KEEPER_ID, RESIDENTS, getRegionResidents, residentById
+  CHENGYE_ID, FISH_MARKET_OWNER_ID, LIGHTHOUSE_KEEPER_ID, RESIDENTS, getRegionResidents, residentById
 } from "./data/residents.js";
+import {
+  CLARKS_ANEMONEFISH_OBSERVATION_ID, OBSERVATION_SUBJECTS, STARLIGHT_OBSERVATION_CAPE_ID,
+  TWO_SPINED_ANGELFISH_OBSERVATION_ID, WONDERS, getObservationSubjectsForSpot,
+  getWondersForSpot, observationSubjectById, wonderById
+} from "./data/observations.js";
+import {
+  LUMINOUS_RESEARCH_NODE_IDS, REGION_RESEARCH, RESEARCH_NODES, getRegionResearch, researchNodeById
+} from "./data/research.js";
+import {
+  RESIDENT_STORY_SCENES, getResidentStoryScenes, residentStorySceneById
+} from "./data/resident-stories.js";
 import {
   LUMINOUS_ARCHIPELAGO_ID, REGIONS, REGION_SPOTS, SLEEPING_TIDE_BAY_ID, SPOTS,
   getFishHabitat, getRegionFish, getRegionFishingSpots, getRegionObservationSpots,
@@ -23,10 +34,15 @@ import {
 
 export {
   CHART_LAYOUT, CHART_REGION_POINTS, CHART_ROUTE_PATHS, COMMISSION_TEMPLATES, DAILY_GOAL_TEMPLATES,
-  FISH_MARKET_OWNER_ID, LIGHTHOUSE_KEEPER_ID,
+  CHENGYE_ID, FISH_MARKET_OWNER_ID, LIGHTHOUSE_KEEPER_ID,
   FISH_ASSET_PURPOSES, FISH_ASSET_REPRESENTATIVES, FISH_ASSET_SPEC, FISH_BODY_PLANS,
   QUEST_TEMPLATES, RESIDENTS, commissionTemplateById, fishAssetSrcSet, getRegionResidents,
   getResidentCommissionTemplates, resolveFishAsset,
+  CLARKS_ANEMONEFISH_OBSERVATION_ID, OBSERVATION_SUBJECTS, STARLIGHT_OBSERVATION_CAPE_ID,
+  TWO_SPINED_ANGELFISH_OBSERVATION_ID, WONDERS, getObservationSubjectsForSpot,
+  getWondersForSpot, observationSubjectById, wonderById,
+  LUMINOUS_RESEARCH_NODE_IDS, REGION_RESEARCH, RESEARCH_NODES, getRegionResearch, researchNodeById,
+  RESIDENT_STORY_SCENES, getResidentStoryScenes, residentStorySceneById,
   LUMINOUS_ARCHIPELAGO_ID, REGIONS, REGION_SPOTS, ROUTES, SLEEPING_TIDE_BAY_ID,
   SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID, SPOTS, getFishHabitat, getRegionFish,
   getRegionFishingSpots, getRegionObservationSpots, getRegionSpots,
@@ -436,6 +452,10 @@ export const CONTENT_VALIDATION = validateContentCatalog({
   routes: ROUTES,
   residents: RESIDENTS,
   commissions: COMMISSION_TEMPLATES,
+  observations: OBSERVATION_SUBJECTS,
+  wonders: WONDERS,
+  researchNodes: RESEARCH_NODES,
+  residentStoryScenes: RESIDENT_STORY_SCENES,
   chartRegions: CHART_REGION_POINTS,
   chartRoutes: CHART_ROUTE_PATHS
 });

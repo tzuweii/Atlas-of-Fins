@@ -2,8 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, SAVE_KEY, SAVE_VERSION, createInitialState,
-  isCurrentSaveSchema, migrateState
+  getResidentStoryStatus, isCurrentSaveSchema, migrateState
 } from "../src/core.js";
+import { CHENGYE_ID } from "../src/data.js";
 import { loadStoredState } from "../src/persistence/migrations.js";
 
 class MemoryStorage {
@@ -133,6 +134,29 @@ test("Slice E v4 state is backed up before Slice F regional event normalization"
   assert.equal(result.state.regionEvents.sleeping_tide_bay.eventId, "silver_tide");
   assert.equal(result.state.regionEvents.luminous_archipelago.eventId, "prism_sunshower");
   assert.equal(result.state.money, 666);
+});
+
+test("Slice F v4 state is backed up before Slice G observation and story normalization", () => {
+  const alpha6 = createInitialState();
+  alpha6.money = 777;
+  delete alpha6.observations;
+  delete alpha6.residentStories;
+  const alpha6Text = JSON.stringify(alpha6);
+  const storage = new MemoryStorage({ [SAVE_KEY]: alpha6Text, [BACKUP_KEY]: "older-alpha" });
+  const result = load(storage);
+
+  assert.equal(storage.getItem(BACKUP_KEY), alpha6Text);
+  assert.equal(result.migratedFromVersion, 4);
+  assert.equal(result.preserveBackupOnWrite, true);
+  assert.equal(result.shouldRewritePrimary, true);
+  assert.deepEqual(result.state.observations, {
+    recordsById: {}, wonderRecordsById: {}, attemptsById: {}, visitedPeriodKeys: []
+  });
+  assert.deepEqual(result.state.residentStories, {});
+  const story = getResidentStoryStatus(result.state, CHENGYE_ID);
+  assert.equal(story.completedSceneIds.length, 0);
+  assert.equal(story.scenes.length, 6);
+  assert.equal(result.state.money, 777);
 });
 
 test("Slice B v4 state is backed up byte-for-byte before same-version Slice C normalization", () => {

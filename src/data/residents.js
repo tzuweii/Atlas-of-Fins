@@ -1,7 +1,8 @@
-import { SLEEPING_TIDE_BAY_ID } from "./regions.js";
+import { LUMINOUS_ARCHIPELAGO_ID, SLEEPING_TIDE_BAY_ID } from "./regions.js";
 
 export const LIGHTHOUSE_KEEPER_ID = "lighthouse_keeper";
 export const FISH_MARKET_OWNER_ID = "fish_market_owner";
+export const CHENGYE_ID = "chengye";
 
 export const RESIDENTS = [
   {
@@ -34,6 +35,23 @@ export const RESIDENTS = [
       active: "不用挑最漂亮的，平常的收穫就很有用了。",
       ready: "剛剛好。港口今晚又能多一鍋熱湯。",
       farewell: "不做也沒關係，明天的市場還是照常開門。"
+    }
+  },
+  {
+    id: CHENGYE_ID,
+    name: "澄野",
+    role: "記錄群島生態與暖流變化的研究員",
+    regionId: LUMINOUS_ARCHIPELAGO_ID,
+    portLocationId: "windrest_observation_shed",
+    portLocationName: "風棲港觀測棚",
+    icon: "◉",
+    appearance: "日曬膚色、大圓盤帽、相機與防水筆記本",
+    dialogue: {
+      greeting: "觀測器今天很安分。你若想去岬角坐坐，記得不用追著任何影子跑。",
+      offer: "剛好有幾頁日常紀錄空著。順路遇見什麼，再替我添上就好。",
+      active: "不用為了數字改變航程。海會在你照常生活時，把答案慢慢送來。",
+      ready: "這些紀錄有魚，也有水色。坐下吧，我們一起把頁角壓平。",
+      farewell: "慢慢走。群島的光總會在另一個時段重新排好。"
     }
   }
 ];

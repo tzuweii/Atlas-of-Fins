@@ -1,11 +1,15 @@
-import { FISH } from "../data.js";
-import { REGIONS, SLEEPING_TIDE_BAY_ID, getFishHabitat, isRegionAvailable } from "../data/regions.js";
+import { FISH, TIMES } from "../data.js";
+import {
+  REGIONS, REGION_SPOTS, SLEEPING_TIDE_BAY_ID, getFishHabitat, isRegionAvailable
+} from "../data/regions.js";
 import { ROUTES, isRouteAvailable, routeById } from "../data/routes.js";
+import { RESEARCH_NODES, getRegionResearch } from "../data/research.js";
 import { getRouteTravelDurationMs } from "./travel.js";
 
 const isIsoDate = value => typeof value === "string" && !Number.isNaN(Date.parse(value));
 const uniqueStrings = values => [...new Set(Array.isArray(values) ? values.filter(value => typeof value === "string" && value) : [])];
 const knownFishIds = new Set(FISH.map(fish => fish.id));
+const knownTimeIds = new Set(TIMES.map(time => time.id));
 
 const availableRegionIds = () => REGIONS.filter(region => region.status === "available").map(region => region.id);
 const availableRouteIds = () => ROUTES.filter(route => route.status === "available").map(route => route.id);
@@ -14,9 +18,21 @@ const validFishIds = values => uniqueStrings(values).filter(fishId => knownFishI
 
 function regionProgressEntry(raw, fallbackDiscoveredFishIds = [], fallbackArrivedAt = null) {
   const source = raw && typeof raw === "object" ? raw : {};
+  const research = getRegionResearch(source.regionId);
+  const knownNodeIds = new Set(RESEARCH_NODES.map(node => node.id));
+  const validRewardIds = new Set(research ? [research.mainReward, ...research.fullRewards].map(reward => reward.id) : []);
   return {
     discoveredFishIds: [...new Set([...validFishIds(source.discoveredFishIds), ...validFishIds(fallbackDiscoveredFishIds)])],
-    completedResearchIds: uniqueStrings(source.completedResearchIds),
+    caughtSpotIds: uniqueStrings(source.caughtSpotIds).filter(spotId => REGION_SPOTS.some(spot => (
+      spot.id === spotId && (!source.regionId || spot.regionId === source.regionId)
+    ))),
+    caughtTimeIds: uniqueStrings(source.caughtTimeIds).filter(timeId => knownTimeIds.has(timeId)),
+    completedResearchIds: uniqueStrings(source.completedResearchIds).filter(nodeId => knownNodeIds.has(nodeId)),
+    mainResearchCompletedDay: source.mainResearchCompletedDay != null && Number.isFinite(Number(source.mainResearchCompletedDay))
+      ? Math.max(1, Math.floor(Number(source.mainResearchCompletedDay))) : null,
+    fullResearchCompletedDay: source.fullResearchCompletedDay != null && Number.isFinite(Number(source.fullResearchCompletedDay))
+      ? Math.max(1, Math.floor(Number(source.fullResearchCompletedDay))) : null,
+    researchRewardIds: uniqueStrings(source.researchRewardIds).filter(rewardId => validRewardIds.has(rewardId)),
     firstArrivedAt: isIsoDate(source.firstArrivedAt)
       ? source.firstArrivedAt
       : isIsoDate(fallbackArrivedAt) ? fallbackArrivedAt : null
@@ -42,11 +58,23 @@ export function createDeveloperWorldState({ discoveredFishIds = [], currentRegio
   const safeCurrentRegionId = implementedRegionIds.includes(currentRegionId) ? currentRegionId : SLEEPING_TIDE_BAY_ID;
   const regionProgress = Object.fromEntries(implementedRegionIds.map(regionId => [
     regionId,
-    regionProgressEntry(null, validFishIds(discoveredFishIds).filter(fishId => {
+    regionProgressEntry({ regionId }, validFishIds(discoveredFishIds).filter(fishId => {
       const fish = FISH.find(entry => entry.id === fishId);
       return Boolean(getFishHabitat(fish, regionId));
     }))
   ]));
+  for (const regionId of implementedRegionIds) {
+    const research = getRegionResearch(regionId);
+    const progress = regionProgress[regionId];
+    if (!research || progress.discoveredFishIds.length < research.mainSpeciesGoal) continue;
+    progress.completedResearchIds = [...research.nodeIds];
+    progress.mainResearchCompletedDay = 1;
+    progress.researchRewardIds = [research.mainReward.id];
+    if (progress.discoveredFishIds.length >= research.fullSpeciesGoal) {
+      progress.fullResearchCompletedDay = 1;
+      progress.researchRewardIds.push(...research.fullRewards.map(reward => reward.id));
+    }
+  }
   return {
     currentRegionId: safeCurrentRegionId,
     visitedRegionIds: implementedRegionIds,
@@ -109,7 +137,7 @@ export function normalizeWorldState(raw, {
   const regionProgress = Object.fromEntries(visitedRegionIds.map(regionId => [
     regionId,
     regionProgressEntry(
-      sourceProgress[regionId],
+      { ...(sourceProgress[regionId] || {}), regionId },
       backfillLegacyDiscoveries && regionId === SLEEPING_TIDE_BAY_ID ? legacyDiscoveredFishIds : [],
       regionId === SLEEPING_TIDE_BAY_ID ? firstArrivedAt : null
     )
@@ -143,16 +171,27 @@ export function normalizeWorldState(raw, {
   };
 }
 
-export function recordRegionalDiscovery(world, fishId, regionId = world?.currentRegionId) {
+export function recordRegionalDiscovery(world, fishId, regionId = world?.currentRegionId, context = {}) {
   if (!world || !knownFishIds.has(fishId) || !isRegionAvailable(regionId)) {
     return { world, isNewRegional: false };
   }
   const fish = FISH.find(entry => entry.id === fishId);
   if (!getFishHabitat(fish, regionId)) return { world, isNewRegional: false };
-  const currentProgress = world.regionProgress?.[regionId] || regionProgressEntry();
-  if (currentProgress.discoveredFishIds.includes(fishId)) return { world, isNewRegional: false };
+  const currentProgress = world.regionProgress?.[regionId] || regionProgressEntry({ regionId });
+  const isNewRegional = !currentProgress.discoveredFishIds.includes(fishId);
+  const caughtSpotIds = [...new Set([
+    ...(currentProgress.caughtSpotIds || []),
+    ...(REGION_SPOTS.some(spot => spot.id === context.spotId && spot.regionId === regionId) ? [context.spotId] : [])
+  ])];
+  const caughtTimeIds = [...new Set([
+    ...(currentProgress.caughtTimeIds || []),
+    ...(knownTimeIds.has(context.timeId) ? [context.timeId] : [])
+  ])];
+  const contextChanged = caughtSpotIds.length !== (currentProgress.caughtSpotIds || []).length
+    || caughtTimeIds.length !== (currentProgress.caughtTimeIds || []).length;
+  if (!isNewRegional && !contextChanged) return { world, isNewRegional: false };
   return {
-    isNewRegional: true,
+    isNewRegional,
     world: {
       ...world,
       visitedRegionIds: [...new Set([...(world.visitedRegionIds || []), regionId])],
@@ -160,7 +199,11 @@ export function recordRegionalDiscovery(world, fishId, regionId = world?.current
         ...(world.regionProgress || {}),
         [regionId]: {
           ...currentProgress,
-          discoveredFishIds: [...currentProgress.discoveredFishIds, fishId]
+          discoveredFishIds: isNewRegional
+            ? [...currentProgress.discoveredFishIds, fishId]
+            : currentProgress.discoveredFishIds,
+          caughtSpotIds,
+          caughtTimeIds
         }
       }
     }

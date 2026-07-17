@@ -143,6 +143,9 @@ export function dockWorldAtDestination(world, now = Date.now()) {
   const regionProgress = {
     discoveredFishIds: uniqueStrings(previousProgress?.discoveredFishIds),
     completedResearchIds: uniqueStrings(previousProgress?.completedResearchIds),
+    mainResearchCompletedDay: previousProgress?.mainResearchCompletedDay || null,
+    fullResearchCompletedDay: previousProgress?.fullResearchCompletedDay || null,
+    researchRewardIds: uniqueStrings(previousProgress?.researchRewardIds),
     firstArrivedAt: validDateMs(previousProgress?.firstArrivedAt) === null
       ? isoAt(nowMs)
       : previousProgress.firstArrivedAt

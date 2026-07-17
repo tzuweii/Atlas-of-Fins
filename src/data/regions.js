@@ -85,13 +85,13 @@ export const REGION_SPOTS = [
     name: "星落觀察岬",
     icon: "⌾",
     description: "不拋竿的安靜岬角，退潮後能俯看礁盤與偶爾經過的特殊身影。",
-    hint: "Slice G 觀察功能預留",
+    hint: "安靜觀察 · 不需魚餌",
     difficulty: 0,
     unlock: { type: "default" },
     sceneVariant: "luminous_observation",
     habitatTags: ["tropical", "observation", "tide-pool"],
     activityType: "observation",
-    contentStatus: "preview"
+    contentStatus: "complete"
   }
 ];
 
@@ -126,6 +126,7 @@ export const REGIONS = [
     spotIds: ["windrest_shallows", "prism_coral_garden", "warm_current_channel", "starlight_observation_cape"],
     fishingSpotIds: ["windrest_shallows", "prism_coral_garden", "warm_current_channel"],
     observationSpotIds: ["starlight_observation_cape"],
+    residentIds: ["chengye"],
     unlock: { type: "route", routeId: "sleeping_tide_to_luminous_archipelago" },
     palette: "luminous_archipelago",
     musicId: "windglass_current",

@@ -1,6 +1,6 @@
 import {
   ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, AQUARIUM_DECORATIONS, BAITS, BAY_EVENTS,
-  DAILY_GOAL_TEMPLATES, FISH, FURNITURE, LUMINOUS_ARCHIPELAGO_ID, MILESTONES, RARITY,
+  CHENGYE_ID, DAILY_GOAL_TEMPLATES, FISH, FURNITURE, LUMINOUS_ARCHIPELAGO_ID, MILESTONES, RARITY,
   REGIONS, RODS, ROUTES, SLEEPING_TIDE_BAY_ID, SPOTS, TIMES,
   getFishHabitat, getRegionFishingSpots, isRegionAvailable
 } from "./data.js";
@@ -28,12 +28,24 @@ import {
   advanceWorldTravel, beginWorldTravel, dockWorldAtDestination, getRouteTravelDurationMs,
   getTravelStatus, normalizeTravelScale
 } from "./systems/travel.js";
+import {
+  createDeveloperObservationState, createObservationState, getObservationHint, normalizeObservationState,
+  recordObservationSubject, visitObservationSpot
+} from "./systems/observations.js";
+import {
+  completeRegionResearchForDeveloper, evaluateResearchProgress, getRegionResearchStatus
+} from "./systems/research.js";
+import {
+  advanceResidentStory as advanceResidentStoryState, createResidentStoryState,
+  getResidentStoryStatus, normalizeResidentStoryState, resetResidentStory
+} from "./systems/resident-stories.js";
 
 export {
   BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, SAVE_KEY, SAVE_VERSION, createDailyQuests,
   CHART_VIEW_LIMITS, canBeginChartRoute, createDefaultChartView, createDeveloperWorldState,
   createInitialWorldState, DEVELOPER_TRAVEL_SCALES, FAMILIAR_TRAVEL_DURATION_MS,
-  FIRST_TRAVEL_DURATION_MS, getRouteTravelDurationMs, getTravelStatus, normalizeChartView,
+  FIRST_TRAVEL_DURATION_MS, getObservationHint, getRegionResearchStatus, getResidentStoryStatus,
+  getRouteTravelDurationMs, getTravelStatus, normalizeChartView,
   normalizeTravelScale, normalizeWorldState, panChartView, requestChartRoute, zoomChartView
 };
 export const DEFAULT_TITLE = "海灣旅人";
@@ -296,6 +308,8 @@ export function createInitialState() {
     tutorialStep: 0,
     dailyBoard: null,
     residentCommissions: null,
+    observations: createObservationState(),
+    residentStories: createResidentStoryState(),
     chartView: createDefaultChartView(),
     travelSettings: { developerDurationScale: 1 },
     world: createInitialWorldState(),
@@ -393,6 +407,8 @@ export function createDeveloperState() {
   state.aquariumDecoration = state.unlockedAquariumDecor[0] || null;
   state.selectedSpot = "deep";
   state.world = createDeveloperWorldState({ discoveredFishIds: Object.keys(state.discovered) });
+  state.observations = createDeveloperObservationState({ day: state.day, observedAt: caughtAt });
+  evaluateResearchProgress(state, LUMINOUS_ARCHIPELAGO_ID);
   state.settings.sound = false;
   return state;
 }
@@ -450,6 +466,9 @@ function migrateDeveloperUnlocks(state, raw) {
       }];
     }))
   };
+  state.observations = createDeveloperObservationState({ day: state.day, observedAt: state.lastSavedAt || new Date().toISOString() });
+  state.residentStories = normalizeResidentStoryState(state.residentStories);
+  evaluateResearchProgress(state, LUMINOUS_ARCHIPELAGO_ID);
   evaluateAchievements(state);
   return state;
 }
@@ -479,6 +498,8 @@ export function migrateState(raw) {
     backfillLegacyDiscoveries: rawVersion < SAVE_VERSION || !raw.world,
     firstArrivedAt: safeDate(raw.lastSavedAt)
   });
+  merged.observations = normalizeObservationState(raw.observations, merged.day);
+  merged.residentStories = normalizeResidentStoryState(raw.residentStories);
   const migratedInventory = (Array.isArray(raw.catchInventory) ? raw.catchInventory : []).map(migrateCatch).filter(Boolean);
   const migratedAquarium = (Array.isArray(raw.aquarium?.fish) ? raw.aquarium.fish : []).map(migrateCatch).filter(Boolean);
   const aquariumUids = new Set();
@@ -533,6 +554,7 @@ export function migrateState(raw) {
   merged.dailyBoard = normalizeDailyBoard(raw.dailyBoard, merged.day, progressAvailability, raw.currentQuests);
   merged.residentCommissions = normalizeResidentCommissionState(raw.residentCommissions, merged.day, progressAvailability);
   merged.chartView = normalizeChartView(raw.chartView);
+  for (const region of REGIONS) evaluateResearchProgress(merged, region.id);
   delete merged.currentQuests;
   delete merged.questHistory;
   merged.money = Math.max(0, Number(merged.money) || 0);
@@ -550,10 +572,15 @@ export function isCurrentSaveSchema(raw) {
     && Number(raw?.dailyBoard?.day) >= 1
     && Array.isArray(raw?.dailyBoard?.entries)
     && raw?.residentCommissions && typeof raw.residentCommissions === "object"
+    && raw?.observations && typeof raw.observations === "object"
+    && raw?.residentStories && typeof raw.residentStories === "object"
     && raw?.chartView && typeof raw.chartView === "object"
     && raw?.travelSettings && typeof raw.travelSettings === "object"
     && Number.isFinite(Number(raw.travelSettings.developerDurationScale))
     && Array.isArray(raw?.world?.completedRouteIds)
+    && Object.values(raw?.world?.regionProgress || {}).every(progress => (
+      Array.isArray(progress?.caughtSpotIds) && Array.isArray(progress?.caughtTimeIds)
+    ))
     && raw?.regionEvents && typeof raw.regionEvents === "object"
     && Object.hasOwn(raw.regionEvents, LUMINOUS_ARCHIPELAGO_ID);
 }
@@ -771,7 +798,8 @@ export function recordCatch(state, caught, baitId = state.equippedBait) {
   const regionalDiscovery = recordRegionalDiscovery(
     state.world,
     caught.fishId,
-    context.regionId || state.world?.currentRegionId || SLEEPING_TIDE_BAY_ID
+    context.regionId || state.world?.currentRegionId || SLEEPING_TIDE_BAY_ID,
+    { spotId: context.spotId, timeId: context.timeId }
   );
   state.world = regionalDiscovery.world;
   const familiarity = getFamiliarity(state.discovered[caught.fishId].count);
@@ -780,7 +808,7 @@ export function recordCatch(state, caught, baitId = state.equippedBait) {
   if (caught.sizeTier === "record") state.recordCatches = (state.recordCatches || 0) + 1;
   if (isNew) state.money += 35 + ({ common: 0, uncommon: 30, rare: 100 }[fish.rarity]);
   if (isFirstShimmer) state.money += SHIMMER_CONFIG.researchReward;
-  updateProgressEvent(state, {
+  const researchUpdate = updateProgressEvent(state, {
     type: "catch",
     source: "manual",
     fish,
@@ -801,6 +829,7 @@ export function recordCatch(state, caught, baitId = state.equippedBait) {
     isWeightRecord,
     familiarity,
     familiarityChanged: familiarity.id !== priorFamiliarity.id,
+    researchUpdate,
     bayEventUpdate,
     completedAchievements,
     record: state.discovered[caught.fishId]
@@ -911,6 +940,37 @@ export function claimQuest(state, instanceId) {
 export function updateProgressEvent(state, event) {
   state.dailyBoard = applyDailyGoalProgress(state.dailyBoard, event);
   state.residentCommissions = applyResidentCommissionProgress(state.residentCommissions, event);
+  return evaluateResearchProgress(state, event?.regionId || state.world?.currentRegionId);
+}
+
+export function observeAtSpot(state, spotId, random = Math.random, observedAt = new Date().toISOString()) {
+  const result = visitObservationSpot(state.observations, {
+    regionId: state.world?.currentRegionId,
+    spotId,
+    timeId: TIMES[state.timeIndex]?.id,
+    weatherId: state.weather,
+    day: state.day,
+    observedAt,
+    docked: state.world?.docking?.status === "docked" && state.world.docking.regionId === state.world.currentRegionId
+  }, random);
+  if (!result.ok) return result;
+  state.observations = result.state;
+  const researchUpdate = result.kind === "subject"
+    ? updateProgressEvent(state, {
+      type: "observe",
+      source: "manual",
+      observationId: result.subject.id,
+      regionId: state.world.currentRegionId,
+      spotId,
+      timeId: TIMES[state.timeIndex]?.id,
+      weather: state.weather
+    })
+    : evaluateResearchProgress(state, state.world.currentRegionId);
+  return { ...result, researchUpdate };
+}
+
+export function advanceResidentStory(state, residentId) {
+  return advanceResidentStoryState(state, residentId);
 }
 
 export function acceptResidentCommission(state, residentId) {
@@ -965,8 +1025,14 @@ export function dockAtDestination(state, now = Date.now()) {
   state.world = result.world;
   const firstSpot = getRegionFishingSpots(result.destinationId)[0];
   if (firstSpot) state.selectedSpot = firstSpot.id;
+  state.residentCommissions = refreshResidentOffers(
+    state.residentCommissions,
+    state.day,
+    getProgressAvailabilityContext(state)
+  );
+  const researchUpdate = evaluateResearchProgress(state, result.destinationId);
   applyBayEventWorldConditions(state);
-  return result;
+  return { ...result, researchUpdate };
 }
 
 export function developerSetTravelScale(state, scale) {
@@ -1022,6 +1088,12 @@ export function developerDockRegion(state, regionId) {
   };
   const firstSpot = getRegionFishingSpots(regionId)[0];
   if (firstSpot) state.selectedSpot = firstSpot.id;
+  state.residentCommissions = refreshResidentOffers(
+    state.residentCommissions,
+    state.day,
+    getProgressAvailabilityContext(state)
+  );
+  evaluateResearchProgress(state, regionId);
   applyBayEventWorldConditions(state);
   return true;
 }
@@ -1036,6 +1108,43 @@ export function developerSetRegionEvent(state, eventId) {
   if (regionId === SLEEPING_TIDE_BAY_ID) state.bayEvent = eventState;
   applyBayEventWorldConditions(state);
   return true;
+}
+
+export function developerRecordObservation(state, subjectId) {
+  if (!state?.developerMode) return false;
+  const result = recordObservationSubject(state.observations, subjectId, {
+    day: state.day,
+    observedAt: new Date().toISOString(),
+    timeId: TIMES[state.timeIndex]?.id,
+    weatherId: state.weather
+  });
+  if (!result.ok) return false;
+  state.observations = result.state;
+  evaluateResearchProgress(state, LUMINOUS_ARCHIPELAGO_ID);
+  return true;
+}
+
+export function developerResetObservations(state) {
+  if (!state?.developerMode) return false;
+  state.observations = createObservationState();
+  const progress = state.world?.regionProgress?.[LUMINOUS_ARCHIPELAGO_ID];
+  if (progress) {
+    state.world.regionProgress[LUMINOUS_ARCHIPELAGO_ID] = {
+      ...progress,
+      completedResearchIds: (progress.completedResearchIds || []).filter(nodeId => ![
+        "luminous_clarks_anemonefish", "luminous_twospined_angelfish"
+      ].includes(nodeId))
+    };
+  }
+  return true;
+}
+
+export function developerCompleteRegionResearch(state, regionId = LUMINOUS_ARCHIPELAGO_ID) {
+  return completeRegionResearchForDeveloper(state, regionId);
+}
+
+export function developerResetChengyeStory(state) {
+  return resetResidentStory(state, CHENGYE_ID);
 }
 
 export function developerSetDailyGoal(state, slotIndex, templateId) {

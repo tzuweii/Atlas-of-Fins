@@ -1,7 +1,7 @@
 const COLLECTION_NAMES = [
   "times", "spots", "rods", "baits", "furniture", "fish", "dailyGoals",
   "events", "achievements", "aquariumDecorations", "regions", "routes", "residents", "commissions",
-  "chartRegions", "chartRoutes"
+  "observations", "wonders", "researchNodes", "residentStoryScenes", "chartRegions", "chartRoutes"
 ];
 
 const WEATHER_IDS = new Set(["sunny", "rain"]);
@@ -228,6 +228,59 @@ export function validateContentCatalog(content = {}) {
     validateProgressCondition("commissions", commission, commission?.condition);
     validateReward("commissions", commission, commission?.reward);
     if (!(Number(commission?.goal) > 0)) addError("invalid-goal", "commissions", commission?.id, `commissions[${commission?.id || "missing-id"}].goal`, "委託目標數量必須大於 0");
+  }
+  for (const observation of collections.observations) {
+    requireReference("observations", observation, "regionId", observation?.regionId, ids.regions, "區域");
+    requireReference("observations", observation, "spotId", observation?.spotId, ids.spots, "觀察點");
+    const spot = collections.spots.find(entry => entry.id === observation?.spotId);
+    if (spot && (spot.activityType !== "observation" || spot.regionId !== observation.regionId)) {
+      addError("invalid-activity", "observations", observation?.id, `observations[${observation?.id || "missing-id"}].spotId`, "正式觀察魚必須引用同區域的觀察活動點");
+    }
+    asArray(observation?.timeIds).forEach((id, index) => requireReference("observations", observation, `timeIds[${index}]`, id, ids.times, "時段"));
+    asArray(observation?.weatherIds).forEach((id, index) => {
+      if (!WEATHER_IDS.has(id)) addError("missing-reference", "observations", observation?.id, `observations[${observation?.id || "missing-id"}].weatherIds[${index}]`, `引用的天氣 ID「${String(id)}」不存在`);
+    });
+    asArray(observation?.requiresObservationIds).forEach((id, index) => requireReference("observations", observation, `requiresObservationIds[${index}]`, id, ids.observations, "前置觀察"));
+    if (!(Number(observation?.pityVisits) >= 1) || !(Number(observation?.baseChance) >= 0 && Number(observation?.baseChance) <= 1)) {
+      addError("invalid-observation-rate", "observations", observation?.id, `observations[${observation?.id || "missing-id"}]`, "正式觀察魚需要 0～1 機率與至少一次的保底次數");
+    }
+    if (typeof observation?.scientific !== "string" || !/^https:\/\//.test(observation?.ecologySource?.url || "")) {
+      addError("missing-ecology", "observations", observation?.id, `observations[${observation?.id || "missing-id"}].ecologySource`, "正式觀察魚需要學名與可追溯的 HTTPS 生態來源");
+    }
+  }
+  for (const wonder of collections.wonders) {
+    requireReference("wonders", wonder, "regionId", wonder?.regionId, ids.regions, "區域");
+    requireReference("wonders", wonder, "spotId", wonder?.spotId, ids.spots, "觀察點");
+    const spot = collections.spots.find(entry => entry.id === wonder?.spotId);
+    if (spot && (spot.activityType !== "observation" || spot.regionId !== wonder.regionId)) {
+      addError("invalid-activity", "wonders", wonder?.id, `wonders[${wonder?.id || "missing-id"}].spotId`, "奇景必須引用同區域的觀察活動點");
+    }
+    asArray(wonder?.timeIds).forEach((id, index) => requireReference("wonders", wonder, `timeIds[${index}]`, id, ids.times, "時段"));
+    asArray(wonder?.weatherIds).forEach((id, index) => {
+      if (!WEATHER_IDS.has(id)) addError("missing-reference", "wonders", wonder?.id, `wonders[${wonder?.id || "missing-id"}].weatherIds[${index}]`, `引用的天氣 ID「${String(id)}」不存在`);
+    });
+    if (!(Number(wonder?.chance) >= 0 && Number(wonder?.chance) <= 1)) {
+      addError("invalid-observation-rate", "wonders", wonder?.id, `wonders[${wonder?.id || "missing-id"}].chance`, "奇景出現機率必須介於 0～1");
+    }
+  }
+  for (const node of collections.researchNodes) {
+    requireReference("researchNodes", node, "regionId", node?.regionId, ids.regions, "區域");
+    if (node?.requirement?.regionId) requireReference("researchNodes", node, "requirement.regionId", node.requirement.regionId, ids.regions, "區域");
+    if (node?.requirement?.observationId) requireReference("researchNodes", node, "requirement.observationId", node.requirement.observationId, ids.observations, "正式觀察");
+    if (node?.requirement?.spotId) {
+      requireReference("researchNodes", node, "requirement.spotId", node.requirement.spotId, ids.spots, "釣點");
+      const spot = collections.spots.find(entry => entry.id === node.requirement.spotId);
+      if (spot && node.requirement.regionId && spot.regionId !== node.requirement.regionId) {
+        addError("region-mismatch", "researchNodes", node?.id, `researchNodes[${node?.id || "missing-id"}].requirement.spotId`, "研究釣點不屬於條件指定區域");
+      }
+    }
+    if (node?.requirement?.timeId) requireReference("researchNodes", node, "requirement.timeId", node.requirement.timeId, ids.times, "時段");
+  }
+  for (const scene of collections.residentStoryScenes) {
+    requireReference("residentStoryScenes", scene, "residentId", scene?.residentId, ids.residents, "居民");
+    if (scene?.trigger?.regionId) requireReference("residentStoryScenes", scene, "trigger.regionId", scene.trigger.regionId, ids.regions, "區域");
+    if (scene?.trigger?.observationId) requireReference("residentStoryScenes", scene, "trigger.observationId", scene.trigger.observationId, ids.observations, "正式觀察");
+    if (scene?.trigger?.nodeId) requireReference("residentStoryScenes", scene, "trigger.nodeId", scene.trigger.nodeId, ids.researchNodes, "研究節點");
   }
   for (const point of collections.chartRegions) {
     requireReference("chartRegions", point, "regionId", point?.regionId, ids.regions, "區域");

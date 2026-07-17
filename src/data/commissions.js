@@ -1,5 +1,5 @@
-import { FISH_MARKET_OWNER_ID, LIGHTHOUSE_KEEPER_ID } from "./residents.js";
-import { SLEEPING_TIDE_BAY_ID } from "./regions.js";
+import { CHENGYE_ID, FISH_MARKET_OWNER_ID, LIGHTHOUSE_KEEPER_ID } from "./residents.js";
+import { LUMINOUS_ARCHIPELAGO_ID, SLEEPING_TIDE_BAY_ID } from "./regions.js";
 
 const coins = amount => ({ type: "coins", amount, label: `${amount} 金幣` });
 const bait = (baitId, amount, label) => ({ type: "bait", baitId, amount, label });
@@ -84,6 +84,56 @@ export const COMMISSION_TEMPLATES = [
     condition: { eventType: "catch", regionIds: [SLEEPING_TIDE_BAY_ID], baitIds: ["shrimp"] },
     reward: coins(95),
     completionDialogue: "魚群喜歡就好。下次進貨，我會照這個方式準備。"
+  },
+  {
+    id: "chengye_lagoon_colors",
+    residentId: CHENGYE_ID,
+    title: "潟湖的日常水色",
+    description: "在風棲淺灘記錄 2 條魚，替觀測簿補上今天的淺水色。",
+    goal: 2,
+    condition: { eventType: "catch", regionIds: [LUMINOUS_ARCHIPELAGO_ID], spotIds: ["windrest_shallows"] },
+    reward: coins(85),
+    completionDialogue: "這兩筆剛剛好。潟湖沒有特別表演，日常的顏色也很值得留下。"
+  },
+  {
+    id: "chengye_coral_margin",
+    residentId: CHENGYE_ID,
+    title: "珊瑚影的邊緣",
+    description: "在稜光珊瑚庭記錄 2 條魚，看看牠們如何沿著明暗交界活動。",
+    goal: 2,
+    condition: { eventType: "catch", regionIds: [LUMINOUS_ARCHIPELAGO_ID], spotIds: ["prism_coral_garden"] },
+    reward: bait("shrimp", 3, "小蝦 3 份"),
+    completionDialogue: "原來今天牠們更靠近陰面。謝謝你沒為了觀察去打亂珊瑚庭。"
+  },
+  {
+    id: "chengye_common_school",
+    residentId: CHENGYE_ID,
+    title: "尋常魚群的方向",
+    description: "在琉光群島記錄 3 條常見魚，替魚群潮路畫幾個輕巧箭頭。",
+    goal: 3,
+    condition: { eventType: "catch", regionIds: [LUMINOUS_ARCHIPELAGO_ID], rarityIds: ["common"] },
+    reward: coins(90),
+    completionDialogue: "常見不是普通，是牠們願意一直把生活留給我們看。"
+  },
+  {
+    id: "chengye_blue_channel",
+    residentId: CHENGYE_ID,
+    title: "藍渠外緣",
+    description: "在暖流藍渠記錄 2 條魚，替較深的潮路留下安全註記。",
+    goal: 2,
+    condition: { eventType: "catch", regionIds: [LUMINOUS_ARCHIPELAGO_ID], spotIds: ["warm_current_channel"] },
+    reward: coins(110),
+    completionDialogue: "深藍那一頁有了新的邊線。下次看見同一股流，就不會覺得陌生了。"
+  },
+  {
+    id: "chengye_night_silhouettes",
+    residentId: CHENGYE_ID,
+    title: "夜礁的普通身影",
+    description: "在琉光群島夜間記錄 2 條魚，不必等待任何稀有訪客。",
+    goal: 2,
+    condition: { eventType: "catch", regionIds: [LUMINOUS_ARCHIPELAGO_ID], timeIds: ["night"] },
+    reward: bait("glow", 2, "發光魚餌 2 份"),
+    completionDialogue: "夜裡不是只有稀有的東西才會發亮。這些普通剪影已經說了很多。"
   }
 ];
 
