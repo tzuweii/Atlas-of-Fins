@@ -70,3 +70,17 @@ test("future region, route, and resident references use the same validation boun
   assert.ok(report.disabledIds.chartRegions.includes("missing-point"));
   assert.ok(report.disabledIds.chartRoutes.includes("missing-path"));
 });
+
+test("luminous fish cannot use observation points or omit ecology and SVG fallback metadata", () => {
+  const catalog = currentCatalog();
+  const fish = catalog.fish.find(entry => entry.id === "bluegreen_chromis");
+  fish.habitats[0].spotIds = ["starlight_observation_cape"];
+  fish.shape = "missing-shape";
+  delete fish.ecologySource;
+
+  const report = validateContentCatalog(catalog);
+  assert.equal(report.ok, false);
+  assert.ok(report.errors.some(error => error.code === "invalid-activity" && error.path.includes("bluegreen_chromis")));
+  assert.ok(report.errors.some(error => error.code === "invalid-shape" && error.path === "fish[bluegreen_chromis].shape"));
+  assert.ok(report.errors.some(error => error.code === "missing-ecology" && error.path === "fish[bluegreen_chromis].ecologySource"));
+});

@@ -42,7 +42,10 @@ export function createDeveloperWorldState({ discoveredFishIds = [], currentRegio
   const safeCurrentRegionId = implementedRegionIds.includes(currentRegionId) ? currentRegionId : SLEEPING_TIDE_BAY_ID;
   const regionProgress = Object.fromEntries(implementedRegionIds.map(regionId => [
     regionId,
-    regionProgressEntry(null, regionId === SLEEPING_TIDE_BAY_ID ? discoveredFishIds : [])
+    regionProgressEntry(null, validFishIds(discoveredFishIds).filter(fishId => {
+      const fish = FISH.find(entry => entry.id === fishId);
+      return Boolean(getFishHabitat(fish, regionId));
+    }))
   ]));
   return {
     currentRegionId: safeCurrentRegionId,

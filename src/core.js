@@ -1,7 +1,8 @@
 import {
   ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, AQUARIUM_DECORATIONS, BAITS, BAY_EVENTS,
-  DAILY_GOAL_TEMPLATES, FISH, FURNITURE, MILESTONES, RARITY, RODS, ROUTES, SLEEPING_TIDE_BAY_ID, SPOTS, TIMES,
-  getFishHabitat, isRegionAvailable
+  DAILY_GOAL_TEMPLATES, FISH, FURNITURE, LUMINOUS_ARCHIPELAGO_ID, MILESTONES, RARITY,
+  REGIONS, RODS, ROUTES, SLEEPING_TIDE_BAY_ID, SPOTS, TIMES,
+  getFishHabitat, getRegionFishingSpots, isRegionAvailable
 } from "./data.js";
 import { BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, SAVE_KEY, SAVE_VERSION } from "./persistence/save-schema.js";
 import {
@@ -148,10 +149,10 @@ function migrateBayEventHistory(raw) {
     .filter(([, entry]) => entry.completions > 0));
 }
 
-function migrateBayEvent(raw, day) {
-  const scheduled = getScheduledBayEvent(day);
+function migrateBayEvent(raw, day, regionId = SLEEPING_TIDE_BAY_ID) {
+  const scheduled = getScheduledBayEvent(day, regionId);
   const persisted = raw && typeof raw === "object" && Number(raw.day) === day
-    ? BAY_EVENTS.find(event => event.id === raw.eventId)
+    ? BAY_EVENTS.find(event => event.id === raw.eventId && event.regionId === regionId)
     : null;
   const event = persisted || scheduled;
   if (!event) return null;
@@ -166,15 +167,16 @@ function migrateBayEvent(raw, day) {
   };
 }
 
-export function getScheduledBayEvent(day) {
+export function getScheduledBayEvent(day, regionId = SLEEPING_TIDE_BAY_ID) {
   const safeDay = Math.max(1, Math.floor(Number(day) || 1));
-  if (!BAY_EVENTS.length || safeDay % 2 === 0) return null;
-  return BAY_EVENTS[Math.floor((safeDay - 1) / 2) % BAY_EVENTS.length] || null;
+  const regionEvents = BAY_EVENTS.filter(event => event.regionId === regionId);
+  if (!regionEvents.length || safeDay % 2 === 0) return null;
+  return regionEvents[Math.floor((safeDay - 1) / 2) % regionEvents.length] || null;
 }
 
-export function createBayEventState(day, eventId = null) {
+export function createBayEventState(day, eventId = null, regionId = SLEEPING_TIDE_BAY_ID) {
   const safeDay = Math.max(1, Math.floor(Number(day) || 1));
-  const event = eventId ? BAY_EVENTS.find(item => item.id === eventId) : getScheduledBayEvent(safeDay);
+  const event = eventId ? BAY_EVENTS.find(item => item.id === eventId) : getScheduledBayEvent(safeDay, regionId);
   return event ? {
     instanceId: `${safeDay}-${event.id}`,
     eventId: event.id,
@@ -185,11 +187,24 @@ export function createBayEventState(day, eventId = null) {
   } : null;
 }
 
+function createRegionEventStates(day) {
+  return Object.fromEntries(REGIONS.filter(region => region.status === "available").map(region => [
+    region.id,
+    createBayEventState(day, null, region.id)
+  ]));
+}
+
+export function getActiveBayEventState(state) {
+  const regionId = state?.world?.currentRegionId || SLEEPING_TIDE_BAY_ID;
+  const current = regionId === SLEEPING_TIDE_BAY_ID ? state?.bayEvent : state?.regionEvents?.[regionId];
+  if (!current || Number(current.day) !== Number(state?.day)) return null;
+  const event = BAY_EVENTS.find(entry => entry.id === current.eventId && entry.regionId === regionId);
+  return event ? current : null;
+}
+
 export function getActiveBayEvent(state) {
-  if (!state?.bayEvent || Number(state.bayEvent.day) !== Number(state.day)) return null;
-  const event = BAY_EVENTS.find(entry => entry.id === state.bayEvent.eventId) || null;
-  const currentRegionId = state.world?.currentRegionId || SLEEPING_TIDE_BAY_ID;
-  return event?.regionId && event.regionId !== currentRegionId ? null : event;
+  const current = getActiveBayEventState(state);
+  return current ? BAY_EVENTS.find(entry => entry.id === current.eventId) || null : null;
 }
 
 function bayEventSpotIds(event) {
@@ -212,15 +227,16 @@ export function applyBayEventWorldConditions(state) {
 
 export function getBayEventHint(state) {
   const event = getActiveBayEvent(state);
+  const current = getActiveBayEventState(state);
   if (!event) return null;
-  const progress = Math.min(event.goal, Math.max(0, Math.floor(Number(state.bayEvent.progress) || 0)));
-  if (!state.bayEvent.completedAt && !isBayEventConditionActive(state, event)) return event.inactiveHint || event.description;
+  const progress = Math.min(event.goal, Math.max(0, Math.floor(Number(current.progress) || 0)));
+  if (!current.completedAt && !isBayEventConditionActive(state, event)) return event.inactiveHint || event.description;
   return event.hints[Math.min(progress, event.hints.length - 1)] || event.description;
 }
 
 export function updateBayEventProgress(state, caught, completedAt = new Date().toISOString()) {
   const event = getActiveBayEvent(state);
-  const current = state?.bayEvent;
+  const current = getActiveBayEventState(state);
   if (!event || !current || current.completedAt) return { updated: false, event };
   const context = normalizeCatchContext(caught?.context);
   const correctTime = !Array.isArray(event.timeIds) || !event.timeIds.length || event.timeIds.includes(context.timeId);
@@ -251,6 +267,9 @@ export function updateBayEventProgress(state, caught, completedAt = new Date().t
 }
 
 export function createInitialState() {
+  const bayEvent = createBayEventState(1);
+  const regionEvents = createRegionEventStates(1);
+  regionEvents[SLEEPING_TIDE_BAY_ID] = bayEvent;
   const state = {
     version: SAVE_VERSION,
     money: 120,
@@ -280,7 +299,8 @@ export function createInitialState() {
     chartView: createDefaultChartView(),
     travelSettings: { developerDurationScale: 1 },
     world: createInitialWorldState(),
-    bayEvent: createBayEventState(1),
+    bayEvent,
+    regionEvents,
     bayEventHistory: {},
     totalSold: 0,
     totalCaught: 0,
@@ -298,7 +318,9 @@ export function createInitialState() {
 export function createDeveloperState() {
   const state = createInitialState();
   const caughtAt = new Date().toISOString();
-  const specimen = (fish, index, location) => ({
+  const specimen = (fish, index, location) => {
+    const habitat = fish.habitats[0];
+    return ({
     uid: `developer-${location}-${fish.id}`,
     fishId: fish.id,
     length: fish.maxLength,
@@ -308,21 +330,24 @@ export function createDeveloperState() {
     price: Math.round(fish.basePrice * RARITY[fish.rarity].multiplier * 1.7 * (index % 2 === 0 ? SHIMMER_CONFIG.priceMultiplier : 1)),
     caughtAt,
     context: {
-      spotId: fish.spots[0],
-      timeId: fish.times[0],
-      weather: fish.weather === "any" ? "sunny" : fish.weather,
+      spotId: habitat.spotIds[0],
+      timeId: habitat.timeIds[0],
+      weather: habitat.weatherIds[0],
       baitId: fish.baits[0],
       rodId: "farcast",
-      regionId: SLEEPING_TIDE_BAY_ID,
+      regionId: habitat.regionId,
       day: 99
     }
   });
+  };
 
   state.developerMode = true;
   state.money = 999999;
   state.day = 99;
   state.timeIndex = 3;
   state.bayEvent = createBayEventState(state.day);
+  state.regionEvents = createRegionEventStates(state.day);
+  state.regionEvents[SLEEPING_TIDE_BAY_ID] = state.bayEvent;
   state.ownedRods = RODS.map(item => item.id);
   state.equippedRod = "farcast";
   state.baitAmounts = objectFrom(BAITS, 999);
@@ -412,7 +437,18 @@ function migrateDeveloperUnlocks(state, raw) {
     visitedRegionIds: [...new Set([...developerWorld.visitedRegionIds, ...(state.world?.visitedRegionIds || [])])],
     unlockedRouteIds: [...new Set([...developerWorld.unlockedRouteIds, ...(state.world?.unlockedRouteIds || [])])],
     completedRouteIds: [...new Set(state.world?.completedRouteIds || [])],
-    regionProgress: { ...developerWorld.regionProgress, ...(state.world?.regionProgress || {}) }
+    regionProgress: Object.fromEntries(developerWorld.visitedRegionIds.map(regionId => {
+      const fullProgress = developerWorld.regionProgress[regionId];
+      const savedProgress = state.world?.regionProgress?.[regionId];
+      return [regionId, {
+        ...fullProgress,
+        ...(savedProgress || {}),
+        discoveredFishIds: [...new Set([
+          ...(fullProgress?.discoveredFishIds || []),
+          ...(savedProgress?.discoveredFishIds || [])
+        ])]
+      }];
+    }))
   };
   evaluateAchievements(state);
   return state;
@@ -466,7 +502,13 @@ export function migrateState(raw) {
     .filter(([id, entry]) => ACHIEVEMENTS.some(item => item.id === id) && entry && typeof entry === "object")
     .map(([id, entry]) => [id, { completedAt: safeDate(entry.completedAt) || new Date().toISOString(), claimed: Boolean(entry.claimed) }]));
   merged.bayEventHistory = migrateBayEventHistory(raw.bayEventHistory);
-  merged.bayEvent = migrateBayEvent(raw.bayEvent, merged.day);
+  merged.bayEvent = migrateBayEvent(raw.bayEvent, merged.day, SLEEPING_TIDE_BAY_ID);
+  merged.regionEvents = Object.fromEntries(REGIONS.filter(region => region.status === "available").map(region => [
+    region.id,
+    region.id === SLEEPING_TIDE_BAY_ID
+      ? merged.bayEvent
+      : migrateBayEvent(raw.regionEvents?.[region.id], merged.day, region.id)
+  ]));
   applyBayEventWorldConditions(merged);
   const validTitles = new Set([
     DEFAULT_TITLE,
@@ -511,7 +553,9 @@ export function isCurrentSaveSchema(raw) {
     && raw?.chartView && typeof raw.chartView === "object"
     && raw?.travelSettings && typeof raw.travelSettings === "object"
     && Number.isFinite(Number(raw.travelSettings.developerDurationScale))
-    && Array.isArray(raw?.world?.completedRouteIds);
+    && Array.isArray(raw?.world?.completedRouteIds)
+    && raw?.regionEvents && typeof raw.regionEvents === "object"
+    && Object.hasOwn(raw.regionEvents, LUMINOUS_ARCHIPELAGO_ID);
 }
 
 export function discoveredCount(state) {
@@ -919,8 +963,9 @@ export function dockAtDestination(state, now = Date.now()) {
   const result = dockWorldAtDestination(state.world, now);
   if (!result.ok) return result;
   state.world = result.world;
-  const firstSpot = SPOTS.find(spot => spot.regionId === result.destinationId);
+  const firstSpot = getRegionFishingSpots(result.destinationId)[0];
   if (firstSpot) state.selectedSpot = firstSpot.id;
+  applyBayEventWorldConditions(state);
   return result;
 }
 
@@ -952,6 +997,44 @@ export function developerResetRouteState(state) {
   });
   const firstSpot = SPOTS.find(spot => spot.regionId === SLEEPING_TIDE_BAY_ID);
   if (firstSpot) state.selectedSpot = firstSpot.id;
+  applyBayEventWorldConditions(state);
+  return true;
+}
+
+export function developerDockRegion(state, regionId) {
+  if (!state?.developerMode || !isRegionAvailable(regionId)) return false;
+  const developerWorld = createDeveloperWorldState({
+    discoveredFishIds: Object.keys(state.discovered || {}),
+    currentRegionId: regionId
+  });
+  const currentProgress = state.world?.regionProgress?.[regionId];
+  state.world = {
+    ...state.world,
+    currentRegionId: regionId,
+    visitedRegionIds: [...new Set([...(state.world?.visitedRegionIds || []), regionId])],
+    unlockedRouteIds: [...new Set([...(state.world?.unlockedRouteIds || []), ...developerWorld.unlockedRouteIds])],
+    regionProgress: {
+      ...(state.world?.regionProgress || {}),
+      [regionId]: currentProgress || developerWorld.regionProgress[regionId]
+    },
+    travel: null,
+    docking: { status: "docked", regionId }
+  };
+  const firstSpot = getRegionFishingSpots(regionId)[0];
+  if (firstSpot) state.selectedSpot = firstSpot.id;
+  applyBayEventWorldConditions(state);
+  return true;
+}
+
+export function developerSetRegionEvent(state, eventId) {
+  if (!state?.developerMode) return false;
+  const regionId = state.world?.currentRegionId;
+  const event = BAY_EVENTS.find(entry => entry.id === eventId && entry.regionId === regionId);
+  if (!event) return false;
+  const eventState = createBayEventState(state.day, event.id, regionId);
+  state.regionEvents = { ...(state.regionEvents || {}), [regionId]: eventState };
+  if (regionId === SLEEPING_TIDE_BAY_ID) state.bayEvent = eventState;
+  applyBayEventWorldConditions(state);
   return true;
 }
 
@@ -1031,6 +1114,8 @@ export function advanceTime(state, random = Math.random) {
     state.dailyBoard = createDailyBoard(state.day, availability);
     state.residentCommissions = refreshResidentOffers(state.residentCommissions, state.day, availability);
     state.bayEvent = createBayEventState(state.day);
+    state.regionEvents = createRegionEventStates(state.day);
+    state.regionEvents[SLEEPING_TIDE_BAY_ID] = state.bayEvent;
     applyBayEventWorldConditions(state);
   }
   return result;

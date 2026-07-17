@@ -118,6 +118,23 @@ test("Slice D v4 state is backed up before Slice E travel history normalization"
   assert.equal(result.state.money, 555);
 });
 
+test("Slice E v4 state is backed up before Slice F regional event normalization", () => {
+  const alpha5 = createInitialState();
+  alpha5.money = 666;
+  delete alpha5.regionEvents;
+  const alpha5Text = JSON.stringify(alpha5);
+  const storage = new MemoryStorage({ [SAVE_KEY]: alpha5Text, [BACKUP_KEY]: "older-alpha" });
+  const result = load(storage);
+
+  assert.equal(storage.getItem(BACKUP_KEY), alpha5Text);
+  assert.equal(result.migratedFromVersion, 4);
+  assert.equal(result.preserveBackupOnWrite, true);
+  assert.equal(result.shouldRewritePrimary, true);
+  assert.equal(result.state.regionEvents.sleeping_tide_bay.eventId, "silver_tide");
+  assert.equal(result.state.regionEvents.luminous_archipelago.eventId, "prism_sunshower");
+  assert.equal(result.state.money, 666);
+});
+
 test("Slice B v4 state is backed up byte-for-byte before same-version Slice C normalization", () => {
   const alpha2Text = JSON.stringify({
     version: 4,

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ACHIEVEMENTS, BAITS, BAY_EVENTS, FISH, FURNITURE, RODS, SLEEPING_TIDE_BAY_ID } from "../src/data.js";
+import { ACHIEVEMENTS, BAITS, BAY_EVENTS, FISH, FURNITURE, LUMINOUS_ARCHIPELAGO_ID, RODS, SLEEPING_TIDE_BAY_ID } from "../src/data.js";
 import {
   SAVE_VERSION, SHIMMER_CONFIG, advanceTime, applyMilestones, buyBait, buyRod, chooseFish, claimAchievement,
   createBayEventState, createDeveloperState, createInitialState, equipTitle, evaluateAchievements, fishWeight, generateCatch, getAchievementProgress,
@@ -14,10 +14,11 @@ const NEW_FISH_IDS = [
   "needlefish", "red_seabream", "malabar_grouper", "mirror_butterflyfish", "greater_amberjack"
 ];
 
-test("catalog contains exactly thirty distinct fish", () => {
-  assert.equal(FISH.length, 30);
-  assert.equal(new Set(FISH.map(fish => fish.id)).size, 30);
-  assert.deepEqual(FISH.slice(-10).map(fish => fish.id), NEW_FISH_IDS);
+test("catalog preserves the thirty legacy fish and adds eleven distinct island fish", () => {
+  assert.equal(FISH.length, 41);
+  assert.equal(new Set(FISH.map(fish => fish.id)).size, 41);
+  assert.deepEqual(FISH.slice(20, 30).map(fish => fish.id), NEW_FISH_IDS);
+  assert.equal(FISH.slice(30).every(fish => fish.habitats.some(habitat => habitat.regionId === LUMINOUS_ARCHIPELAGO_ID)), true);
 });
 
 test("ten new fish have balanced rarity, conditions, and catchable weights", () => {
@@ -83,7 +84,9 @@ test("existing developer saves backfill newly catalogued fish and collection rew
 });
 
 test("bay event catalog and daily schedule are deterministic", () => {
-  assert.equal(BAY_EVENTS.length, 3);
+  assert.equal(BAY_EVENTS.length, 6);
+  assert.equal(BAY_EVENTS.filter(event => event.regionId === SLEEPING_TIDE_BAY_ID).length, 3);
+  assert.equal(BAY_EVENTS.filter(event => event.regionId === LUMINOUS_ARCHIPELAGO_ID).length, 3);
   assert.equal(new Set(BAY_EVENTS.map(event => event.id)).size, BAY_EVENTS.length);
   assert.equal(getScheduledBayEvent(1)?.id, "silver_tide");
   assert.equal(getScheduledBayEvent(2), null);
@@ -92,6 +95,9 @@ test("bay event catalog and daily schedule are deterministic", () => {
   assert.equal(getScheduledBayEvent(5)?.id, "rain_drift");
   assert.equal(getScheduledBayEvent(6), null);
   assert.equal(getScheduledBayEvent(7)?.id, "silver_tide");
+  assert.equal(getScheduledBayEvent(1, LUMINOUS_ARCHIPELAGO_ID)?.id, "prism_sunshower");
+  assert.equal(getScheduledBayEvent(3, LUMINOUS_ARCHIPELAGO_ID)?.id, "coral_rainveil");
+  assert.equal(getScheduledBayEvent(5, LUMINOUS_ARCHIPELAGO_ID)?.id, "blue_channel_pulse");
 
   const state = createInitialState();
   assert.equal(getActiveBayEvent(state)?.id, "silver_tide");

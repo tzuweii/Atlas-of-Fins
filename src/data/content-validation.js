@@ -7,6 +7,8 @@ const COLLECTION_NAMES = [
 const WEATHER_IDS = new Set(["sunny", "rain"]);
 const SIZE_TARGETS = new Set(["small", "standard", "large", "record"]);
 const ROUTE_DISTANCE_CLASSES = new Set(["short", "medium", "long"]);
+const SPOT_ACTIVITY_TYPES = new Set(["fishing", "observation"]);
+const FISH_BODY_SHAPES = new Set(["slender", "torpedo", "round", "flat", "spiky", "ribbon", "cephalopod", "mahi", "winged", "glow", "box", "needle"]);
 const isChartPosition = value => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100;
 
 const asArray = value => Array.isArray(value) ? value : [];
@@ -103,6 +105,9 @@ export function validateContentCatalog(content = {}) {
   for (const spot of collections.spots) {
     if (spot?.requires) requireReference("spots", spot, "requires", spot.requires, ids.rods, "釣竿");
     if (spot?.regionId) requireReference("spots", spot, "regionId", spot.regionId, ids.regions, "區域");
+    if (!SPOT_ACTIVITY_TYPES.has(spot?.activityType || "fishing")) {
+      addError("invalid-activity", "spots", spot?.id, `spots[${spot?.id || "missing-id"}].activityType`, `活動類型「${String(spot?.activityType)}」不受支援`);
+    }
   }
 
   for (const fish of collections.fish) {
@@ -114,6 +119,9 @@ export function validateContentCatalog(content = {}) {
     }
     if (fish?.weather !== "any" && !WEATHER_IDS.has(fish?.weather)) {
       addError("missing-reference", "fish", fish?.id, `fish[${fish?.id || "missing-id"}].weather`, `引用的天氣 ID「${String(fish?.weather)}」不存在`);
+    }
+    if (!FISH_BODY_SHAPES.has(fish?.shape)) {
+      addError("invalid-shape", "fish", fish?.id, `fish[${fish?.id || "missing-id"}].shape`, `SVG fallback 輪廓「${String(fish?.shape)}」不存在`);
     }
     asArray(fish?.regionIds).forEach((id, index) => requireReference("fish", fish, `regionIds[${index}]`, id, ids.regions, "區域"));
     asArray(fish?.habitats).forEach((habitat, habitatIndex) => {
@@ -130,6 +138,15 @@ export function validateContentCatalog(content = {}) {
             `釣點「${id}」不屬於區域「${String(habitat?.regionId)}」`
           );
         }
+        if (spot && (spot.activityType || "fishing") !== "fishing") {
+          addError(
+            "invalid-activity",
+            "fish",
+            fish?.id,
+            `fish[${fish?.id || "missing-id"}].habitats[${habitatIndex}].spotIds[${index}]`,
+            `魚池不可引用非釣魚活動點「${id}」`
+          );
+        }
       });
       asArray(habitat?.timeIds).forEach((id, index) => requireReference("fish", fish, `habitats[${habitatIndex}].timeIds[${index}]`, id, ids.times, "時段"));
       asArray(habitat?.weatherIds).forEach((id, index) => {
@@ -138,6 +155,16 @@ export function validateContentCatalog(content = {}) {
         }
       });
     });
+    const isLuminousOriginal = asArray(fish?.habitats).some(habitat => habitat?.regionId === "luminous_archipelago")
+      && !asArray(fish?.habitats).some(habitat => habitat?.regionId === "sleeping_tide_bay");
+    if (isLuminousOriginal) {
+      if (typeof fish?.scientific !== "string" || !fish.scientific.includes(" ")) {
+        addError("missing-ecology", "fish", fish?.id, `fish[${fish?.id || "missing-id"}].scientific`, "琉光群島新魚需要學名");
+      }
+      if (typeof fish?.ecologySource?.label !== "string" || !/^https:\/\//.test(fish?.ecologySource?.url || "")) {
+        addError("missing-ecology", "fish", fish?.id, `fish[${fish?.id || "missing-id"}].ecologySource`, "琉光群島新魚需要可追溯的 HTTPS 生態來源");
+      }
+    }
   }
 
   for (const event of collections.events) {
@@ -167,6 +194,20 @@ export function validateContentCatalog(content = {}) {
 
   for (const region of collections.regions) {
     asArray(region?.spotIds).forEach((id, index) => requireReference("regions", region, `spotIds[${index}]`, id, ids.spots, "釣點"));
+    asArray(region?.fishingSpotIds).forEach((id, index) => {
+      requireReference("regions", region, `fishingSpotIds[${index}]`, id, ids.spots, "釣點");
+      const spot = collections.spots.find(entry => entry.id === id);
+      if (spot && ((spot.activityType || "fishing") !== "fishing" || spot.regionId !== region.id)) {
+        addError("region-mismatch", "regions", region?.id, `regions[${region?.id || "missing-id"}].fishingSpotIds[${index}]`, `釣點「${id}」不是此區域的釣魚活動點`);
+      }
+    });
+    asArray(region?.observationSpotIds).forEach((id, index) => {
+      requireReference("regions", region, `observationSpotIds[${index}]`, id, ids.spots, "觀察點");
+      const spot = collections.spots.find(entry => entry.id === id);
+      if (spot && (spot.activityType !== "observation" || spot.regionId !== region.id)) {
+        addError("region-mismatch", "regions", region?.id, `regions[${region?.id || "missing-id"}].observationSpotIds[${index}]`, `觀察點「${id}」不是此區域的觀察活動點`);
+      }
+    });
     asArray(region?.residentIds).forEach((id, index) => requireReference("regions", region, `residentIds[${index}]`, id, ids.residents, "居民"));
   }
   for (const route of collections.routes) {
