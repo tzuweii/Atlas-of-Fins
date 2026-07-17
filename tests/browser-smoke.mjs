@@ -252,7 +252,13 @@ assert.match(await evaluate("document.querySelector('#time-label').innerText"), 
 
 const saved = await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save"))`);
 const savedCatchRecord = Object.values(saved.discovered)[0];
-assert.equal(saved.version, 3);
+assert.equal(saved.version, 4);
+assert.equal(saved.world.currentRegionId, "sleeping_tide_bay");
+assert.deepEqual(saved.world.visitedRegionIds, ["sleeping_tide_bay"]);
+assert.deepEqual(saved.world.unlockedRouteIds, []);
+assert.deepEqual(saved.world.docking, { status: "docked", regionId: "sleeping_tide_bay" });
+assert.equal(saved.world.travel, null);
+assert.ok(saved.world.regionProgress.sleeping_tide_bay.discoveredFishIds.includes(Object.keys(saved.discovered)[0]));
 assert.ok(saved.totalCaught >= 1);
 assert.ok(saved.totalSold > 0);
 assert.equal(saved.completedTutorial, true);
@@ -311,6 +317,30 @@ assert.match(await evaluate("document.querySelector('.bay-event-card[data-bay-ev
 await click("#save-button");
 assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).bayEvent.eventId`), "rain_drift");
 assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).weather`), "rain");
+
+await click("#menu-button");
+await click('[data-action="to-title"]');
+await waitFor(`!document.querySelector("#title-screen").classList.contains("is-hidden")`);
+const legacyV3Payload = await evaluate(`(() => {
+  const save = JSON.parse(localStorage.getItem("atlas-of-fins.save"));
+  save.version = 3;
+  save.money = 2468;
+  delete save.world;
+  save.currentQuests[0].progress = Math.min(1, save.currentQuests[0].goal);
+  const raw = JSON.stringify(save);
+  localStorage.setItem("atlas-of-fins.save", raw);
+  localStorage.setItem("atlas-of-fins.backup", "older-backup");
+  return raw;
+})()`);
+await click("#continue-button");
+await waitFor(`!document.querySelector("#game-shell").classList.contains("is-hidden")`);
+const migratedV4Save = await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save"))`);
+assert.equal(migratedV4Save.version, 4);
+assert.equal(migratedV4Save.money, 2468);
+assert.equal(migratedV4Save.world.currentRegionId, "sleeping_tide_bay");
+assert.equal(migratedV4Save.world.docking.status, "docked");
+assert.equal(migratedV4Save.currentQuests[0].progress, 1);
+assert.equal(await evaluate(`localStorage.getItem("atlas-of-fins.backup")`), legacyV3Payload);
 assert.equal(exceptions.length, 0, `No uncaught browser exceptions: ${exceptions.join(", ")}`);
 
 if (process.env.SCREENSHOT) {

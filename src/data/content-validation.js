@@ -53,6 +53,7 @@ export function validateContentCatalog(content = {}) {
 
   for (const spot of collections.spots) {
     if (spot?.requires) requireReference("spots", spot, "requires", spot.requires, ids.rods, "釣竿");
+    if (spot?.regionId) requireReference("spots", spot, "regionId", spot.regionId, ids.regions, "區域");
   }
 
   for (const fish of collections.fish) {
@@ -66,9 +67,32 @@ export function validateContentCatalog(content = {}) {
       addError("missing-reference", "fish", fish?.id, `fish[${fish?.id || "missing-id"}].weather`, `引用的天氣 ID「${String(fish?.weather)}」不存在`);
     }
     asArray(fish?.regionIds).forEach((id, index) => requireReference("fish", fish, `regionIds[${index}]`, id, ids.regions, "區域"));
+    asArray(fish?.habitats).forEach((habitat, habitatIndex) => {
+      requireReference("fish", fish, `habitats[${habitatIndex}].regionId`, habitat?.regionId, ids.regions, "區域");
+      asArray(habitat?.spotIds).forEach((id, index) => {
+        requireReference("fish", fish, `habitats[${habitatIndex}].spotIds[${index}]`, id, ids.spots, "釣點");
+        const spot = collections.spots.find(entry => entry.id === id);
+        if (spot && spot.regionId !== habitat?.regionId) {
+          addError(
+            "region-mismatch",
+            "fish",
+            fish?.id,
+            `fish[${fish?.id || "missing-id"}].habitats[${habitatIndex}].spotIds[${index}]`,
+            `釣點「${id}」不屬於區域「${String(habitat?.regionId)}」`
+          );
+        }
+      });
+      asArray(habitat?.timeIds).forEach((id, index) => requireReference("fish", fish, `habitats[${habitatIndex}].timeIds[${index}]`, id, ids.times, "時段"));
+      asArray(habitat?.weatherIds).forEach((id, index) => {
+        if (!WEATHER_IDS.has(id)) {
+          addError("missing-reference", "fish", fish?.id, `fish[${fish?.id || "missing-id"}].habitats[${habitatIndex}].weatherIds[${index}]`, `引用的天氣 ID「${String(id)}」不存在`);
+        }
+      });
+    });
   }
 
   for (const event of collections.events) {
+    if (event?.regionId) requireReference("events", event, "regionId", event.regionId, ids.regions, "區域");
     asArray(event?.fishIds).forEach((id, index) => requireReference("events", event, `fishIds[${index}]`, id, ids.fish, "魚種"));
     asArray(event?.spotIds).forEach((id, index) => requireReference("events", event, `spotIds[${index}]`, id, ids.spots, "釣點"));
     asArray(event?.timeIds).forEach((id, index) => requireReference("events", event, `timeIds[${index}]`, id, ids.times, "時段"));

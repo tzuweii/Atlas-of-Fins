@@ -1,12 +1,13 @@
 import { ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, BAITS, CONTENT_VALIDATION, FISH, FURNITURE, MILESTONES, RARITY, RODS, SPOTS, TIMES } from "./data.js";
 import {
-  BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, SAVE_KEY, advanceTime, applyMilestones, baitById, buyBait, buyFurniture, buyRod,
+  BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, SAVE_KEY, SAVE_VERSION, advanceTime, applyMilestones, baitById, buyBait, buyFurniture, buyRod,
   chooseFish, claimAchievement, claimQuest, createDeveloperState, createInitialState, discoveredCount, equipTitle, fishById,
   furnitureById, generateCatch, getAchievementProgress, getActiveBayEvent, getAquariumCapacity, getBayEventHint, getFamiliarity,
   getTensionConfig, getUnclaimedAchievementCount, isUnlocked, migrateState, moveCatchToAquarium,
   isBayEventConditionActive, recordCatch, removeFishFromAquarium, replaceAquariumFish, rodById, sellCatches,
   setAquariumDecoration, swapAquariumFish
 } from "./core.js";
+import { loadStoredState } from "./persistence/migrations.js";
 import { applyContentValidationGate, renderContentValidationReport } from "./ui/content-error-view.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -24,6 +25,8 @@ let activeSaveMode = "normal";
 let journalFilter = "all";
 let selectedJournalFish = null;
 let shopTab = "rods";
+let preserveBackupOnNextSave = false;
+let shouldRewriteLoadedSave = false;
 let fishing = { phase: "idle", fish: null, caught: null, context: null, timer: null, raf: null, held: false, tension: .38, progress: 0, danger: 0, last: 0 };
 
 class Sound {
@@ -80,16 +83,24 @@ function saveGame(showToast = false) {
   try {
     const [primaryKey, backupKey] = saveKeys();
     const previous = localStorage.getItem(primaryKey);
-    if (previous) localStorage.setItem(backupKey, previous);
+    if (previous && !preserveBackupOnNextSave) localStorage.setItem(backupKey, previous);
     state.lastSavedAt = new Date().toISOString();
     localStorage.setItem(primaryKey, JSON.stringify(state));
+    preserveBackupOnNextSave = false;
+    shouldRewriteLoadedSave = false;
     if (showToast) toast(activeSaveMode === "developer" ? "開發者測試紀錄已儲存" : "航海日誌已妥善收好");
   } catch { if (showToast) toast("無法使用本機存檔，請檢查瀏覽器設定"); }
 }
 function loadGame() {
-  for (const key of saveKeys()) {
-    try { const raw = localStorage.getItem(key); if (raw) return migrateState(JSON.parse(raw)); } catch { /* try backup */ }
-  }
+  const [primaryKey, backupKey] = saveKeys();
+  try {
+    const loaded = loadStoredState(localStorage, { primaryKey, backupKey, targetVersion: SAVE_VERSION, migrate: migrateState });
+    if (loaded) {
+      preserveBackupOnNextSave = loaded.preserveBackupOnWrite;
+      shouldRewriteLoadedSave = loaded.shouldRewritePrimary;
+      return loaded.state;
+    }
+  } catch { /* keep the original save untouched and fall back safely */ }
   return activeSaveMode === "developer" ? createDeveloperState() : createInitialState();
 }
 
@@ -99,6 +110,8 @@ function startGame(isNew = false, mode = "normal") {
     return;
   }
   activeSaveMode = mode;
+  preserveBackupOnNextSave = false;
+  shouldRewriteLoadedSave = false;
   if (isNew) {
     state = mode === "developer" ? createDeveloperState() : createInitialState();
     const [primaryKey, backupKey] = saveKeys();
@@ -106,7 +119,7 @@ function startGame(isNew = false, mode = "normal") {
     saveGame();
   } else {
     state = loadGame();
-    if (!hasSave(mode)) saveGame();
+    if (!hasSave(mode) || shouldRewriteLoadedSave) saveGame();
   }
   titleScreen.classList.add("is-hidden");
   gameShell.classList.remove("is-hidden");
@@ -206,6 +219,7 @@ function behaviorName(id){ return ({steady:"平穩型",sprint:"衝刺型",endura
 
 function currentCatchContext() {
   return {
+    regionId: state.world.currentRegionId,
     spotId: state.selectedSpot,
     timeId: TIMES[state.timeIndex].id,
     weather: state.weather,

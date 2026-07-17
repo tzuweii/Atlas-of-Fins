@@ -1,8 +1,18 @@
-import { ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, AQUARIUM_DECORATIONS, BAITS, BAY_EVENTS, FISH, FURNITURE, MILESTONES, RARITY, RODS, SPOTS, TIMES } from "./data.js";
+import {
+  ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, AQUARIUM_DECORATIONS, BAITS, BAY_EVENTS,
+  FISH, FURNITURE, MILESTONES, RARITY, RODS, SLEEPING_TIDE_BAY_ID, SPOTS, TIMES,
+  getFishHabitat, isRegionAvailable
+} from "./data.js";
 import { BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, SAVE_KEY, SAVE_VERSION } from "./persistence/save-schema.js";
 import { applyDailyQuestProgress, claimDailyQuest, createDailyQuests } from "./systems/daily-board.js";
+import {
+  createDeveloperWorldState, createInitialWorldState, normalizeWorldState, recordRegionalDiscovery
+} from "./systems/world-state.js";
 
-export { BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, SAVE_KEY, SAVE_VERSION, createDailyQuests };
+export {
+  BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, SAVE_KEY, SAVE_VERSION, createDailyQuests,
+  createDeveloperWorldState, createInitialWorldState, normalizeWorldState
+};
 export const DEFAULT_TITLE = "海灣旅人";
 
 export const FAMILIARITY_LEVELS = [
@@ -33,6 +43,7 @@ const nonNegativeNumber = value => Math.max(0, Number(value) || 0);
 function normalizeCatchContext(raw) {
   const context = raw && typeof raw === "object" ? raw : {};
   return {
+    regionId: isRegionAvailable(context.regionId) ? context.regionId : null,
     spotId: isKnownId(SPOTS, context.spotId) ? context.spotId : null,
     timeId: isKnownId(TIMES, context.timeId) ? context.timeId : null,
     weather: ["sunny", "rain"].includes(context.weather) ? context.weather : null,
@@ -127,7 +138,9 @@ export function createBayEventState(day, eventId = null) {
 
 export function getActiveBayEvent(state) {
   if (!state?.bayEvent || Number(state.bayEvent.day) !== Number(state.day)) return null;
-  return BAY_EVENTS.find(event => event.id === state.bayEvent.eventId) || null;
+  const event = BAY_EVENTS.find(entry => entry.id === state.bayEvent.eventId) || null;
+  const currentRegionId = state.world?.currentRegionId || SLEEPING_TIDE_BAY_ID;
+  return event?.regionId && event.regionId !== currentRegionId ? null : event;
 }
 
 function bayEventSpotIds(event) {
@@ -215,6 +228,7 @@ export function createInitialState() {
     tutorialStep: 0,
     currentQuests: createDailyQuests(1),
     questHistory: {},
+    world: createInitialWorldState(),
     bayEvent: createBayEventState(1),
     bayEventHistory: {},
     totalSold: 0,
@@ -244,6 +258,7 @@ export function createDeveloperState() {
       weather: fish.weather === "any" ? "sunny" : fish.weather,
       baitId: fish.baits[0],
       rodId: "farcast",
+      regionId: SLEEPING_TIDE_BAY_ID,
       day: 99
     }
   });
@@ -294,6 +309,7 @@ export function createDeveloperState() {
   state.unlockedAquariumDecor = AQUARIUM_DECORATIONS.map(item => item.id);
   state.aquariumDecoration = state.unlockedAquariumDecor[0] || null;
   state.selectedSpot = "deep";
+  state.world = createDeveloperWorldState({ discoveredFishIds: Object.keys(state.discovered) });
   state.settings.sound = false;
   return state;
 }
@@ -329,6 +345,10 @@ function migrateDeveloperUnlocks(state, raw) {
   state.totalCaught = Math.max(state.totalCaught, full.totalCaught);
   state.totalSold = Math.max(state.totalSold, full.totalSold);
   state.recordCatches = Math.max(state.recordCatches, full.recordCatches);
+  state.world = createDeveloperWorldState({
+    discoveredFishIds: Object.keys(state.discovered),
+    currentRegionId: state.world?.currentRegionId
+  });
   evaluateAchievements(state);
   return state;
 }
@@ -347,6 +367,12 @@ export function migrateState(raw) {
     .filter(([fishId]) => isKnownId(FISH, fishId))
     .map(([fishId, record]) => [fishId, migrateDiscovery(record)])
     .filter(([, record]) => record.count > 0));
+  const rawVersion = Math.max(0, Math.floor(Number(raw.version) || 0));
+  merged.world = normalizeWorldState(raw.world, {
+    legacyDiscoveredFishIds: Object.keys(merged.discovered),
+    backfillLegacyDiscoveries: rawVersion < SAVE_VERSION || !raw.world,
+    firstArrivedAt: safeDate(raw.lastSavedAt)
+  });
   const migratedInventory = (Array.isArray(raw.catchInventory) ? raw.catchInventory : []).map(migrateCatch).filter(Boolean);
   const migratedAquarium = (Array.isArray(raw.aquarium?.fish) ? raw.aquarium.fish : []).map(migrateCatch).filter(Boolean);
   const aquariumUids = new Set();
@@ -495,15 +521,20 @@ export function isUnlocked(item, state) {
 }
 
 export function fishWeight(fish, state, spotId = state.selectedSpot, baitId = state.equippedBait) {
-  if (!fish.spots.includes(spotId)) return 0;
+  const regionId = state.world?.currentRegionId || SLEEPING_TIDE_BAY_ID;
+  const habitat = getFishHabitat(fish, regionId);
+  if (!habitat?.spotIds.includes(spotId)) return 0;
   const rod = RODS.find(r => r.id === state.equippedRod) || RODS[0];
   const bait = BAITS.find(b => b.id === baitId) || BAITS[0];
   const currentTime = TIMES[state.timeIndex]?.id || "dawn";
   const rarityBase = { common: 10, uncommon: 4.2, rare: 0.85 }[fish.rarity];
-  let weight = rarityBase;
-  weight *= fish.times.includes(currentTime) ? 2.8 : 0.22;
-  if (fish.weather === state.weather) weight *= 2.2;
-  else if (fish.weather !== "any") weight *= 0.48;
+  const habitatWeight = Number.isFinite(Number(habitat.baseWeight))
+    ? Math.max(0, Number(habitat.baseWeight))
+    : 1;
+  let weight = rarityBase * habitatWeight;
+  weight *= habitat.timeIds.includes(currentTime) ? 2.8 : 0.22;
+  if (habitat.weatherIds.length === 1 && habitat.weatherIds.includes(state.weather)) weight *= 2.2;
+  else if (!habitat.weatherIds.includes(state.weather)) weight *= 0.48;
   if (fish.baits.includes(baitId)) weight *= 2.65;
   if (bait.tags.some(tag => fish.tags.includes(tag) || tag === fish.rarity || tag === spotId)) weight *= 1.45;
   if (fish.rarity !== "common") weight *= 1 + rod.rareBonus;
@@ -554,11 +585,18 @@ export function generateCatch(fish, contextOrRandom = {}, stateOrRandom = null, 
     random = stateOrRandom;
     catchState = null;
   }
+  const regionId = context.regionId || catchState?.world?.currentRegionId || SLEEPING_TIDE_BAY_ID;
+  const habitat = getFishHabitat(fish, regionId) || getFishHabitat(fish, SLEEPING_TIDE_BAY_ID);
+  const sizeScale = Math.max(.1, Number(habitat?.sizeScale) || 1);
+  const minLength = fish.minLength * sizeScale;
+  const maxLength = fish.maxLength * sizeScale;
+  const minWeight = fish.minWeight * Math.pow(sizeScale, 3);
+  const maxWeight = fish.maxWeight * Math.pow(sizeScale, 3);
   const sizeRoll = Math.min(1, Math.max(0, (random() + random()) / 2));
-  const length = fish.minLength + (fish.maxLength - fish.minLength) * sizeRoll;
-  const weightCurve = Math.pow((length - fish.minLength) / Math.max(1, fish.maxLength - fish.minLength), 1.65);
-  const weight = fish.minWeight + (fish.maxWeight - fish.minWeight) * weightCurve * (0.92 + random() * 0.16);
-  const ratio = (length - fish.minLength) / (fish.maxLength - fish.minLength);
+  const length = minLength + (maxLength - minLength) * sizeRoll;
+  const weightCurve = Math.pow((length - minLength) / Math.max(1, maxLength - minLength), 1.65);
+  const weight = minWeight + (maxWeight - minWeight) * weightCurve * (0.92 + random() * 0.16);
+  const ratio = (length - minLength) / (maxLength - minLength);
   const sizeTier = ratio >= .93 ? "record" : ratio >= .72 ? "large" : ratio < .25 ? "small" : "standard";
   const sizeMultiplier = { small: .8, standard: 1, large: 1.3, record: 1.7 }[sizeTier];
   const variant = catchState ? rollVariant(fish.id, sizeTier, catchState, random).variant : "normal";
@@ -600,6 +638,12 @@ export function recordCatch(state, caught, baitId = state.equippedBait) {
     shimmerCount: (prior?.shimmerCount || 0) + (caught.variant === "shimmer" ? 1 : 0),
     shimmerPity: caught.variant === "shimmer" ? 0 : (prior?.shimmerPity || 0) + 1
   };
+  const regionalDiscovery = recordRegionalDiscovery(
+    state.world,
+    caught.fishId,
+    context.regionId || state.world?.currentRegionId || SLEEPING_TIDE_BAY_ID
+  );
+  state.world = regionalDiscovery.world;
   const familiarity = getFamiliarity(state.discovered[caught.fishId].count);
   state.catchInventory.push(caught);
   state.totalCaught += 1;
@@ -611,6 +655,7 @@ export function recordCatch(state, caught, baitId = state.equippedBait) {
   const completedAchievements = evaluateAchievements(state);
   return {
     isNew,
+    isNewRegional: regionalDiscovery.isNewRegional,
     isFirstShimmer,
     isLengthRecord,
     isWeightRecord,

@@ -1,4 +1,4 @@
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 export const SAVE_KEY = "atlas-of-fins.save";
 export const BACKUP_KEY = "atlas-of-fins.backup";
 export const DEV_SAVE_KEY = "atlas-of-fins.dev-save";

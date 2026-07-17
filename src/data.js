@@ -1,19 +1,27 @@
 import { validateContentCatalog } from "./data/content-validation.js";
 import { DAILY_GOAL_TEMPLATES, QUEST_TEMPLATES } from "./data/daily-goals.js";
+import {
+  LUMINOUS_ARCHIPELAGO_ID, REGIONS, REGION_SPOTS, SLEEPING_TIDE_BAY_ID, SPOTS,
+  getFishHabitat, getRegionFish, getRegionSpots, isRegionAvailable, regionById, regionSpotById
+} from "./data/regions.js";
+import {
+  ROUTES, SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID, getRouteDestination, getRoutesForRegion,
+  isRouteAvailable, routeById
+} from "./data/routes.js";
 
-export { DAILY_GOAL_TEMPLATES, QUEST_TEMPLATES };
+export {
+  DAILY_GOAL_TEMPLATES, QUEST_TEMPLATES,
+  LUMINOUS_ARCHIPELAGO_ID, REGIONS, REGION_SPOTS, ROUTES, SLEEPING_TIDE_BAY_ID,
+  SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID, SPOTS, getFishHabitat, getRegionFish,
+  getRegionSpots, getRouteDestination, getRoutesForRegion, isRegionAvailable,
+  isRouteAvailable, regionById, regionSpotById, routeById
+};
 
 export const TIMES = [
   { id: "dawn", name: "清晨", icon: "◒", line: "晨霧正沿著海面慢慢散去" },
   { id: "day", name: "白天", icon: "☀", line: "陽光在波紋上撒下碎金" },
   { id: "dusk", name: "黃昏", icon: "◐", line: "晚霞把海灣染成溫柔的橘紅" },
   { id: "night", name: "夜晚", icon: "☾", line: "船燈與星光在深藍海面相映" }
-];
-
-export const SPOTS = [
-  { id: "shore", name: "近岸淺水區", icon: "⌁", description: "魚群活躍、咬餌快速，是最舒服的起點。", hint: "常見魚比例高", difficulty: 1 },
-  { id: "reef", name: "礁石邊緣", icon: "◒", description: "海草環繞著礁石，色彩鮮明的魚穿梭其中。", hint: "少見魚較多", difficulty: 2 },
-  { id: "deep", name: "海灣深水區", icon: "◉", description: "深藍水域藏著大型與稀有的身影。", hint: "需強化遠投竿", difficulty: 3, requires: "farcast" }
 ];
 
 export const RODS = [
@@ -46,7 +54,15 @@ export const FURNITURE = [
 const fish = (id, name, english, rarity, spots, times, weather, baits, behavior, length, weight, price, difficulty, shape, colors, short, detail, fact, tags = []) => ({
   id, name, english, scientific: "灣區觀察紀錄", rarity, spots, times, weather, baits, behavior,
   minLength: length[0], maxLength: length[1], minWeight: weight[0], maxWeight: weight[1], basePrice: price,
-  difficulty, shape, colors, short, detail, fact, tags
+  difficulty, shape, colors, short, detail, fact, tags,
+  habitats: [{
+    regionId: SLEEPING_TIDE_BAY_ID,
+    spotIds: [...spots],
+    timeIds: [...times],
+    weatherIds: weather === "any" ? ["sunny", "rain"] : [weather],
+    baseWeight: 1,
+    sizeScale: 1
+  }]
 });
 
 export const FISH = [
@@ -91,6 +107,7 @@ export const RARITY = {
 export const BAY_EVENTS = [
   {
     id: "silver_tide",
+    regionId: SLEEPING_TIDE_BAY_ID,
     name: "銀潮靠岸",
     icon: "✦",
     description: "成群的銀色小魚沿著潮線靠近淺灘，海面像被晨光輕輕翻動。",
@@ -110,6 +127,7 @@ export const BAY_EVENTS = [
   },
   {
     id: "moonlit_tide",
+    regionId: SLEEPING_TIDE_BAY_ID,
     name: "月光潮汐",
     icon: "☾",
     description: "月色把礁石與深水之間的潮路照亮，夜行魚群正沿著冷光緩緩上浮。",
@@ -130,6 +148,7 @@ export const BAY_EVENTS = [
   },
   {
     id: "rain_drift",
+    regionId: SLEEPING_TIDE_BAY_ID,
     name: "雨後漂流",
     icon: "☂",
     description: "細雨把海草、碎貝與浮木推向礁石邊緣，躲藏其中的魚也跟著漂流帶靠近。",
@@ -201,7 +220,7 @@ export const CONTENT_VALIDATION = validateContentCatalog({
   events: BAY_EVENTS,
   achievements: ACHIEVEMENTS,
   aquariumDecorations: AQUARIUM_DECORATIONS,
-  regions: [],
-  routes: [],
+  regions: REGIONS,
+  routes: ROUTES,
   residents: []
 });

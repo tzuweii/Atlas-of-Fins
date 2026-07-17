@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ACHIEVEMENTS, BAITS, BAY_EVENTS, FISH, FURNITURE, RODS } from "../src/data.js";
+import { ACHIEVEMENTS, BAITS, BAY_EVENTS, FISH, FURNITURE, RODS, SLEEPING_TIDE_BAY_ID } from "../src/data.js";
 import {
   SAVE_VERSION, SHIMMER_CONFIG, advanceTime, applyMilestones, buyBait, buyRod, chooseFish, claimAchievement,
   createBayEventState, createDeveloperState, createInitialState, equipTitle, evaluateAchievements, fishWeight, generateCatch, getAchievementProgress,
@@ -241,7 +241,7 @@ test("v2 saves migrate to v3 event state and restore event titles", () => {
     day: 1,
     bayEvent: { eventId: "silver_tide", day: 1, progress: 2 }
   });
-  assert.equal(partial.version, 3);
+  assert.equal(partial.version, SAVE_VERSION);
   assert.equal(partial.bayEvent.eventId, "silver_tide");
   assert.equal(partial.bayEvent.progress, 2);
 
@@ -284,7 +284,7 @@ test("fish pool respects fishing spot", () => {
 test("catch price uses size and rarity and records discoveries", () => {
   const state = createInitialState();
   const rare = FISH.find(fish => fish.rarity === "rare");
-  const context = { spotId: "deep", timeId: "night", weather: "rain", baitId: "glow", rodId: "farcast", day: 4 };
+  const context = { regionId: SLEEPING_TIDE_BAY_ID, spotId: "deep", timeId: "night", weather: "rain", baitId: "glow", rodId: "farcast", day: 4 };
   const caught = generateCatch(rare, context, () => .99);
   assert.equal(caught.sizeTier, "record");
   assert.equal(caught.price, Math.round(rare.basePrice * 4 * 1.7));
@@ -594,6 +594,6 @@ test("partial and malformed saves migrate without losing defaults", () => {
   assert.equal(state.discovered.anchovy, undefined);
   assert.equal(state.catchInventory.length, 1);
   assert.equal(state.catchInventory[0].variant, "normal");
-  assert.deepEqual(state.catchInventory[0].context, { spotId: null, timeId: null, weather: null, baitId: null, rodId: null, day: null });
+  assert.deepEqual(state.catchInventory[0].context, { regionId: null, spotId: null, timeId: null, weather: null, baitId: null, rodId: null, day: null });
   assert.deepEqual(state.aquarium, { fish: [] });
 });

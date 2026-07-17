@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   ACHIEVEMENTS, AQUARIUM_DECORATIONS, BAITS, BAY_EVENTS, CONTENT_VALIDATION, DAILY_GOAL_TEMPLATES,
-  FISH, FURNITURE, RARITY, RODS, SPOTS, TIMES
+  FISH, FURNITURE, RARITY, REGIONS, RODS, ROUTES, SPOTS, TIMES
 } from "../src/data.js";
 import { formatContentValidationErrors, validateContentCatalog } from "../src/data/content-validation.js";
 
@@ -18,8 +18,8 @@ const currentCatalog = () => ({
   events: structuredClone(BAY_EVENTS),
   achievements: structuredClone(ACHIEVEMENTS),
   aquariumDecorations: structuredClone(AQUARIUM_DECORATIONS),
-  regions: [],
-  routes: [],
+  regions: structuredClone(REGIONS),
+  routes: structuredClone(ROUTES),
   residents: []
 });
 
