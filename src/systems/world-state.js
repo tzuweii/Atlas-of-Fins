@@ -66,6 +66,9 @@ export function createDeveloperWorldState({ discoveredFishIds = [], currentRegio
   for (const regionId of implementedRegionIds) {
     const research = getRegionResearch(regionId);
     const progress = regionProgress[regionId];
+    progress.caughtSpotIds = REGION_SPOTS.filter(spot => spot.regionId === regionId
+      && (spot.activityType || "fishing") === "fishing").map(spot => spot.id);
+    progress.caughtTimeIds = TIMES.map(time => time.id);
     if (!research || progress.discoveredFishIds.length < research.mainSpeciesGoal) continue;
     progress.completedResearchIds = [...research.nodeIds];
     progress.mainResearchCompletedDay = 1;

@@ -9,6 +9,9 @@ import {
   DAILY_POETIC_LINES, FISH_ENCOUNTER_LINES, JOURNAL_ENTRY_TYPE_LABELS, JOURNAL_EVENT_TEMPLATES,
   JOURNAL_TEMPLATE_VERSION, journalTemplateByEventType
 } from "./data/journal-templates.js";
+import {
+  AUTO_FISHING_EQUIPMENT, AUTO_FISHING_POETIC_LINES, AUTO_FISHING_REASON_LABELS
+} from "./data/auto-fishing.js";
 import { DAILY_GOAL_TEMPLATES, QUEST_TEMPLATES } from "./data/daily-goals.js";
 import { COMMISSION_TEMPLATES, commissionTemplateById, getResidentCommissionTemplates } from "./data/commissions.js";
 import {
@@ -64,7 +67,8 @@ export {
   FURNITURE, SHIP_FURNITURE, SHIP_INTERIOR_SCENES, SHIP_LIGHTING, SHIP_SLOT_TYPES,
   getShipFurniture, shipFurnitureById, shipInteriorSceneByShipId,
   DAILY_POETIC_LINES, FISH_ENCOUNTER_LINES, JOURNAL_ENTRY_TYPE_LABELS, JOURNAL_EVENT_TEMPLATES,
-  JOURNAL_TEMPLATE_VERSION, journalTemplateByEventType
+  JOURNAL_TEMPLATE_VERSION, journalTemplateByEventType,
+  AUTO_FISHING_EQUIPMENT, AUTO_FISHING_POETIC_LINES, AUTO_FISHING_REASON_LABELS
 };
 
 export const TIMES = [
@@ -465,5 +469,6 @@ export const CONTENT_VALIDATION = validateContentCatalog({
   ships: SHIPS,
   shipFurniture: SHIP_FURNITURE,
   shipInteriors: SHIP_INTERIOR_SCENES,
-  journalTemplates: JOURNAL_EVENT_TEMPLATES
+  journalTemplates: JOURNAL_EVENT_TEMPLATES,
+  autoFishingEquipment: [AUTO_FISHING_EQUIPMENT]
 });

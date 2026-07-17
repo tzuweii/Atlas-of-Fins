@@ -85,6 +85,21 @@ test("current v5 primary reload does not rotate or rewrite its backup", () => {
   assert.equal(storage.getItem(BACKUP_KEY), "recovery");
 });
 
+test("Slice D v5 save is backed up byte-for-byte before Slice E rack normalization", () => {
+  const alpha4 = createInitialState();
+  alpha4.money = 777;
+  alpha4.autoFishing = { owned: false, activeSession: null, lastSummary: null, settledSessionIds: [] };
+  const alpha4Text = JSON.stringify(alpha4);
+  const storage = new MemoryStorage({ [SAVE_KEY]: alpha4Text, [BACKUP_KEY]: "alpha4-recovery" });
+  const result = load(storage);
+  assert.equal(storage.getItem(BACKUP_KEY), alpha4Text);
+  assert.equal(result.migratedFromVersion, 5);
+  assert.equal(result.preserveBackupOnWrite, true);
+  assert.equal(result.shouldRewritePrimary, true);
+  assert.equal(result.state.money, 777);
+  assert.equal(result.state.autoFishing.version, 1);
+});
+
 test("Slice A v5 save is backed up before same-version ship catalog normalization", () => {
   const alpha1 = createInitialState();
   delete alpha1.ships.catalogVersion;

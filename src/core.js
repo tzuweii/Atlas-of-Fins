@@ -1,5 +1,5 @@
 import {
-  ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, AQUARIUM_DECORATIONS, BAITS, BAY_EVENTS,
+  ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, AQUARIUM_DECORATIONS, AUTO_FISHING_EQUIPMENT, BAITS, BAY_EVENTS,
   CHENGYE_ID, DAILY_GOAL_TEMPLATES, FISH, FURNITURE, LUMINOUS_ARCHIPELAGO_ID, MILESTONES, RARITY,
   JOURNAL_EVENT_TEMPLATES, REGIONS, RODS, ROUTES, SHIPS, SHIP_FURNITURE, SLEEPING_TIDE_BAY_ID, SPOTS, TIDEGLOW_SOURCES, TIMES,
   getFishHabitat, getRegionFishingSpots, isRegionAvailable, shipFurnitureById as findShipFurnitureById
@@ -69,15 +69,30 @@ import {
   createJournalState, developerFillDailyJournal, filterJournalEntries, markJournalEntriesRead,
   normalizeJournalState, sealJournalDay
 } from "./systems/journal.js";
+import {
+  AUTO_FISHING_VERSION, acknowledgeAutoFishingSummary as acknowledgeAutoSummaryState,
+  autoFishingSummaryView, cancelAutoFishingCloseMarker as cancelAutoCloseState,
+  createAutoFishingState, getAutoFishingFishPool, getAutoFishingPurchaseState,
+  getEligibleAutoFishingBaits, getEligibleAutoFishingSpots,
+  markAutoFishingPageClosed as markAutoClosedState, normalizeAutoFishingState,
+  purchaseAutoFishingEquipment as purchaseAutoEquipmentState,
+  resetAutoFishingForDeveloper as resetAutoFishingStateForDeveloper,
+  settleAutoFishingOnOpen as settleAutoFishingStateOnOpen,
+  startAutoFishingSession as startAutoFishingSessionState,
+  stopAutoFishingSession as stopAutoFishingSessionState, syncAutoFishingShip
+} from "./systems/auto-fishing.js";
 
 export {
   BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, DEV_TEMP_SAVE_KEY, SAVE_KEY, SAVE_VERSION, TEMP_SAVE_KEY,
-  SHIPS, SHIP_FURNITURE, TIDEGLOW_SOURCES, activeShip, activeShipSpeed, activeShipFurnitureCatalog,
+  AUTO_FISHING_EQUIPMENT, AUTO_FISHING_VERSION, SHIPS, SHIP_FURNITURE, TIDEGLOW_SOURCES,
+  activeShip, activeShipSpeed, activeShipFurnitureCatalog, autoFishingSummaryView,
   collectInvalidInteriorReferences, createDailyQuests, getShipPurchaseState, shipInterior,
   acknowledgeJournalNotices, allJournalEntries, filterJournalEntries, markJournalEntriesRead,
   CHART_VIEW_LIMITS, canBeginChartRoute, createDefaultChartView, createDeveloperWorldState,
   createInitialWorldState, DEVELOPER_TRAVEL_SCALES, FAMILIAR_TRAVEL_DURATION_MS,
-  FIRST_TRAVEL_DURATION_MS, getObservationHint, getRegionResearchStatus, getResidentStoryStatus,
+  FIRST_TRAVEL_DURATION_MS, getAutoFishingFishPool, getAutoFishingPurchaseState,
+  getEligibleAutoFishingBaits, getEligibleAutoFishingSpots, getObservationHint,
+  getRegionResearchStatus, getResidentStoryStatus,
   getRouteTravelDurationMs, getTravelStatus, normalizeChartView,
   normalizeTravelScale, normalizeWorldState, panChartView, requestChartRoute, zoomChartView
 };
@@ -98,7 +113,7 @@ function createJournalShell() {
 }
 
 function createAutoFishingShell() {
-  return { owned: false, activeSession: null, lastSummary: null, settledSessionIds: [] };
+  return createAutoFishingState();
 }
 
 export const FAMILIARITY_LEVELS = [
@@ -185,8 +200,15 @@ function migrateCatch(raw) {
 function migrateDiscovery(raw) {
   const record = raw && typeof raw === "object" ? raw : {};
   const shimmerCount = Math.max(0, Math.floor(Number(record.shimmerCount) || 0));
+  const count = Math.max(0, Math.floor(Number(record.count) || 0));
+  const autoCount = Math.min(count, Math.max(0, Math.floor(Number(record.autoCount) || 0)));
+  const manualCount = Number.isFinite(Number(record.manualCount))
+    ? Math.min(count, Math.max(0, Math.floor(Number(record.manualCount))))
+    : Math.max(0, count - autoCount);
   return {
-    count: Math.max(0, Math.floor(Number(record.count) || 0)),
+    count,
+    manualCount,
+    autoCount,
     firstCaught: safeDate(record.firstCaught),
     lastCaught: safeDate(record.lastCaught) || safeDate(record.firstCaught),
     bestLength: nonNegativeNumber(record.bestLength),
@@ -412,6 +434,7 @@ export function createDeveloperState() {
   };
 
   state.developerMode = true;
+  state.autoFishing = { ...createAutoFishingState(), owned: true, purchasedAt: caughtAt };
   state.money = 999999;
   state.day = 99;
   state.timeIndex = 3;
@@ -429,6 +452,8 @@ export function createDeveloperState() {
   }));
   state.discovered = Object.fromEntries(FISH.map(fish => [fish.id, {
     count: 10,
+    manualCount: 10,
+    autoCount: 0,
     firstCaught: caughtAt,
     lastCaught: caughtAt,
     bestLength: fish.maxLength,
@@ -602,10 +627,7 @@ export function migrateState(raw) {
       }
     }, { starterInterior: createShipShell().interiorsByShipId[STARTER_SHIP_ID] });
     merged.journal = normalizeJournalState(raw.journal);
-    merged.autoFishing = {
-      ...createAutoFishingShell(),
-      ...(raw.autoFishing && typeof raw.autoFishing === "object" ? raw.autoFishing : {})
-    };
+    merged.autoFishing = normalizeAutoFishingState(raw.autoFishing);
   }
   merged.settings = normalizeDisplaySettings({ ...base.settings, ...(raw.settings || {}) });
   merged.travelSettings = {
@@ -683,7 +705,7 @@ export function migrateState(raw) {
   delete merged.questHistory;
   merged.money = Math.max(0, Number(merged.money) || 0);
   merged.totalSold = nonNegativeNumber(merged.totalSold);
-  const recordedCatchTotal = Object.values(merged.discovered).reduce((sum, record) => sum + record.count, 0);
+  const recordedCatchTotal = Object.values(merged.discovered).reduce((sum, record) => sum + (record.manualCount || 0), 0);
   merged.totalCaught = Math.max(Math.floor(nonNegativeNumber(merged.totalCaught)), recordedCatchTotal);
   const heldRecordCatches = [...merged.catchInventory, ...merged.aquarium.fish].filter(caught => caught.sizeTier === "record").length;
   merged.recordCatches = Math.max(Math.floor(nonNegativeNumber(merged.recordCatches)), heldRecordCatches);
@@ -723,7 +745,8 @@ export function isCurrentSaveSchema(raw) {
     && Array.isArray(raw.journal.dailyArchives) && Array.isArray(raw.journal.unreadEntryIds)
     && Array.isArray(raw.journal.pendingNoticeEntryIds)
     && raw.journal.dailyEntries.filter(entry => entry?.sealed).length <= 180
-    && raw?.autoFishing && typeof raw.autoFishing === "object";
+    && raw?.autoFishing && raw.autoFishing.version === AUTO_FISHING_VERSION
+    && Array.isArray(raw.autoFishing.settledSessionIds);
 }
 
 export function discoveredCount(state) {
@@ -756,8 +779,8 @@ export function getAchievementProgress(state, achievementOrId) {
   let current = 0;
   if (achievement.type === "totalCaught") current = Math.max(0, Number(state.totalCaught) || 0);
   if (achievement.type === "species") current = discoveredCount(state);
-  if (achievement.type === "familiarSpecies") current = records.filter(record => (record.count || 0) >= 5).length;
-  if (achievement.type === "masteredSpecies") current = records.filter(record => (record.count || 0) >= 10).length;
+  if (achievement.type === "familiarSpecies") current = records.filter(record => (record.manualCount ?? record.count ?? 0) >= 5).length;
+  if (achievement.type === "masteredSpecies") current = records.filter(record => (record.manualCount ?? record.count ?? 0) >= 10).length;
   if (achievement.type === "recordCatches") current = Math.max(0, Number(state.recordCatches) || 0);
   if (achievement.type === "shimmerSpecies") current = records.filter(record => record.caughtShimmer).length;
   if (achievement.type === "aquariumCount") current = Array.isArray(state.aquarium?.fish) ? state.aquarium.fish.length : 0;
@@ -1011,6 +1034,8 @@ export function recordCatch(state, caught, baitId = state.equippedBait) {
   caught.context = context;
   state.discovered[caught.fishId] = {
     count: (prior?.count || 0) + 1,
+    manualCount: (prior?.manualCount ?? prior?.count ?? 0) + 1,
+    autoCount: prior?.autoCount || 0,
     firstCaught: prior?.firstCaught || caught.caughtAt,
     lastCaught: caught.caughtAt,
     bestLength: Math.max(prior?.bestLength || 0, caught.length),
@@ -1301,6 +1326,69 @@ export function getRouteDurationForState(state, routeId) {
   return getRouteTravelDurationMs(route, state?.world, scale, activeShipSpeed(state));
 }
 
+export function buyAutoFishingEquipment(state, purchasedAt) {
+  return purchaseAutoEquipmentState(state, purchasedAt);
+}
+
+export function configureAutoFishing(state, options = {}) {
+  return startAutoFishingSessionState(state, options);
+}
+
+export function stopAutoFishing(state, reason = "manual") {
+  return stopAutoFishingSessionState(state, reason);
+}
+
+export function markAutoFishingClosed(state, closedAt) {
+  return markAutoClosedState(state, closedAt);
+}
+
+export function cancelAutoFishingClosed(state) {
+  return cancelAutoCloseState(state);
+}
+
+export function settleAutoFishing(state, openedAt) {
+  return settleAutoFishingStateOnOpen(state, openedAt);
+}
+
+export function acknowledgeAutoFishing(state, summaryId = null) {
+  return acknowledgeAutoSummaryState(state, summaryId);
+}
+
+export function developerResetAutoFishing(state, owned = true) {
+  return resetAutoFishingStateForDeveloper(state, { owned });
+}
+
+export function developerSimulateAutoFishing(state, {
+  durationMs = AUTO_FISHING_EQUIPMENT.maxOfflineMs,
+  openedAt = new Date().toISOString(),
+  stopReason = null
+} = {}) {
+  if (!state?.developerMode || !state.autoFishing?.activeSession) return { ok: false, reason: "inactive" };
+  if (["departed", "manual"].includes(stopReason)) return stopAutoFishingSessionState(state, stopReason);
+  const openedTimestamp = Date.parse(openedAt);
+  if (!Number.isFinite(openedTimestamp)) return { ok: false, reason: "invalid-time" };
+  let simulatedDuration = Number(durationMs) || 0;
+  if (stopReason === "returned-early") simulatedDuration = 60 * 1000;
+  if (stopReason === "three-hour-limit") simulatedDuration = AUTO_FISHING_EQUIPMENT.maxOfflineMs;
+  if (stopReason === "clock-rollback") simulatedDuration = -5 * 60 * 1000;
+  if (stopReason === "bait-empty") {
+    state.baitAmounts[state.autoFishing.activeSession.baitId] = 1;
+    simulatedDuration = 8 * 60 * 1000;
+  }
+  if (stopReason === "no-eligible-fish") {
+    state.autoFishing.activeSession = { ...state.autoFishing.activeSession, spotId: "developer-invalid-spot" };
+    simulatedDuration = 8 * 60 * 1000;
+  }
+  if (stopReason === "region-changed") {
+    const otherRegionId = REGIONS.find(region => region.status === "available" && region.id !== state.world?.currentRegionId)?.id;
+    state.autoFishing.activeSession = { ...state.autoFishing.activeSession, regionId: otherRegionId || "developer-other-region" };
+    simulatedDuration = 8 * 60 * 1000;
+  }
+  const closedAt = new Date(openedTimestamp - simulatedDuration).toISOString();
+  if (!markAutoClosedState(state, closedAt)) return { ok: false, reason: "already-closed" };
+  return settleAutoFishingStateOnOpen(state, openedAt);
+}
+
 export function beginRouteTravel(state, routeId, now = Date.now()) {
   if (!state?.world) return { ok: false, reason: "missing-world", world: state?.world };
   const scale = state.developerMode ? state.travelSettings?.developerDurationScale : 1;
@@ -1308,6 +1396,7 @@ export function beginRouteTravel(state, routeId, now = Date.now()) {
   const speedMultiplier = activeShipSpeed(state);
   const result = beginWorldTravel(state.world, routeId, now, { scale, speedMultiplier, shipId: ship.id });
   if (!result.ok) return result;
+  stopAutoFishingSessionState(state, "departed");
   state.world = result.world;
   const travel = state.world.travel;
   const journalEvent = dispatchGameEvent(state, {
@@ -1393,6 +1482,7 @@ export function developerFillJournalArchive(state, count = 181) {
 export function buyShip(state, shipId, purchasedAt) {
   const result = purchaseShipState(state, shipId, purchasedAt);
   if (!result.ok) return result;
+  syncAutoFishingShip(state);
   const journalEvent = dispatchGameEvent(state, {
     type: "ship.purchased",
     source: "manual",
@@ -1404,7 +1494,9 @@ export function buyShip(state, shipId, purchasedAt) {
 }
 
 export function switchActiveShip(state, shipId) {
-  return switchShipState(state, shipId);
+  const result = switchShipState(state, shipId);
+  if (result.ok) syncAutoFishingShip(state);
+  return result;
 }
 
 export function developerSetShipOwned(state, shipId, owned = true) {
@@ -1440,6 +1532,7 @@ export function developerArriveTravel(state, now = Date.now()) {
 
 export function developerResetRouteState(state) {
   if (!state?.developerMode) return false;
+  stopAutoFishingSessionState(state, "region-changed");
   const previousBayProgress = state.world?.regionProgress?.[SLEEPING_TIDE_BAY_ID];
   state.world = createInitialWorldState({
     discoveredFishIds: previousBayProgress?.discoveredFishIds || Object.keys(state.discovered || {}),
@@ -1453,6 +1546,7 @@ export function developerResetRouteState(state) {
 
 export function developerDockRegion(state, regionId) {
   if (!state?.developerMode || !isRegionAvailable(regionId)) return false;
+  if (regionId !== state.world?.currentRegionId) stopAutoFishingSessionState(state, "region-changed");
   const developerWorld = createDeveloperWorldState({
     discoveredFishIds: Object.keys(state.discovered || {}),
     currentRegionId: regionId

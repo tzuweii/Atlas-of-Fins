@@ -2,7 +2,7 @@ const COLLECTION_NAMES = [
   "times", "spots", "rods", "baits", "furniture", "fish", "dailyGoals",
   "events", "achievements", "aquariumDecorations", "regions", "routes", "residents", "commissions",
   "observations", "wonders", "researchNodes", "residentStoryScenes", "chartRegions", "chartRoutes",
-  "tideglowSources", "ships", "shipFurniture", "shipInteriors", "journalTemplates"
+  "tideglowSources", "ships", "shipFurniture", "shipInteriors", "journalTemplates", "autoFishingEquipment"
 ];
 
 const WEATHER_IDS = new Set(["sunny", "rain"]);
@@ -386,6 +386,21 @@ export function validateContentCatalog(content = {}) {
     }
     if (template?.permanent !== true) {
       addError("invalid-retention", "journalTemplates", template?.id, `journalTemplates[${template?.id || "missing-id"}].permanent`, "世界事件日誌模板必須永久保存");
+    }
+  }
+
+  for (const equipment of collections.autoFishingEquipment) {
+    requireReference("autoFishingEquipment", equipment, "unlockShipId", equipment?.unlockShipId, ids.ships, "船隻");
+    if (!(Number(equipment?.price) > 0)) {
+      addError("invalid-price", "autoFishingEquipment", equipment?.id, `autoFishingEquipment[${equipment?.id || "missing-id"}].price`, "自動釣架需要大於 0 的固定價格");
+    }
+    for (const key of ["maxOfflineMs", "catchIntervalMs", "maxCatchCount", "familiarityLimitPerFish"]) {
+      if (!(Number(equipment?.[key]) > 0)) {
+        addError("invalid-limit", "autoFishingEquipment", equipment?.id, `autoFishingEquipment[${equipment?.id || "missing-id"}].${key}`, `自動釣架欄位「${key}」必須大於 0`);
+      }
+    }
+    if (Number(equipment?.catchIntervalMs) * Number(equipment?.maxCatchCount) > Number(equipment?.maxOfflineMs)) {
+      addError("invalid-limit", "autoFishingEquipment", equipment?.id, `autoFishingEquipment[${equipment?.id || "missing-id"}].maxCatchCount`, "單次最大漁獲數不可超過三小時節奏可產生的數量");
     }
   }
 

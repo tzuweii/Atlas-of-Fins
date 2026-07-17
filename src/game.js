@@ -1,5 +1,5 @@
 import {
-  ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, BAITS, BAY_EVENTS, CHART_REGION_POINTS, CHART_ROUTE_PATHS,
+  ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, AUTO_FISHING_EQUIPMENT, BAITS, BAY_EVENTS, CHART_REGION_POINTS, CHART_ROUTE_PATHS,
   CHENGYE_ID, COMMISSION_TEMPLATES, CONTENT_VALIDATION, DAILY_GOAL_TEMPLATES, FISH, FURNITURE,
   JOURNAL_ENTRY_TYPE_LABELS, JOURNAL_EVENT_TEMPLATES, MILESTONES,
   LUMINOUS_ARCHIPELAGO_ID, OBSERVATION_SUBJECTS, RARITY, REGIONS, RESEARCH_NODES, RESIDENTS, RODS,
@@ -10,26 +10,29 @@ import {
 import {
   BACKUP_KEY, CHART_VIEW_LIMITS, DEVELOPER_TRAVEL_SCALES, DEV_BACKUP_KEY, DEV_SAVE_KEY, DEV_TEMP_SAVE_KEY,
   SAVE_KEY, SAVE_VERSION, TEMP_SAVE_KEY,
-  acceptResidentCommission, activeShip, activeShipSpeed, activeShipFurnitureCatalog, advanceResidentStory, advanceTime,
-  applyMilestones, baitById, beginRouteTravel, buyBait, buyRod, buyShip, buyShipFurniture, chooseFish, claimAchievement,
+  acceptResidentCommission, acknowledgeAutoFishing, activeShip, activeShipSpeed, activeShipFurnitureCatalog,
+  advanceResidentStory, advanceTime, applyMilestones, autoFishingSummaryView, baitById, beginRouteTravel,
+  buyAutoFishingEquipment, buyBait, buyRod, buyShip, buyShipFurniture, chooseFish, claimAchievement,
   claimAllCompletedDailyGoals, claimQuest, createDeveloperState, createInitialState, deliverResidentCommission,
-  developerArriveTravel, developerClearResidentCommissionHistory, developerCompleteDailyGoals,
+  cancelAutoFishingClosed, configureAutoFishing, developerArriveTravel, developerClearResidentCommissionHistory, developerCompleteDailyGoals,
   developerCompleteRegionResearch, developerCompleteResidentCommission, developerRecordObservation,
   developerResetChengyeStory, developerResetDailyBoard, developerResetObservations, developerResetRouteState,
-  developerDockRegion, developerSetDailyGoal, developerSetRegionEvent, developerSetResidentOffer,
+  developerDockRegion, developerResetAutoFishing, developerSetDailyGoal, developerSetRegionEvent, developerSetResidentOffer,
   developerSetTravelScale, developerAdjustTideglow, developerEmitTideglowEvent,
   developerClearActiveShipFurniture, developerEmitJournalEvent, developerFillActiveShipFurniture,
   developerFillJournalArchive, developerResetActiveShipSlots,
-  developerRevealShips, developerSetActiveShipLighting, developerSetShipOwned, developerSetShipSpeed, discoveredCount,
+  developerRevealShips, developerSetActiveShipLighting, developerSetShipOwned, developerSetShipSpeed,
+  developerSimulateAutoFishing, discoveredCount,
   dockAtDestination, dropResidentCommission, equipTitle, filterJournalEntries, fishById,
   furnitureById, generateCatch, getAchievementProgress, getActiveBayEvent, getActiveBayEventState,
-  getAquariumCapacity, getBayEventHint, getFamiliarity, getObservationHint,
+  getAquariumCapacity, getAutoFishingFishPool, getBayEventHint, getEligibleAutoFishingBaits,
+  getEligibleAutoFishingSpots, getFamiliarity, getObservationHint,
   getRegionResearchStatus, getResidentStoryStatus, getShipPurchaseState,
   getRouteDurationForState, getTensionConfig, getTravelStatus, getUnclaimedAchievementCount, isUnlocked,
-  markJournalEntriesRead, acknowledgeJournalNotices, migrateState, moveCatchToAquarium,
+  markAutoFishingClosed, markJournalEntriesRead, acknowledgeJournalNotices, migrateState, moveCatchToAquarium,
   isBayEventConditionActive, isCurrentSaveSchema, observeAtSpot, recordCatch, removeFishFromAquarium, replaceAquariumFish, rodById, sellCatches,
-  normalizeChartView, panChartView, placeShipFurniture, progressTravel, setAquariumDecoration, shipInterior,
-  swapAquariumFish, switchActiveShip, collectInvalidInteriorReferences,
+  normalizeChartView, panChartView, placeShipFurniture, progressTravel, setAquariumDecoration, settleAutoFishing,
+  shipInterior, stopAutoFishing, swapAquariumFish, switchActiveShip, collectInvalidInteriorReferences,
   zoomChartView
 } from "./core.js";
 import { loadStoredState, writeStoredState } from "./persistence/migrations.js";
@@ -203,6 +206,7 @@ function startGame(isNew = false, mode = "normal") {
   selectedLogbookEntryId = null;
   preserveBackupOnNextSave = false;
   shouldRewriteLoadedSave = false;
+  let autoFishingUpdate = { changed: false, summary: null };
   if (isNew) {
     state = mode === "developer" ? createDeveloperState() : createInitialState();
     const [primaryKey, backupKey, temporaryKey] = saveKeys();
@@ -211,7 +215,8 @@ function startGame(isNew = false, mode = "normal") {
   } else {
     state = loadGame();
     const travelUpdate = progressTravel(state, Date.now());
-    if (!hasSave(mode) || shouldRewriteLoadedSave || travelUpdate.changed) saveGame();
+    autoFishingUpdate = settleAutoFishing(state, new Date().toISOString());
+    if (!hasSave(mode) || shouldRewriteLoadedSave || travelUpdate.changed || autoFishingUpdate.changed) saveGame();
   }
   state.settings = normalizeDisplaySettings({ ...state.settings, ...loadPreferences(state.settings) });
   savePreferences();
@@ -221,7 +226,10 @@ function startGame(isNew = false, mode = "normal") {
   app.classList.toggle("is-developer-mode", mode === "developer");
   currentView = "fishing";
   syncTravelClock(); syncWorld(); render(); updateTutorial(); sound.startAmbient();
-  setTimeout(flushJournalNotices,80);
+  setTimeout(()=>{
+    const summary=autoFishingUpdate.summary||(!state.autoFishing?.lastSummary?.acknowledged?state.autoFishing.lastSummary:null);
+    if(summary)showAutoFishingSummary(summary);else flushJournalNotices();
+  },80);
 }
 
 function syncWorld() {
@@ -924,15 +932,34 @@ function renderCatch() {
 function sizeName(tier){return({small:"小型",standard:"標準",large:"大型",record:"紀錄級"})[tier]}
 
 function renderShop() {
-  const tabNames={rods:"魚竿",baits:"魚餌",furniture:"船屋家具",ships:"船隻"};
+  const tabNames={rods:"魚竿",baits:"魚餌",furniture:"船屋家具",equipment:"船用設備",ships:"船隻"};
   let items=[];
   if(shopTab==="rods") items=RODS.map(item=>shopItem(item,"rod"));
   if(shopTab==="baits") items=BAITS.map(item=>shopItem(item,"bait"));
   if(shopTab==="furniture") items=activeShipFurnitureCatalog(state).map(item=>shopItem(item,"furniture"));
+  if(shopTab==="equipment") items=[autoFishingStoreItem()];
   if(shopTab==="ships") items=SHIPS.map(shipStoreItem);
   const actions=`<span class="price">● ${state.money.toLocaleString("zh-TW")}</span><span class="price tideglow-price">✦ ${state.tideglow.total.toLocaleString("zh-TW")}</span>`;
   const furnitureNote=shopTab==="furniture"?`<p class="ship-catalog-note">目前展示 <b>${activeShip(state).name}</b> 專屬家具；切換船隻後，商店也會換成對應設計。</p>`:"";
   content.innerHTML=`${panelHeading("海灣商店","老闆會替你收好需要的裝備；商品永遠不會限時消失。",actions)}<div class="shop-tabs">${Object.entries(tabNames).map(([id,name])=>`<button class="filter-chip ${shopTab===id?"is-active":""}" data-action="shop-tab" data-id="${id}">${name}</button>`).join("")}</div>${furnitureNote}<div class="shop-grid">${items.join("")}</div>`;
+}
+
+function autoFishingStoreItem() {
+  const equipment=AUTO_FISHING_EQUIPMENT,owned=state.autoFishing?.owned;
+  const unlockShip=shipById(equipment.unlockShipId),hasUnlockShip=state.ships.ownedShipIds.includes(equipment.unlockShipId);
+  const active=Boolean(state.autoFishing?.activeSession);
+  let action=`<button class="soft-button" disabled>需先擁有${unlockShip?.name||"指定船隻"}</button>`;
+  let label=`解鎖條件：${unlockShip?.name||equipment.unlockShipId}`;
+  if(hasUnlockShip&&!owned){
+    const affordable=state.money>=equipment.price;
+    action=`<button class="primary-button" data-action="buy-auto-fishing" ${affordable?"":"disabled"}>${affordable?"購買永久設備":"金幣不足"}</button>`;
+    label="已符合船隻條件";
+  }
+  if(owned){
+    action=`<button class="${active?"primary-button":"soft-button"}" data-action="show-auto-fishing">${active?"調整目前設定":"設定自動釣魚"}</button>`;
+    label=active?"已在目前港口待命":"永久擁有 · 尚未設定";
+  }
+  return `<article class="card shop-item auto-fishing-store-item ${owned?"is-owned":""}"><div class="shop-item-icon">⌁</div><span class="section-label">永久船用設備 · 不占家具插槽</span><h3>${equipment.name}</h3><p>${equipment.description}</p><div class="price-row"><span class="price">${owned?"已擁有":`${equipment.price.toLocaleString("zh-TW")} 金幣`}</span><span class="item-state">${label}</span></div>${action}</article>`;
 }
 
 function shipStoreItem(ship) {
@@ -957,6 +984,31 @@ function showShipPurchaseConfirmation(shipId) {
   if (!eligibility.ok) { toast("目前還不能購買這艘船，請確認潮光、金幣與停泊狀態"); return; }
   const ship = eligibility.ship;
   modalRoot.innerHTML = `<div class="modal-backdrop"><div class="modal ship-purchase-modal"><span class="section-label">永久船隻收藏</span><h2>讓${ship.name}靠岸？</h2><p class="modal-copy">將支付 ${ship.price.toLocaleString("zh-TW")} 金幣並立即切換使用；${ship.tideglowRequired} 潮光只是解鎖門檻，不會被消耗。</p><p class="quiet-note">新船保有可使用的固定床台、航圖桌、日誌入口與水族箱基座；可替換家具需依這艘船的樣式另外購買。</p><div class="modal-actions"><button class="soft-button" data-action="close-modal">再想一下</button><button class="primary-button" data-action="confirm-buy-ship" data-id="${ship.id}">購買並使用</button></div></div></div>`;
+}
+
+function formatAutoFishingDuration(milliseconds) {
+  const minutes=Math.max(0,Math.floor((Number(milliseconds)||0)/60000));
+  return minutes>=60?`${Math.floor(minutes/60)} 小時 ${minutes%60} 分鐘`:`${minutes} 分鐘`;
+}
+
+function showAutoFishingSetup() {
+  if(!state.autoFishing?.owned){shopTab="equipment";setView("shop");return;}
+  const spots=getEligibleAutoFishingSpots(state),baits=getEligibleAutoFishingBaits(state),session=state.autoFishing.activeSession;
+  const selectedSpot=session?.spotId&&spots.some(spot=>spot.id===session.spotId)?session.spotId:spots[0]?.id;
+  const selectedBait=session?.baitId&&baits.some(bait=>bait.id===session.baitId)?session.baitId:baits[0]?.id;
+  const fishPool=selectedSpot&&selectedBait?getAutoFishingFishPool(state,{regionId:state.world.currentRegionId,spotId:selectedSpot,baitId:selectedBait}):[];
+  const spotOptions=spots.map(spot=>`<option value="${spot.id}" ${spot.id===selectedSpot?"selected":""}>${spot.name}</option>`).join("");
+  const baitOptions=baits.map(bait=>`<option value="${bait.id}" ${bait.id===selectedBait?"selected":""}>${bait.name} · ${state.baitAmounts[bait.id]} 份</option>`).join("");
+  const region=regionById(state.world.currentRegionId),ready=spots.length&&baits.length&&fishPool.length;
+  const activePanel=session?`<div class="auto-fishing-active"><span class="section-label">目前待命</span><b>${regionById(session.regionId)?.portName||session.regionId} · ${SPOTS.find(spot=>spot.id===session.spotId)?.name||session.spotId}</b><small>${baitById(session.baitId)?.name||session.baitId} · 關閉整個遊戲頁面後才開始計時</small></div>`:"";
+  modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal auto-fishing-modal"><span class="section-label">固定船用設備 · ${activeShip(state).name}</span><h2>${AUTO_FISHING_EQUIPMENT.name}</h2><p class="modal-copy">只會在目前停泊的 <b>${region?.portName||"港口"}</b>，從你曾經實際釣過的釣點守候熟悉的普通與少見魚種。切到背景分頁不算離線。</p>${activePanel}<div class="auto-fishing-form"><label>目前港口已造訪的釣點<select id="auto-fishing-spot" ${spots.length?"":"disabled"}>${spotOptions||'<option>尚無可用釣點</option>'}</select></label><label>消耗魚餌<select id="auto-fishing-bait" ${baits.length?"":"disabled"}>${baitOptions||'<option>沒有可用魚餌</option>'}</select></label>${state.developerMode?`<label>固定測試種子<input id="auto-fishing-seed" value="slice-e-fixed-seed" maxlength="80"></label>`:""}</div><p class="quiet-note">每 4 分鐘最多帶回 1 尾，每次最多 3 小時；不會遇見新魚、稀有魚、閃光魚或紀錄級尺寸，也不會推進手動釣魚目標。${fishPool.length?`目前可遇見 ${fishPool.length} 種熟悉魚。`:"目前選擇沒有符合規則的熟悉魚種。"}</p><div class="modal-actions">${session?'<button class="soft-button" data-action="stop-auto-fishing">收起釣架</button>':'<button class="soft-button" data-action="close-modal">先不設定</button>'}<button class="primary-button" data-action="start-auto-fishing" ${ready?"":"disabled"}>${session?"套用新設定":"讓釣架待命"}</button></div></div></div>`;
+}
+
+function showAutoFishingSummary(summary) {
+  const view=autoFishingSummaryView(summary);if(!view)return;
+  const fishRows=view.fish.map(({fish,count})=>`<li><span>${fish.name}</span><b>${count} 尾</b></li>`).join("");
+  const familiarity=Object.values(view.familiarityGainsByFishId||{}).reduce((sum,count)=>sum+count,0);
+  modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal auto-fishing-summary"><span class="section-label">離線守候回報</span><h2>港灣替你收好了這段潮聲</h2><p class="modal-copy">${view.region?.portName||view.regionId} · ${view.spot?.name||view.spotId} · ${view.bait?.name||view.baitId} · ${formatAutoFishingDuration(view.countedMs)}</p><div class="auto-summary-stats"><div><small>帶回漁獲</small><b>${view.catchCount} 尾</b></div><div><small>魚餌消耗</small><b>${view.baitConsumed} 份</b></div><div><small>可售價值</small><b>${view.totalValue} 金幣</b></div></div>${fishRows?`<ul class="auto-summary-fish">${fishRows}</ul>`:'<div class="modal-empty">這次沒有帶回漁獲，也沒有消耗魚餌。</div>'}<p class="quiet-note">熟悉度筆記 +${familiarity} · ${escapeText(view.stopLabel)}</p><blockquote>${escapeText(view.poeticLine)}</blockquote><div class="modal-actions"><button class="primary-button" data-action="acknowledge-auto-fishing" data-id="${view.id}">收下這份回報</button></div></div></div>`;
 }
 
 function shopItem(item,type) {
@@ -1098,9 +1150,12 @@ function renderHome() {
     return `<button class="home-slot slot-${slot.id} ${item?"":"is-empty"}" style="${style}" data-action="slot" data-id="${slot.id}" title="${item?item.name:`空的${slot.name}插槽`}">${item?`<span>${item.icon}</span><small>${item.name}</small>`:""}</button>`;
   }).join("");
   const ownedFurniture=(interior?.ownedFurnitureIds||[]).map(furnitureById).filter(Boolean);
+  const autoOwned=state.autoFishing?.owned,autoSession=state.autoFishing?.activeSession;
+  const autoRack=autoOwned?`<button class="cabin-auto-rack ${autoSession?"is-active":""}" data-action="show-auto-fishing" title="${AUTO_FISHING_EQUIPMENT.name}"><i></i><span>${autoSession?"釣架待命":"自動釣架"}</span></button>`:"";
+  const autoCard=autoOwned?`<div class="card home-card auto-fishing-home-card"><span class="section-label">固定船用設備 · 不占插槽</span><h3>${AUTO_FISHING_EQUIPMENT.name}</h3><p>${autoSession?`已設定在${regionById(autoSession.regionId)?.portName||"目前港口"}的${SPOTS.find(spot=>spot.id===autoSession.spotId)?.name||"熟悉釣點"}；完整關閉遊戲後才會開始守候。`:"釣架已固定在船屋一角，設定後只會守著目前停泊的港口。"}</p><button class="${autoSession?"primary-button":"soft-button"}" data-action="show-auto-fishing">${autoSession?"查看或調整設定":"設定自動釣魚"}</button></div>`:"";
   content.innerHTML=`${panelHeading(ship.name,`目前船屋 · 航速 ${activeShipSpeed(state).toFixed(2)}×。外面是未知的海，這裡是永遠為你亮著燈的家。`)}
-    ${renderAquariumPanel()}<div class="home-layout"><div class="cabin-view theme-${scene?.theme||"default"} lighting-${interior?.lightingId||"default"}" data-ship="${ship.id}"><div class="cabin-fixed-structure fixed-bed-platform"><span>固定床台</span></div><div class="cabin-fixed-structure fixed-chart-desk"><span>航圖桌</span></div><div class="cabin-fixed-structure fixed-journal-shelf"><span>日誌架</span></div><div class="cabin-glow"></div><div class="cabin-window"><i class="window-rain"></i></div>${slots}<div class="cabin-identity"><b>${ship.name}</b><small>${lighting}</small></div></div>
-    <aside class="home-side">${renderHomeChartCard()}<div class="card home-card logbook-home-card"><span class="section-label">固定日誌架 · ${state.journal.unreadEntryIds.length} 篇未讀</span><h3>${filterJournalEntries(state.journal,"all")[0]?.title||"把潮聲整理成冊"}</h3><p>永久相遇頁與今日潮記都收在同一本冊子裡；空船也能免費閱讀。</p><button class="soft-button" data-action="show-logbook">翻開航海日誌</button></div><div class="card home-card"><span class="section-label">休息一下</span><h3>${TIMES[state.timeIndex].name}的船屋</h3><p>${state.weather==="rain"?"細雨落在窗上，固定床台與室內暖光讓木牆顯得更加溫柔。":"光線從舷窗落進來，船身隨著海面緩緩呼吸。即使沒有添購寢具，也能安心休息。"}</p><button class="primary-button sleep-button" data-action="sleep">睡到下一個時段</button></div><div class="card home-card"><span class="section-label">${ship.name}的家具</span><div class="owned-list">${ownedFurniture.length?ownedFurniture.map(item=>`<button class="owned-chip ${interior.placedFurniture[item.slot]===item.id?"is-placed":""}" data-action="place-furniture" data-id="${item.id}">${item.icon} ${item.name}</button>`).join(""):'<p class="quiet-note">這艘船還沒有可替換家具；固定床台、航圖桌與水族箱仍可使用。</p>'}</div></div><div class="card home-card"><span class="section-label">圖鑑里程碑</span><div class="milestone-list">${MILESTONES.map(m=>`<div class="milestone-row ${state.completedMilestones.includes(m.count)?"is-done":""}"><i></i><span>${m.count} 種 · ${m.reward}</span></div>`).join("")}</div></div></aside></div>`;
+    ${renderAquariumPanel()}<div class="home-layout"><div class="cabin-view theme-${scene?.theme||"default"} lighting-${interior?.lightingId||"default"}" data-ship="${ship.id}"><div class="cabin-fixed-structure fixed-bed-platform"><span>固定床台</span></div><div class="cabin-fixed-structure fixed-chart-desk"><span>航圖桌</span></div><div class="cabin-fixed-structure fixed-journal-shelf"><span>日誌架</span></div>${autoRack}<div class="cabin-glow"></div><div class="cabin-window"><i class="window-rain"></i></div>${slots}<div class="cabin-identity"><b>${ship.name}</b><small>${lighting}</small></div></div>
+    <aside class="home-side">${renderHomeChartCard()}<div class="card home-card logbook-home-card"><span class="section-label">固定日誌架 · ${state.journal.unreadEntryIds.length} 篇未讀</span><h3>${filterJournalEntries(state.journal,"all")[0]?.title||"把潮聲整理成冊"}</h3><p>永久相遇頁與今日潮記都收在同一本冊子裡；空船也能免費閱讀。</p><button class="soft-button" data-action="show-logbook">翻開航海日誌</button></div>${autoCard}<div class="card home-card"><span class="section-label">休息一下</span><h3>${TIMES[state.timeIndex].name}的船屋</h3><p>${state.weather==="rain"?"細雨落在窗上，固定床台與室內暖光讓木牆顯得更加溫柔。":"光線從舷窗落進來，船身隨著海面緩緩呼吸。即使沒有添購寢具，也能安心休息。"}</p><button class="primary-button sleep-button" data-action="sleep">睡到下一個時段</button></div><div class="card home-card"><span class="section-label">${ship.name}的家具</span><div class="owned-list">${ownedFurniture.length?ownedFurniture.map(item=>`<button class="owned-chip ${interior.placedFurniture[item.slot]===item.id?"is-placed":""}" data-action="place-furniture" data-id="${item.id}">${item.icon} ${item.name}</button>`).join(""):'<p class="quiet-note">這艘船還沒有可替換家具；固定床台、航圖桌與水族箱仍可使用。</p>'}</div></div><div class="card home-card"><span class="section-label">圖鑑里程碑</span><div class="milestone-list">${MILESTONES.map(m=>`<div class="milestone-row ${state.completedMilestones.includes(m.count)?"is-done":""}"><i></i><span>${m.count} 種 · ${m.reward}</span></div>`).join("")}</div></div></aside></div>`;
 }
 
 function placeFurniture(id) {
@@ -1285,7 +1340,7 @@ function showDeveloperTools() {
   modalRoot.innerHTML = `<div class="modal-backdrop"><div class="modal developer-modal"><span class="section-label">資料驅動測試入口</span><h2>Slice D 開發者控制</h2><p class="modal-copy">每日模板與居民委託選項直接由正式內容資料產生；所有操作只寫入獨立開發者存檔。</p><div class="developer-control-grid"><section class="developer-control-card"><h3>每日小目標</h3><label>卡片位置<select id="developer-daily-slot"><option value="0">第 1 張</option><option value="1">第 2 張</option><option value="2">第 3 張</option></select></label><label>正式模板<select id="developer-daily-template">${dailyOptions}</select></label><div class="developer-control-actions"><button class="soft-button" data-action="developer-set-daily">指定模板</button><button class="soft-button" data-action="developer-complete-daily">全部完成</button><button class="soft-button" data-action="developer-claim-daily">領取完成</button><button class="soft-button" data-action="developer-next-day">推進航海日</button><button class="soft-button" data-action="developer-reset-daily">重置今日</button></div></section><section class="developer-control-card"><h3>居民委託</h3><label>居民<select id="developer-resident">${residentOptions}</select></label><label>正式模板<select id="developer-commission-template">${commissionOptions}</select></label><p class="quiet-note">${active ? `進行中：${active.title} · ${active.progress}/${active.goal}` : "目前沒有 active 委託"}</p><div class="developer-control-actions"><button class="soft-button" data-action="developer-set-offer">指定提案</button><button class="soft-button" data-action="developer-accept-offer">接受提案</button><button class="soft-button" data-action="developer-complete-commission">完成進度</button><button class="soft-button" data-action="developer-deliver-commission">交付</button><button class="soft-button" data-action="developer-drop-commission">放下</button><button class="soft-button" data-action="developer-clear-commission-history">清除歷史</button></div></section></div><div class="modal-actions"><button class="primary-button" data-action="close-modal">完成測試</button></div></div></div>`;
   const travelStatus = getTravelStatus(state.world);
   const scaleOptions = DEVELOPER_TRAVEL_SCALES.map(scale => `<option value="${scale}" ${state.travelSettings.developerDurationScale === scale ? "selected" : ""}>${scale === 1 ? "正式速度 100%" : `測試速度 ${Math.round(scale * 100)}%`}</option>`).join("");
-  $(".developer-modal h2")?.replaceChildren("v0.5 Slice D 整合控制");
+  $(".developer-modal h2")?.replaceChildren("v0.5 Slice E 整合控制");
   $(".developer-modal .modal-copy")?.replaceChildren("既有旅程控制與 v5 事件、潮光帳本集中於此；全部操作只寫入獨立開發者存檔。");
   $(".developer-control-grid")?.insertAdjacentHTML("beforeend", `<section class="developer-control-card"><h3>正式航線</h3><label>航程時間比例<select id="developer-travel-scale">${scaleOptions}</select></label><p class="quiet-note">${travelStatus ? `航行中：${travelStatus.route.name} · ${travelStatus.segment}/${travelStatus.totalSegments}` : state.world.docking?.status === "offshore" ? `已抵達${regionById(state.world.docking.regionId)?.name || "目的地"}外海` : "目前安全停泊"}</p><div class="developer-control-actions"><button class="soft-button" data-action="developer-set-travel-scale">套用比例</button><button class="soft-button" data-action="developer-arrive-travel" ${travelStatus ? "" : "disabled"}>立即抵達外海</button><button class="soft-button" data-action="developer-reset-route">重置首條航線</button></div></section>`);
   const regionOptions = REGIONS.filter(region => region.status === "available").map(region => `<option value="${region.id}" ${state.world.currentRegionId === region.id ? "selected" : ""}>${region.name} · ${region.portName}</option>`).join("");
@@ -1306,6 +1361,9 @@ function showDeveloperTools() {
   $(".developer-control-grid")?.insertAdjacentHTML("beforeend", `<section class="developer-control-card"><h3>船別家具與燈光</h3><label>${activeShip(state).name}燈光<select id="developer-ship-lighting">${lightingOptions}</select></label><p class="quiet-note">擁有 ${activeInterior?.ownedFurnitureIds.length||0}/${activeShipFurnitureCatalog(state).length} · 已配置 ${Object.values(activeInterior?.placedFurniture||{}).filter(Boolean).length}/${SHIP_SLOT_TYPES.length} · 失效引用 ${invalidInteriorRefs.length}</p><div class="developer-control-actions"><button class="soft-button" data-action="developer-fill-ship-furniture">購齊並填入</button><button class="soft-button" data-action="developer-clear-ship-furniture">清除船別家具</button><button class="soft-button" data-action="developer-reset-ship-slots">重置插槽</button><button class="soft-button" data-action="developer-set-ship-lighting">套用燈光</button><button class="soft-button" data-action="developer-inspect-interiors">檢查失效引用</button></div></section>`);
   const journalOptions=JOURNAL_EVENT_TEMPLATES.map(template=>`<option value="${template.eventType}">${template.entryType} · ${template.eventType}</option>`).join("");
   $(".developer-control-grid")?.insertAdjacentHTML("beforeend", `<section class="developer-control-card"><h3>初遇與航海日誌</h3><label>永久頁事件<select id="developer-journal-event">${journalOptions}</select></label><p class="quiet-note">永久 ${state.journal.permanentEntries.length} · 潮記 ${state.journal.dailyEntries.length} · 十日摘要 ${state.journal.dailyArchives.length} · 未讀 ${state.journal.unreadEntryIds.length}</p><div class="developer-control-actions"><button class="soft-button" data-action="developer-emit-journal">發送新事件</button><button class="soft-button" data-action="developer-resend-journal">重送驗證去重</button><button class="soft-button" data-action="developer-fill-journal">填滿 181 篇潮記</button><button class="soft-button" data-action="developer-check-journal">檢查頁面引用</button><button class="soft-button" data-action="show-logbook">開啟日誌</button></div></section>`);
+  const autoSession=state.autoFishing?.activeSession,autoSummary=state.autoFishing?.lastSummary;
+  const autoScenarios=[["returned","正常返回 · 20 分"],["returned-early","提早返回"],["bait-empty","魚餌耗盡"],["three-hour-limit","三小時上限"],["clock-rollback","時間倒退"],["no-eligible-fish","無合格魚種"],["region-changed","停泊海域改變"],["departed","直接出航停止"],["manual","手動收起"]].map(([value,label])=>`<option value="${value}">${label}</option>`).join("");
+  $(".developer-control-grid")?.insertAdjacentHTML("beforeend", `<section class="developer-control-card"><h3>靜潮自動釣架</h3><label>停止情境<select id="developer-auto-scenario">${autoScenarios}</select></label><p class="quiet-note">${state.autoFishing?.owned?"已擁有":"未擁有"} · ${autoSession?`${autoSession.spotId} / ${autoSession.baitId} 待命`:"未設定"} · ${autoSummary?`最近 ${autoSummary.catchCount} 尾 / ${autoSummary.stopReason}`:"尚無回報"}</p><div class="developer-control-actions"><button class="soft-button" data-action="show-auto-fishing" ${state.autoFishing?.owned?"":"disabled"}>固定種子設定</button><button class="soft-button" data-action="developer-auto-owned">重置為已擁有</button><button class="soft-button" data-action="developer-auto-locked">重置為未擁有</button><button class="soft-button" data-action="developer-auto-simulate" ${autoSession?"":"disabled"}>模擬情境</button>${autoSummary&&!autoSummary.acknowledged?'<button class="soft-button" data-action="developer-auto-summary">顯示最近回報</button>':""}</div></section>`);
   $(".developer-control-grid")?.insertAdjacentHTML("beforeend", `<section class="developer-control-card"><h3>整合與存檔</h3><p class="quiet-note">存檔 v${SAVE_VERSION} · ${regionById(state.world.currentRegionId)?.name || state.world.currentRegionId} · DOM ${document.querySelectorAll("*").length} 節點 · SVG ${document.querySelectorAll("svg").length} 個</p><div class="developer-control-actions"><button class="soft-button" data-action="show-settings">顯示與縮放</button><button class="soft-button" data-action="show-save-export">匯出開發者存檔</button><button class="soft-button" data-action="show-save-import">匯入開發者存檔</button></div></section>`);
 }
 
@@ -1397,6 +1455,24 @@ document.addEventListener("click", event => {
     if(setAquariumDecoration(state,next)){saveGame();renderHome();toast(next?"水族箱已亮起拾光微粒":"水族箱裝飾已關閉");}
   }
   if(action==="shop-tab"){shopTab=id;renderShop();}
+  if(action==="buy-auto-fishing"){
+    const result=buyAutoFishingEquipment(state);
+    if(result.ok){sound.play("coin");saveGame();renderShop();toast(`${AUTO_FISHING_EQUIPMENT.name}已永久固定在每艘船上`,"gold");}
+    else toast("購買未完成；請確認潮聲居所、停泊狀態與金幣");
+  }
+  if(action==="show-auto-fishing")showAutoFishingSetup();
+  if(action==="start-auto-fishing"){
+    const result=configureAutoFishing(state,{spotId:$("#auto-fishing-spot")?.value,baitId:$("#auto-fishing-bait")?.value,seed:$("#auto-fishing-seed")?.value});
+    if(result.ok){saveGame();modalRoot.innerHTML="";render();toast("釣架已安靜待命；只有完整關閉遊戲才會開始計時","gold");}
+    else toast("設定未完成；請確認目前港口、已釣過的釣點、魚餌與熟悉魚種");
+  }
+  if(action==="stop-auto-fishing"){
+    const result=stopAutoFishing(state);
+    if(result.ok){saveGame();modalRoot.innerHTML="";render();toast("釣架已收線，沒有留下未結算的成果");}
+  }
+  if(action==="acknowledge-auto-fishing"&&acknowledgeAutoFishing(state,id)){
+    saveGame();modalRoot.innerHTML="";render();toast("漁獲與熟悉度筆記已收進航程紀錄","gold");setTimeout(flushJournalNotices,0);
+  }
   if(action==="prepare-buy-ship")showShipPurchaseConfirmation(id);
   if(action==="confirm-buy-ship"){
     const result=buyShip(state,id);
@@ -1521,6 +1597,16 @@ document.addEventListener("click", event => {
     const sourceIds=state.journal.permanentEntries.map(entry=>entry.sourceId),valid=sourceIds.length===new Set(sourceIds).size&&state.journal.dailyEntries.length<=180&&state.journal.permanentEntries.every(entry=>entry.body&&entry.title);
     toast(valid?"日誌來源、完整文字與 180 篇上限皆通過":"日誌檢查發現重複或缺漏",valid?"gold":"");
   }
+  if(action==="developer-auto-owned"&&developerResetAutoFishing(state,true))finishDeveloperAction("自動釣架已重置為永久擁有");
+  if(action==="developer-auto-locked"&&developerResetAutoFishing(state,false))finishDeveloperAction("自動釣架已重置為未擁有");
+  if(action==="developer-auto-simulate"){
+    const stopReason=$("#developer-auto-scenario")?.value;
+    const result=developerSimulateAutoFishing(state,{durationMs:20*60*1000,stopReason});
+    if(result.ok&&result.summary){saveGame();showAutoFishingSummary(result.summary);}
+    else if(result.ok)finishDeveloperAction(`釣架已依 ${stopReason} 情境安全停止`);
+    else toast("請先用固定種子完成一組自動釣魚設定");
+  }
+  if(action==="developer-auto-summary"&&state.autoFishing?.lastSummary)showAutoFishingSummary(state.autoFishing.lastSummary);
   if(action==="developer-own-ship"){
     const shipId=$("#developer-ship")?.value,owned=state.ships.ownedShipIds.includes(shipId);
     if(developerSetShipOwned(state,shipId,!owned))finishDeveloperAction(owned?"已移除測試船隻擁有狀態":"已加入測試船隻擁有狀態");
@@ -1591,7 +1677,17 @@ document.addEventListener("visibilitychange",()=>{
   if(document.visibilityState==="hidden")travelClockTick({forceSave:true});
   else {const result=travelClockTick();if(result.arrived||result.changed)render();syncTravelClock();}
 });
-window.addEventListener("pagehide",()=>{if(state.world?.travel)travelClockTick({forceSave:true});});
+function persistPageExit(event) {
+  if(event?.persisted||!gameIsActive())return;
+  if(state.world?.travel)travelClockTick();
+  markAutoFishingClosed(state,new Date().toISOString());
+  saveGame();
+}
+window.addEventListener("pagehide",persistPageExit);
+window.addEventListener("pageshow",event=>{
+  if(!event.persisted||!gameIsActive())return;
+  if(cancelAutoFishingClosed(state))saveGame();
+});
 
 $$(".nav-button").forEach(button=>button.addEventListener("click",()=>setView(button.dataset.view)));
 $("#continue-button").addEventListener("click",()=>startGame(false,"normal"));
@@ -1613,7 +1709,7 @@ setInterval(()=>{
   if(timeResult.autoClaims.length)setTimeout(()=>toast(`${timeResult.autoClaims.length} 項每日獎勵已自動收好`,"gold"),280);
   if(currentView==="home")renderHome();
 },300000);
-window.addEventListener("beforeunload",()=>saveGame());
+window.addEventListener("beforeunload",persistPageExit);
 state.settings=loadPreferences(state.settings);
 applyDisplaySettings();
 $("#continue-button").disabled=!CONTENT_VALIDATION.ok||!hasSave();

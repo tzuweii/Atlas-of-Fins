@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  ACHIEVEMENTS, AQUARIUM_DECORATIONS, BAITS, BAY_EVENTS, COMMISSION_TEMPLATES, CONTENT_VALIDATION,
+  ACHIEVEMENTS, AQUARIUM_DECORATIONS, AUTO_FISHING_EQUIPMENT, BAITS, BAY_EVENTS, COMMISSION_TEMPLATES, CONTENT_VALIDATION,
   CHART_REGION_POINTS, CHART_ROUTE_PATHS, DAILY_GOAL_TEMPLATES, FISH, FURNITURE, JOURNAL_EVENT_TEMPLATES, RARITY,
   REGIONS, RESIDENTS, RODS, ROUTES, SHIPS, SHIP_FURNITURE, SHIP_INTERIOR_SCENES,
   SPOTS, TIDEGLOW_SOURCES, TIMES
@@ -30,7 +30,8 @@ const currentCatalog = () => ({
   ships: structuredClone(SHIPS),
   shipFurniture: structuredClone(SHIP_FURNITURE),
   shipInteriors: structuredClone(SHIP_INTERIOR_SCENES),
-  journalTemplates: structuredClone(JOURNAL_EVENT_TEMPLATES)
+  journalTemplates: structuredClone(JOURNAL_EVENT_TEMPLATES),
+  autoFishingEquipment: [structuredClone(AUTO_FISHING_EQUIPMENT)]
 });
 
 test("current content catalog has unique IDs and valid references", () => {
@@ -136,4 +137,14 @@ test("journal templates reject duplicate event types, empty page types, and temp
   assert.ok(report.errors.some(error => error.collection === "journalTemplates" && error.code === "duplicate-event-type"));
   assert.ok(report.errors.some(error => error.collection === "journalTemplates" && error.code === "invalid-type"));
   assert.ok(report.errors.some(error => error.collection === "journalTemplates" && error.code === "invalid-retention"));
+});
+
+test("automatic fishing equipment validates its unlock ship and offline limits", () => {
+  const catalog = currentCatalog();
+  catalog.autoFishingEquipment[0].unlockShipId = "missing-ship";
+  catalog.autoFishingEquipment[0].catchIntervalMs = catalog.autoFishingEquipment[0].maxOfflineMs;
+  catalog.autoFishingEquipment[0].maxCatchCount = 2;
+  const report = validateContentCatalog(catalog);
+  assert.ok(report.errors.some(error => error.collection === "autoFishingEquipment" && error.code === "missing-reference"));
+  assert.ok(report.errors.some(error => error.collection === "autoFishingEquipment" && error.code === "invalid-limit"));
 });
