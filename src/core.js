@@ -1,7 +1,7 @@
 import {
   ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, AQUARIUM_DECORATIONS, BAITS, BAY_EVENTS,
   CHENGYE_ID, DAILY_GOAL_TEMPLATES, FISH, FURNITURE, LUMINOUS_ARCHIPELAGO_ID, MILESTONES, RARITY,
-  REGIONS, RODS, ROUTES, SHIPS, SHIP_FURNITURE, SLEEPING_TIDE_BAY_ID, SPOTS, TIDEGLOW_SOURCES, TIMES,
+  JOURNAL_EVENT_TEMPLATES, REGIONS, RODS, ROUTES, SHIPS, SHIP_FURNITURE, SLEEPING_TIDE_BAY_ID, SPOTS, TIDEGLOW_SOURCES, TIMES,
   getFishHabitat, getRegionFishingSpots, isRegionAvailable, shipFurnitureById as findShipFurnitureById
 } from "./data.js";
 import {
@@ -64,11 +64,17 @@ import {
   grantShipFurniture, placeShipFurniture as placeShipFurnitureState,
   purchaseShipFurniture, shipInterior, syncLegacyStarterFurniture
 } from "./systems/ship-interiors.js";
+import {
+  JOURNAL_VERSION, acknowledgeJournalNotices, allJournalEntries, applyJournalEvent,
+  createJournalState, developerFillDailyJournal, filterJournalEntries, markJournalEntriesRead,
+  normalizeJournalState, sealJournalDay
+} from "./systems/journal.js";
 
 export {
   BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, DEV_TEMP_SAVE_KEY, SAVE_KEY, SAVE_VERSION, TEMP_SAVE_KEY,
   SHIPS, SHIP_FURNITURE, TIDEGLOW_SOURCES, activeShip, activeShipSpeed, activeShipFurnitureCatalog,
   collectInvalidInteriorReferences, createDailyQuests, getShipPurchaseState, shipInterior,
+  acknowledgeJournalNotices, allJournalEntries, filterJournalEntries, markJournalEntriesRead,
   CHART_VIEW_LIMITS, canBeginChartRoute, createDefaultChartView, createDeveloperWorldState,
   createInitialWorldState, DEVELOPER_TRAVEL_SCALES, FAMILIAR_TRAVEL_DURATION_MS,
   FIRST_TRAVEL_DURATION_MS, getObservationHint, getRegionResearchStatus, getResidentStoryStatus,
@@ -88,23 +94,7 @@ function createShipShell(ownedFurniture = ["sleeping_bag"], placedFurniture = { 
 }
 
 function createJournalShell() {
-  return {
-    introCreated: true,
-    fishEncounterLineById: {},
-    permanentEntries: [{
-      id: "journal:intro",
-      eventId: null,
-      type: "intro",
-      sailingDay: 1,
-      occurredAt: null,
-      title: "把潮聲整理成冊",
-      body: "今天，我開始把走過的潮聲整理成冊。",
-      refs: {}
-    }],
-    dailyEntries: [],
-    dailyArchives: [],
-    unreadEntryIds: ["journal:intro"]
-  };
+  return createJournalState();
 }
 
 function createAutoFishingShell() {
@@ -611,16 +601,7 @@ export function migrateState(raw) {
         }
       }
     }, { starterInterior: createShipShell().interiorsByShipId[STARTER_SHIP_ID] });
-    const journal = raw.journal && typeof raw.journal === "object" ? raw.journal : {};
-    merged.journal = {
-      ...createJournalShell(),
-      ...journal,
-      fishEncounterLineById: journal.fishEncounterLineById && typeof journal.fishEncounterLineById === "object" ? { ...journal.fishEncounterLineById } : {},
-      permanentEntries: Array.isArray(journal.permanentEntries) ? journal.permanentEntries.filter(entry => entry && typeof entry === "object") : createJournalShell().permanentEntries,
-      dailyEntries: Array.isArray(journal.dailyEntries) ? journal.dailyEntries.filter(entry => entry && typeof entry === "object") : [],
-      dailyArchives: Array.isArray(journal.dailyArchives) ? journal.dailyArchives.filter(entry => entry && typeof entry === "object") : [],
-      unreadEntryIds: [...new Set(Array.isArray(journal.unreadEntryIds) ? journal.unreadEntryIds.filter(id => typeof id === "string") : [])]
-    };
+    merged.journal = normalizeJournalState(raw.journal);
     merged.autoFishing = {
       ...createAutoFishingShell(),
       ...(raw.autoFishing && typeof raw.autoFishing === "object" ? raw.autoFishing : {})
@@ -736,7 +717,12 @@ export function isCurrentSaveSchema(raw) {
     && raw.ships.catalogVersion === SHIP_CATALOG_VERSION
     && raw.ships.interiorVersion === SHIP_INTERIOR_VERSION
     && raw.ships.ownedShipIds.every(shipId => raw.ships.interiorsByShipId?.[shipId]?.placedFurniture)
-    && raw?.journal && Array.isArray(raw.journal.permanentEntries)
+    && raw?.journal && raw.journal.version === JOURNAL_VERSION
+    && raw.journal.fishEncounterLineById && typeof raw.journal.fishEncounterLineById === "object"
+    && Array.isArray(raw.journal.permanentEntries) && Array.isArray(raw.journal.dailyEntries)
+    && Array.isArray(raw.journal.dailyArchives) && Array.isArray(raw.journal.unreadEntryIds)
+    && Array.isArray(raw.journal.pendingNoticeEntryIds)
+    && raw.journal.dailyEntries.filter(entry => entry?.sealed).length <= 180
     && raw?.autoFishing && typeof raw.autoFishing === "object";
 }
 
@@ -965,12 +951,18 @@ function gameEventConsumers(state) {
       state.tideglow = result.state;
       const newlyRevealed = result.awarded ? revealEligibleShips(state) : [];
       return { ok: true, ...result, newlyRevealed };
+    },
+    journal: event => {
+      const result = applyJournalEvent(state.journal, event);
+      state.journal = result.state;
+      return result;
     }
   };
 }
 
 export function dispatchGameEvent(state, input, { consumerIds = [] } = {}) {
-  const enqueued = enqueueGameEvent(state.gameEvents, { ...gameEventContext(state, input), ...input }, { consumerIds });
+  const requiredConsumers = [...new Set([...consumerIds, "journal"])];
+  const enqueued = enqueueGameEvent(state.gameEvents, { ...gameEventContext(state, input), ...input }, { consumerIds: requiredConsumers });
   state.gameEvents = enqueued.state;
   if (!enqueued.event || enqueued.duplicate) return { ...enqueued, complete: Boolean(enqueued.duplicate), results: {} };
   const consumed = consumeGameEvent(state.gameEvents, enqueued.event.eventId, gameEventConsumers(state));
@@ -1052,7 +1044,8 @@ export function recordCatch(state, caught, baitId = state.equippedBait) {
     regionId: context.regionId,
     spotId: context.spotId,
     timeId: context.timeId,
-    weather: context.weather
+    weather: context.weather,
+    isNew, isFirstShimmer, isLengthRecord, isWeightRecord
   });
   const discoveryEvent = isNew
     ? emitTideglowEvent(state, "fish.discovered", { fishId: fish.id }, {
@@ -1065,6 +1058,17 @@ export function recordCatch(state, caught, baitId = state.equippedBait) {
     })
     : null;
   const bayEventUpdate = updateBayEventProgress(state, caught);
+  const bayEventJournal = bayEventUpdate?.updated ? dispatchGameEvent(state, {
+    type: "region.event.progress",
+    source: "manual",
+    occurredAt: caught.caughtAt,
+    regionId: context.regionId,
+    spotId: context.spotId,
+    timeId: context.timeId,
+    weatherId: context.weather,
+    refs: { eventId: bayEventUpdate.event.id, fishId: fish.id },
+    payload: { completed: bayEventUpdate.completed }
+  }) : null;
   const completedAchievements = evaluateAchievements(state);
   return {
     isNew,
@@ -1077,6 +1081,7 @@ export function recordCatch(state, caught, baitId = state.equippedBait) {
     researchUpdate: progressUpdate.researchUpdate,
     tideglowEvents: [discoveryEvent, ...(progressUpdate.researchUpdate?.tideglowEvents || [])].filter(Boolean),
     bayEventUpdate,
+    journalEvents: [progressUpdate.dispatched, discoveryEvent, bayEventJournal].filter(Boolean),
     completedAchievements,
     record: state.discovered[caught.fishId]
   };
@@ -1238,10 +1243,21 @@ export function observeAtSpot(state, spotId, random = Math.random, observedAt = 
       source: "manual", occurredAt: observedAt, regionId: state.world.currentRegionId, spotId
     })
     : null;
+  const wonderEvent = result.kind === "wonder"
+    ? dispatchGameEvent(state, {
+      type: "wonder.recorded",
+      source: "manual",
+      occurredAt: observedAt,
+      regionId: state.world.currentRegionId,
+      spotId,
+      refs: { wonderId: result.wonder.id, regionId: state.world.currentRegionId }
+    })
+    : null;
   return {
     ...result,
     researchUpdate: progressUpdate.researchUpdate,
-    tideglowEvents: [observationEvent, ...(progressUpdate.researchUpdate?.tideglowEvents || [])].filter(Boolean)
+    tideglowEvents: [observationEvent, ...(progressUpdate.researchUpdate?.tideglowEvents || [])].filter(Boolean),
+    journalEvents: [observationEvent, wonderEvent, ...(progressUpdate.researchUpdate?.tideglowEvents || [])].filter(Boolean)
   };
 }
 
@@ -1291,8 +1307,18 @@ export function beginRouteTravel(state, routeId, now = Date.now()) {
   const ship = activeShip(state);
   const speedMultiplier = activeShipSpeed(state);
   const result = beginWorldTravel(state.world, routeId, now, { scale, speedMultiplier, shipId: ship.id });
-  if (result.ok) state.world = result.world;
-  return result;
+  if (!result.ok) return result;
+  state.world = result.world;
+  const travel = state.world.travel;
+  const journalEvent = dispatchGameEvent(state, {
+    type: "route.departed",
+    source: "manual",
+    occurredAt: new Date(now).toISOString(),
+    regionId: travel.fromRegionId,
+    shipId: travel.shipId,
+    refs: { routeId, fromRegionId: travel.fromRegionId, toRegionId: travel.toRegionId, shipId: travel.shipId }
+  });
+  return { ...result, journalEvent };
 }
 
 export function progressTravel(state, now = Date.now()) {
@@ -1317,9 +1343,16 @@ export function dockAtDestination(state, now = Date.now()) {
   const arrivalEvent = result.firstArrival
     ? emitTideglowEvent(state, "region.arrived", { regionId: result.destinationId }, { regionId: result.destinationId })
     : null;
+  const revisitEvent = result.firstArrival ? null : dispatchGameEvent(state, {
+    type: "region.revisited",
+    source: "manual",
+    occurredAt: new Date(now).toISOString(),
+    regionId: result.destinationId,
+    refs: { regionId: result.destinationId }
+  });
   const researchUpdate = evaluateResearchWithEvents(state, result.destinationId);
   applyBayEventWorldConditions(state);
-  return { ...result, researchUpdate, tideglowEvents: [arrivalEvent, ...(researchUpdate.tideglowEvents || [])].filter(Boolean) };
+  return { ...result, researchUpdate, tideglowEvents: [arrivalEvent, ...(researchUpdate.tideglowEvents || [])].filter(Boolean), journalEvents: [arrivalEvent, revisitEvent, ...(researchUpdate.tideglowEvents || [])].filter(Boolean) };
 }
 
 export function developerAdjustTideglow(state, delta) {
@@ -1334,8 +1367,40 @@ export function developerEmitTideglowEvent(state, eventType, refs = {}) {
   return emitTideglowEvent(state, eventType, refs, { source: "developer" });
 }
 
+export function developerEmitJournalEvent(state, eventType, refs = {}, eventId = null) {
+  if (!state?.developerMode || !JOURNAL_EVENT_TEMPLATES.some(template => template.eventType === eventType)) return null;
+  return dispatchGameEvent(state, {
+    ...(eventId ? { eventId } : {}),
+    type: eventType,
+    source: "developer",
+    ...(refs.regionId ? { regionId: refs.regionId } : {}),
+    ...(refs.shipId ? { shipId: refs.shipId } : {}),
+    refs
+  });
+}
+
+export function developerFillJournalArchive(state, count = 181) {
+  if (!state?.developerMode) return false;
+  state.journal = developerFillDailyJournal(state.journal, {
+    startDay: Math.max(1, state.day - Math.max(0, Math.floor(Number(count) || 181)) + 1),
+    count,
+    regionId: state.world?.currentRegionId,
+    shipId: state.ships?.activeShipId
+  });
+  return true;
+}
+
 export function buyShip(state, shipId, purchasedAt) {
-  return purchaseShipState(state, shipId, purchasedAt);
+  const result = purchaseShipState(state, shipId, purchasedAt);
+  if (!result.ok) return result;
+  const journalEvent = dispatchGameEvent(state, {
+    type: "ship.purchased",
+    source: "manual",
+    occurredAt: purchasedAt,
+    refs: { shipId: result.ship.id },
+    shipId: result.ship.id
+  });
+  return { ...result, journalEvent };
 }
 
 export function switchActiveShip(state, shipId) {
@@ -1534,6 +1599,7 @@ export function advanceTime(state, random = Math.random) {
   const result = { dayChanged: false, autoClaims: [] };
   state.timeIndex = (state.timeIndex + 1) % TIMES.length;
   if (state.timeIndex === 0) {
+    state.journal = sealJournalDay(state.journal, state.day);
     result.autoClaims = claimAllCompletedDailyGoals(state);
     state.day += 1;
     result.dayChanged = true;

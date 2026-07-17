@@ -92,7 +92,7 @@ assert.match(await evaluate("document.querySelector('#time-label').innerText"), 
 assert.match(await evaluate("document.querySelector('.bay-event-card[data-bay-event=\"moonlit_tide\"]').innerText"), /月光潮汐[\s\S]*礁石邊緣／海灣深水區[\s\S]*0 \/ 2[\s\S]*目前生效/);
 assert.equal(await evaluate("document.querySelector('#developer-tools-button').hidden"), false);
 await click("#developer-tools-button");
-assert.match(await evaluate("document.querySelector('.developer-modal').innerText"), /v0.5 Slice C 整合控制[\s\S]*每日小目標[\s\S]*居民委託[\s\S]*正式航線[\s\S]*琉光群島內容[\s\S]*觀察、研究與澄野[\s\S]*潮光與事件帳本[\s\S]*船別家具與燈光[\s\S]*整合與存檔/);
+assert.match(await evaluate("document.querySelector('.developer-modal').innerText"), /v0.5 Slice D 整合控制[\s\S]*每日小目標[\s\S]*居民委託[\s\S]*正式航線[\s\S]*琉光群島內容[\s\S]*觀察、研究與澄野[\s\S]*潮光與事件帳本[\s\S]*船別家具與燈光[\s\S]*初遇與航海日誌[\s\S]*整合與存檔/);
 assert.equal(await evaluate("document.querySelectorAll('#developer-daily-template option').length"), 5);
 assert.equal(await evaluate("document.querySelectorAll('#developer-commission-template option').length"), 13);
 assert.equal(await evaluate("document.querySelectorAll('#developer-travel-scale option').length"), 3);
@@ -100,6 +100,7 @@ assert.equal(await evaluate("document.querySelectorAll('#developer-region option
 assert.equal(await evaluate("document.querySelectorAll('#developer-region-event option').length"), 3);
 assert.equal(await evaluate("document.querySelectorAll('#developer-observation-subject option').length"), 2);
 assert.equal(await evaluate("document.querySelectorAll('#developer-tideglow-source option').length"), 6);
+assert.equal(await evaluate("document.querySelectorAll('#developer-journal-event option').length"), 11);
 assert.equal(await evaluate("document.querySelectorAll('#developer-ship option').length"), 6);
 assert.equal(await evaluate("document.querySelectorAll('#developer-ship-lighting option').length"), 3);
 assert.match(await evaluate("document.querySelector('.developer-modal').innerText"), /遠航書房燈光[\s\S]*擁有 8\/8[\s\S]*失效引用 0/);
@@ -109,6 +110,19 @@ await click('[data-action="developer-emit-tideglow"]');
 assert.equal(await evaluate("JSON.parse(localStorage.getItem('atlas-of-fins.dev-save')).tideglow.total"), 1);
 await click('[data-action="developer-emit-tideglow"]');
 assert.equal(await evaluate("JSON.parse(localStorage.getItem('atlas-of-fins.dev-save')).tideglow.total"), 1);
+await evaluate(`document.querySelector('#developer-journal-event').value = 'world.completed'`);
+await click('[data-action="developer-emit-journal"]');
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.dev-save")).journal.permanentEntries.filter(entry => entry.sourceId === "world-complete").length`), 1);
+await click('[data-action="developer-fill-journal"]');
+assert.deepEqual(await evaluate(`(() => { const journal=JSON.parse(localStorage.getItem("atlas-of-fins.dev-save")).journal; return {daily:journal.dailyEntries.length,archives:journal.dailyArchives.length,permanent:journal.permanentEntries.length}; })()`), { daily:171, archives:1, permanent:2 });
+await click('[data-action="developer-check-journal"]');
+await click('[data-action="show-logbook"]');
+await click('[data-action="select-logbook-entry"][data-id="journal:world-complete"]');
+assert.match(await evaluate("document.querySelector('.logbook-modal').innerText"), /航海日誌[\s\S]*第一張航圖完成[\s\S]*船仍會隨潮水呼吸[\s\S]*模板更新不會改寫/);
+assert.equal(await evaluate("document.querySelectorAll('.logbook-layout > *').length"), 2);
+assert.equal(await evaluate("Boolean(document.querySelector('[data-action=\"logbook-filter\"][data-filter=\"day\"]'))"), true);
+await click('[data-action="close-modal"]');
+await click('#developer-tools-button');
 await click('[data-action="show-settings"]');
 const standardHeadingSize = await evaluate("parseFloat(getComputedStyle(document.querySelector('.settings-modal h2')).fontSize)");
 await click('[data-action="set-text-scale"][data-id="large"]');
@@ -375,6 +389,9 @@ await click('[data-view="journal"]');
 assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /探索進度[\s\S]*1 \/ 41/);
 assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /初次相遇[\s\S]*初次：/);
 assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /閃光紀錄 1 次/);
+const firstCaughtFishId = await evaluate(`Object.keys(JSON.parse(localStorage.getItem("atlas-of-fins.save")).discovered)[0]`);
+await evaluate(`document.querySelector('[data-action="select-fish"][data-id="${firstCaughtFishId}"]').click()`);
+assert.match(await evaluate("document.querySelector('.fish-detail').innerText"), /初遇短句/);
 
 await click("#menu-button");
 await click('[data-action="to-title"]');
@@ -733,7 +750,7 @@ assert.deepEqual(await evaluate("JSON.parse(localStorage.getItem('atlas-of-fins.
 assert.equal(await evaluate("document.querySelector('#app').classList.contains('is-switching-ship')"), true);
 await click('[data-action="shop-tab"][data-id="furniture"]');
 assert.equal(await evaluate("document.querySelectorAll('.shop-item').length"), 8);
-assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /潮聲居所專屬家具[\s\S]*潮紋織毯[\s\S]*圓窗軟床/);
+assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /潮聲居所\s*專屬家具[\s\S]*潮紋織毯[\s\S]*圓窗軟床/);
 await click('[data-action="buy-furniture"][data-id="tidewhisper_woven_quilt"]');
 assert.equal(await evaluate("JSON.parse(localStorage.getItem('atlas-of-fins.save')).money"), 8020);
 assert.equal(await evaluate("JSON.parse(localStorage.getItem('atlas-of-fins.save')).ships.interiorsByShipId.tidewhisper_residence.placedFurniture.sleep"), "tidewhisper_woven_quilt");
@@ -742,13 +759,19 @@ assert.equal(await evaluate("document.querySelector('.cabin-view').dataset.ship"
 assert.equal(await evaluate("document.querySelector('.cabin-view').classList.contains('theme-round-window-nest')"), true);
 assert.equal(await evaluate("document.querySelector('.aquarium-panel').classList.contains('aquarium-frame-seafoam-ceramic')"), true);
 assert.match(await evaluate("document.querySelector('.cabin-view').innerText"), /固定床台[\s\S]*航圖桌[\s\S]*潮聲居所/);
+await click('[data-action="show-logbook"]');
+await click('[data-action="select-logbook-entry"][data-id="journal:ship:tidewhisper_residence"]');
+assert.match(await evaluate("document.querySelector('.logbook-page').innerText"), /新船靠岸 · 潮聲居所[\s\S]*潮光沒有被花掉[\s\S]*港口便多出一盞屬於我的燈/);
+assert.equal(await evaluate("Boolean(document.querySelector('[data-action=\"logbook-cross-link\"][data-kind=\"ship\"]'))"), true);
+await click('[data-action="logbook-cross-link"][data-kind="ship"]');
+assert.equal(await evaluate("document.querySelectorAll('[data-ship-card]').length"), 6);
 await click('[data-view="shop"]');
 await click('[data-action="shop-tab"][data-id="ships"]');
 await click('[data-action="switch-ship"][data-id="drifting_home"]');
 assert.equal(await evaluate("JSON.parse(localStorage.getItem('atlas-of-fins.save')).ships.activeShipId"), "drifting_home");
 await click('[data-action="shop-tab"][data-id="furniture"]');
 assert.equal(await evaluate("document.querySelectorAll('.shop-item').length"), 10);
-assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /漂流小屋專屬家具[\s\S]*基礎睡袋/);
+assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /漂流小屋\s*專屬家具[\s\S]*基礎睡袋/);
 assert.equal(exceptions.length, 0, `No uncaught browser exceptions: ${exceptions.join(", ")}`);
 
 if (process.env.SCREENSHOT) {

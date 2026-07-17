@@ -2,7 +2,7 @@ const COLLECTION_NAMES = [
   "times", "spots", "rods", "baits", "furniture", "fish", "dailyGoals",
   "events", "achievements", "aquariumDecorations", "regions", "routes", "residents", "commissions",
   "observations", "wonders", "researchNodes", "residentStoryScenes", "chartRegions", "chartRoutes",
-  "tideglowSources", "ships", "shipFurniture", "shipInteriors"
+  "tideglowSources", "ships", "shipFurniture", "shipInteriors", "journalTemplates"
 ];
 
 const WEATHER_IDS = new Set(["sunny", "rain"]);
@@ -371,6 +371,21 @@ export function validateContentCatalog(content = {}) {
     }
     if (!Array.isArray(scene?.fixedStructures) || scene.fixedStructures.length < 4) {
       addError("missing-fixed-structure", "shipInteriors", scene?.id, `shipInteriors[${scene?.id || "missing-id"}].fixedStructures`, "每艘船都需要固定床台、航圖桌、日誌架與水族箱基座");
+    }
+  }
+
+  const journalEventTypes = new Set();
+  for (const template of collections.journalTemplates) {
+    if (typeof template?.eventType !== "string" || !template.eventType.trim()) {
+      addError("invalid-type", "journalTemplates", template?.id, `journalTemplates[${template?.id || "missing-id"}].eventType`, "日誌模板需要標準事件類型");
+    } else if (journalEventTypes.has(template.eventType)) {
+      addError("duplicate-event-type", "journalTemplates", template?.id, `journalTemplates[${template.id}].eventType`, `日誌事件類型「${template.eventType}」重複`);
+    } else journalEventTypes.add(template.eventType);
+    if (typeof template?.entryType !== "string" || !template.entryType.trim()) {
+      addError("invalid-type", "journalTemplates", template?.id, `journalTemplates[${template?.id || "missing-id"}].entryType`, "日誌模板需要頁面類型");
+    }
+    if (template?.permanent !== true) {
+      addError("invalid-retention", "journalTemplates", template?.id, `journalTemplates[${template?.id || "missing-id"}].permanent`, "世界事件日誌模板必須永久保存");
     }
   }
 

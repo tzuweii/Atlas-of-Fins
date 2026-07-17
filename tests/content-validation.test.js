@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   ACHIEVEMENTS, AQUARIUM_DECORATIONS, BAITS, BAY_EVENTS, COMMISSION_TEMPLATES, CONTENT_VALIDATION,
-  CHART_REGION_POINTS, CHART_ROUTE_PATHS, DAILY_GOAL_TEMPLATES, FISH, FURNITURE, RARITY,
+  CHART_REGION_POINTS, CHART_ROUTE_PATHS, DAILY_GOAL_TEMPLATES, FISH, FURNITURE, JOURNAL_EVENT_TEMPLATES, RARITY,
   REGIONS, RESIDENTS, RODS, ROUTES, SHIPS, SHIP_FURNITURE, SHIP_INTERIOR_SCENES,
   SPOTS, TIDEGLOW_SOURCES, TIMES
 } from "../src/data.js";
@@ -29,7 +29,8 @@ const currentCatalog = () => ({
   tideglowSources: structuredClone(TIDEGLOW_SOURCES),
   ships: structuredClone(SHIPS),
   shipFurniture: structuredClone(SHIP_FURNITURE),
-  shipInteriors: structuredClone(SHIP_INTERIOR_SCENES)
+  shipInteriors: structuredClone(SHIP_INTERIOR_SCENES),
+  journalTemplates: structuredClone(JOURNAL_EVENT_TEMPLATES)
 });
 
 test("current content catalog has unique IDs and valid references", () => {
@@ -124,4 +125,15 @@ test("ship interiors validate ship references, common slots, coordinates, and pr
   assert.ok(report.errors.some(error => error.code === "invalid-slot"));
   assert.ok(report.errors.some(error => error.code === "missing-slot"));
   assert.ok(report.errors.some(error => error.code === "invalid-position"));
+});
+
+test("journal templates reject duplicate event types, empty page types, and temporary retention", () => {
+  const catalog = currentCatalog();
+  catalog.journalTemplates[1].eventType = catalog.journalTemplates[0].eventType;
+  catalog.journalTemplates[2].entryType = "";
+  catalog.journalTemplates[3].permanent = false;
+  const report = validateContentCatalog(catalog);
+  assert.ok(report.errors.some(error => error.collection === "journalTemplates" && error.code === "duplicate-event-type"));
+  assert.ok(report.errors.some(error => error.collection === "journalTemplates" && error.code === "invalid-type"));
+  assert.ok(report.errors.some(error => error.collection === "journalTemplates" && error.code === "invalid-retention"));
 });

@@ -5,6 +5,10 @@ import {
   FURNITURE, SHIP_FURNITURE, SHIP_INTERIOR_SCENES, SHIP_LIGHTING, SHIP_SLOT_TYPES,
   getShipFurniture, shipFurnitureById, shipInteriorSceneByShipId
 } from "./data/ship-interiors.js";
+import {
+  DAILY_POETIC_LINES, FISH_ENCOUNTER_LINES, JOURNAL_ENTRY_TYPE_LABELS, JOURNAL_EVENT_TEMPLATES,
+  JOURNAL_TEMPLATE_VERSION, journalTemplateByEventType
+} from "./data/journal-templates.js";
 import { DAILY_GOAL_TEMPLATES, QUEST_TEMPLATES } from "./data/daily-goals.js";
 import { COMMISSION_TEMPLATES, commissionTemplateById, getResidentCommissionTemplates } from "./data/commissions.js";
 import {
@@ -58,7 +62,9 @@ export {
   TIDEGLOW_SOURCES, tideglowSourceByEventType, tideglowSourceId,
   IMPLEMENTED_SHIP_IDS, SHIPS, shipById,
   FURNITURE, SHIP_FURNITURE, SHIP_INTERIOR_SCENES, SHIP_LIGHTING, SHIP_SLOT_TYPES,
-  getShipFurniture, shipFurnitureById, shipInteriorSceneByShipId
+  getShipFurniture, shipFurnitureById, shipInteriorSceneByShipId,
+  DAILY_POETIC_LINES, FISH_ENCOUNTER_LINES, JOURNAL_ENTRY_TYPE_LABELS, JOURNAL_EVENT_TEMPLATES,
+  JOURNAL_TEMPLATE_VERSION, journalTemplateByEventType
 };
 
 export const TIMES = [
@@ -458,5 +464,6 @@ export const CONTENT_VALIDATION = validateContentCatalog({
   tideglowSources: TIDEGLOW_SOURCES,
   ships: SHIPS,
   shipFurniture: SHIP_FURNITURE,
-  shipInteriors: SHIP_INTERIOR_SCENES
+  shipInteriors: SHIP_INTERIOR_SCENES,
+  journalTemplates: JOURNAL_EVENT_TEMPLATES
 });

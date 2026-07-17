@@ -224,3 +224,28 @@ test("Slice B v5 save is backed up before same-version Slice C interior normaliz
   assert.equal(result.state.ships.interiorVersion, 1);
   assert.deepEqual(result.state.ships.interiorsByShipId.drifting_home.ownedFurnitureIds, ["sleeping_bag"]);
 });
+
+test("Slice C v5 save is backed up before same-version Slice D journal normalization", () => {
+  const alpha3 = createInitialState();
+  alpha3.journal = {
+    introCreated: true,
+    fishEncounterLineById: {},
+    permanentEntries: [{
+      id: "journal:intro", eventId: null, type: "intro", sailingDay: 1, occurredAt: null,
+      title: "把潮聲整理成冊", body: "今天，我開始把走過的潮聲整理成冊。", refs: {}
+    }],
+    dailyEntries: [],
+    dailyArchives: [],
+    unreadEntryIds: ["journal:intro"]
+  };
+  const alpha3Text = JSON.stringify(alpha3);
+  const storage = new MemoryStorage({ [SAVE_KEY]: alpha3Text, [BACKUP_KEY]: "alpha3-recovery" });
+  const result = load(storage);
+  assert.equal(storage.getItem(BACKUP_KEY), alpha3Text);
+  assert.equal(result.migratedFromVersion, 5);
+  assert.equal(result.preserveBackupOnWrite, true);
+  assert.equal(result.shouldRewritePrimary, true);
+  assert.equal(result.state.journal.version, 1);
+  assert.equal(result.state.journal.permanentEntries.length, 1);
+  assert.deepEqual(result.state.journal.fishEncounterLineById, {});
+});
