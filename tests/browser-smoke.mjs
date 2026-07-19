@@ -64,6 +64,8 @@ await wait(350);
 await waitFor(`document.readyState === "complete"`);
 await evaluate(`localStorage.clear()`);
 assert.equal(await evaluate("document.title"), "Atlas of Fins｜鰭之圖鑑");
+assert.equal(await evaluate("document.querySelector('#app').dataset.uiRevision"), "20260719-rarity-palette");
+assert.equal(await evaluate("document.querySelector('script[type=\"module\"]').src.endsWith('src/game.js?rev=20260719-rarity-palette')"), true);
 
 await click("#title-settings-button");
 assert.match(await evaluate("document.querySelector('.settings-modal').innerText"), /聲音與顯示[\s\S]*文字大小[\s\S]*介面縮放/);
@@ -92,7 +94,7 @@ assert.match(await evaluate("document.querySelector('#time-label').innerText"), 
 assert.match(await evaluate("document.querySelector('.bay-event-card[data-bay-event=\"moonlit_tide\"]').innerText"), /月光潮汐[\s\S]*礁石邊緣／海灣深水區[\s\S]*0 \/ 2[\s\S]*目前生效/);
 assert.equal(await evaluate("document.querySelector('#developer-tools-button').hidden"), false);
 await click("#developer-tools-button");
-assert.match(await evaluate("document.querySelector('.developer-modal').innerText"), /v0.5 Slice E 整合控制[\s\S]*每日小目標[\s\S]*居民委託[\s\S]*正式航線[\s\S]*琉光群島內容[\s\S]*觀察、研究與澄野[\s\S]*潮光與事件帳本[\s\S]*船別家具與燈光[\s\S]*初遇與航海日誌[\s\S]*靜潮自動釣架[\s\S]*整合與存檔/);
+assert.match(await evaluate("document.querySelector('.developer-modal').innerText"), /v0.5 Slice E 整合控制[\s\S]*每日小目標[\s\S]*居民今日提案[\s\S]*正式航線[\s\S]*琉光群島內容[\s\S]*觀察、研究與澄野[\s\S]*潮光與事件帳本[\s\S]*船別家具與燈光[\s\S]*潮聲日誌[\s\S]*靜潮自動釣架[\s\S]*整合與存檔/);
 assert.equal(await evaluate("document.querySelectorAll('#developer-daily-template option').length"), 5);
 assert.equal(await evaluate("document.querySelectorAll('#developer-commission-template option').length"), 13);
 assert.equal(await evaluate("document.querySelectorAll('#developer-travel-scale option').length"), 3);
@@ -100,7 +102,8 @@ assert.equal(await evaluate("document.querySelectorAll('#developer-region option
 assert.equal(await evaluate("document.querySelectorAll('#developer-region-event option').length"), 3);
 assert.equal(await evaluate("document.querySelectorAll('#developer-observation-subject option').length"), 2);
 assert.equal(await evaluate("document.querySelectorAll('#developer-tideglow-source option').length"), 6);
-assert.equal(await evaluate("document.querySelectorAll('#developer-journal-event option').length"), 11);
+assert.equal(await evaluate("document.querySelector('#developer-journal-event') === null"), true);
+assert.equal(await evaluate("Boolean(document.querySelector('[data-action=\"developer-check-journal\"]'))"), true);
 assert.equal(await evaluate("document.querySelectorAll('#developer-ship option').length"), 6);
 assert.equal(await evaluate("document.querySelectorAll('#developer-ship-lighting option').length"), 3);
 assert.match(await evaluate("document.querySelector('.developer-modal').innerText"), /遠航書房燈光[\s\S]*擁有 8\/8[\s\S]*失效引用 0/);
@@ -126,17 +129,36 @@ await click('[data-action="developer-emit-tideglow"]');
 assert.equal(await evaluate("JSON.parse(localStorage.getItem('atlas-of-fins.dev-save')).tideglow.total"), 1);
 await click('[data-action="developer-emit-tideglow"]');
 assert.equal(await evaluate("JSON.parse(localStorage.getItem('atlas-of-fins.dev-save')).tideglow.total"), 1);
-await evaluate(`document.querySelector('#developer-journal-event').value = 'world.completed'`);
-await click('[data-action="developer-emit-journal"]');
-assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.dev-save")).journal.permanentEntries.filter(entry => entry.sourceId === "world-complete").length`), 1);
-await click('[data-action="developer-fill-journal"]');
-assert.deepEqual(await evaluate(`(() => { const journal=JSON.parse(localStorage.getItem("atlas-of-fins.dev-save")).journal; return {daily:journal.dailyEntries.length,archives:journal.dailyArchives.length,permanent:journal.permanentEntries.length}; })()`), { daily:171, archives:1, permanent:2 });
 await click('[data-action="developer-check-journal"]');
+assert.deepEqual(await evaluate(`(() => { const journal=JSON.parse(localStorage.getItem("atlas-of-fins.dev-save")).journal; return {version:journal.version,hasDaily:"dailyEntries" in journal,hasPermanent:"permanentEntries" in journal}; })()`), { version:2, hasDaily:false, hasPermanent:false });
+await click('[data-action="close-modal"]');
+assert.equal(await evaluate("document.querySelectorAll('[data-action=\"show-logbook\"]').length"), 0);
+await click('[data-view="home"]');
+assert.equal(await evaluate("document.querySelectorAll('[data-action=\"show-logbook\"]').length"), 1);
 await click('[data-action="show-logbook"]');
-await click('[data-action="select-logbook-entry"][data-id="journal:world-complete"]');
-assert.match(await evaluate("document.querySelector('.logbook-modal').innerText"), /航海日誌[\s\S]*第一張航圖完成[\s\S]*船仍會隨潮水呼吸[\s\S]*模板更新不會改寫/);
+assert.match(await evaluate("document.querySelector('.logbook-modal').innerText"), /潮聲日誌[\s\S]*今日潮記[\s\S]*魚類圖鑑[\s\S]*眠潮灣[\s\S]*星冰南方海[\s\S]*純文字唯讀頁面/);
 assert.equal(await evaluate("document.querySelectorAll('.logbook-layout > *').length"), 2);
-assert.equal(await evaluate("Boolean(document.querySelector('[data-action=\"logbook-filter\"][data-filter=\"day\"]'))"), true);
+assert.equal(await evaluate("document.querySelectorAll('[data-action=\"logbook-category\"]').length"), 8);
+assert.equal(await evaluate("document.querySelectorAll('.logbook-tree-group').length"), 8);
+assert.equal(await evaluate("document.querySelectorAll('.logbook-tree-group.is-expanded').length"), 1);
+assert.equal(await evaluate("document.querySelector('.logbook-layout').firstElementChild.classList.contains('logbook-sidebar')"), true);
+await click('[data-action="logbook-category"][data-id="rare_fish"]');
+assert.equal(await evaluate("document.querySelectorAll('[data-action=\"select-logbook-entry\"]').length"), 7);
+assert.equal(await evaluate("document.querySelector('.logbook-tree-group.is-expanded [data-action=\"logbook-category\"]').dataset.id"), "rare_fish");
+assert.equal(exceptions.length, 0, `Journal category click has no browser exception: ${exceptions.join(", ")}`);
+await click('[data-action="logbook-category"][data-id="mist_cape_cold_current"]');
+await wait(100);
+assert.equal(exceptions.length, 0, `Future journal category has no browser exception: ${exceptions.join(", ")}`);
+assert.match(await evaluate("document.querySelector('.logbook-modal').innerText"), /尚無可讀頁[\s\S]*預先寫好的章節頁/);
+assert.equal(await evaluate("Boolean(document.querySelector('.logbook-tree-group.is-expanded .logbook-tree-empty'))"), true);
+await click('[data-action="logbook-category"][data-id="rare_fish"]');
+await click('[data-action="select-logbook-entry"][data-id="journal:fish:mahi"]');
+assert.match(await evaluate("document.querySelector('.logbook-page').innerText"), /金藍掠過深水[\s\S]*鬼頭刀[\s\S]*不通往其他系統/);
+assert.equal(await evaluate("document.querySelector('[data-action=\"logbook-cross-link\"]') === null"), true);
+await command("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+assert.equal(await evaluate("document.querySelector('.logbook-modal').getBoundingClientRect().right <= window.innerWidth"), true);
+assert.equal(await evaluate("document.documentElement.scrollWidth <= window.innerWidth"), true);
+await command("Emulation.clearDeviceMetricsOverride");
 await click('[data-action="close-modal"]');
 await click('#developer-tools-button');
 await click('[data-action="show-settings"]');
@@ -224,13 +246,21 @@ assert.equal(await evaluate(`Boolean(JSON.parse(localStorage.getItem("atlas-of-f
 await click('[data-action="close-modal"]');
 await click('[data-view="residents"]');
 assert.equal(await evaluate("document.querySelectorAll('.resident-card').length"), 1);
-assert.match(await evaluate("document.querySelector('[data-resident=\"chengye\"]').innerText"), /澄野[\s\S]*港口相遇 · 0 \/ 6[\s\S]*繞了半片海的觀測器[\s\S]*今日提案/);
-await click('[data-resident="chengye"] [data-action="talk-resident"]');
-assert.match(await evaluate("document.querySelector('.resident-story-modal').innerText"), /繞了半片海的觀測器[\s\S]*不適合被帶走的相遇/);
+assert.match(await evaluate("document.querySelector('[data-resident=\"chengye\"]').innerText"), /澄野[\s\S]*海域主線 · 新章節[\s\S]*繞了半片海的觀測器[\s\S]*接受主線任務[\s\S]*今日提案 · 選填[\s\S]*不影響主線/);
+await click('[data-resident="chengye"] [data-action="accept-resident-story"]');
+assert.match(await evaluate("document.querySelector('.resident-story-modal').innerText"), /琉光群島主線 · 第 1 節／6[\s\S]*繞了半片海的觀測器[\s\S]*不適合被帶走的相遇[\s\S]*本節主線目標[\s\S]*開始執行主線任務/);
+await command("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+assert.equal(await evaluate("document.querySelector('.resident-story-modal').getBoundingClientRect().right <= window.innerWidth"), true);
+assert.equal(await evaluate("document.documentElement.scrollWidth <= window.innerWidth"), true);
+await command("Emulation.clearDeviceMetricsOverride");
 await click('[data-action="close-modal"]');
+assert.match(await evaluate("document.querySelector('[data-resident=\"chengye\"]').innerText"), /海域主線 · 任務進行中[\s\S]*替漂流觀測器補上淺灘資料[\s\S]*0 \/ 2[\s\S]*今日提案 · 選填/);
 await click('[data-view="journal"]');
+assert.equal(await evaluate("document.querySelectorAll('.fish-region-filters .filter-chip').length"), 3);
+assert.equal(await evaluate("Boolean(document.querySelector('[data-action=\"journal-filter\"][data-id=\"common\"], [data-action=\"journal-filter\"][data-id=\"uncommon\"], [data-action=\"journal-filter\"][data-id=\"rare\"]'))"), false);
 await click('[data-action="journal-filter"][data-id="luminous_archipelago"]');
 assert.equal(await evaluate("document.querySelectorAll('.fish-card').length"), 15);
+assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /琉光群島魚類圖鑑[\s\S]*跨海域魚也會出現在這一頁/);
 await click('[data-action="select-fish"][data-id="bluegreen_chromis"]');
 assert.match(await evaluate("document.querySelector('.fish-detail').innerText"), /藍綠光鰓魚[\s\S]*琉光群島印章[\s\S]*FishBase 物種摘要/);
 await click('[data-view="chart"]');
@@ -247,6 +277,25 @@ await click('[data-action="journal-filter"][data-id="all"]');
 assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /探索進度[\s\S]*41 \/ 41/);
 assert.equal(await evaluate("document.querySelectorAll('.fish-card').length"), 41);
 assert.equal(await evaluate("document.querySelectorAll('.fish-card.is-unknown').length"), 0);
+const rarityPalette = await evaluate(`(() => ({
+  common: getComputedStyle(document.querySelector('.fish-card.rarity-common')).backgroundImage,
+  uncommon: getComputedStyle(document.querySelector('.fish-card.rarity-uncommon')).backgroundImage,
+  rare: getComputedStyle(document.querySelector('.fish-card.rarity-rare')).backgroundImage,
+  epic: getComputedStyle(document.documentElement).getPropertyValue('--rarity-epic-label').trim(),
+  legendary: getComputedStyle(document.documentElement).getPropertyValue('--rarity-legendary-label').trim()
+}))()`);
+assert.match(rarityPalette.common, /rgb\(247, 247, 243\)/);
+assert.match(rarityPalette.uncommon, /rgb\(237, 244, 251\)/);
+assert.match(rarityPalette.rare, /rgb\(242, 234, 250\)/);
+assert.deepEqual({ epic: rarityPalette.epic, legendary: rarityPalette.legendary }, { epic: "#ad622b", legendary: "#916018" });
+assert.match(await evaluate("document.querySelector('.fish-card.rarity-common').innerText"), /常見/);
+await command("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+assert.equal(await evaluate("document.documentElement.scrollWidth <= window.innerWidth"), true);
+await command("Emulation.clearDeviceMetricsOverride");
+if (process.env.FISH_ATLAS_SCREENSHOT) {
+  const atlasShot = await command("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+  await writeFile(process.env.FISH_ATLAS_SCREENSHOT, Buffer.from(atlasShot.data, "base64"));
+}
 assert.equal(await evaluate("Boolean(document.querySelector('[data-id=\"yellow_boxfish\"] .fish-svg'))"), true);
 assert.equal(await evaluate("Boolean(document.querySelector('[data-id=\"needlefish\"] .fish-svg'))"), true);
 assert.equal(await evaluate("localStorage.getItem('atlas-of-fins.save')"), null);
@@ -350,10 +399,10 @@ assert.deepEqual(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.
 
 await click('[data-view="residents"]');
 assert.equal(await evaluate("document.querySelectorAll('.resident-card').length"), 2);
-assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /沒有好感度[\s\S]*燈塔守望者[\s\S]*魚市場老闆/);
-assert.match(await evaluate("document.querySelector('[data-resident=\lighthouse_keeper\]').innerText"), /淺灘的潮聲[\s\S]*接受委託/);
+assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /海域主線會推進固定故事章節[\s\S]*今日提案[\s\S]*不共用進度與解鎖[\s\S]*燈塔守望者[\s\S]*魚市場老闆/);
+assert.match(await evaluate("document.querySelector('[data-resident=\lighthouse_keeper\]').innerText"), /今日提案 · 選填[\s\S]*淺灘的潮聲[\s\S]*接受今日提案/);
 await click('[data-resident="lighthouse_keeper"] [data-action="accept-commission"]');
-assert.match(await evaluate("document.querySelector('[data-resident=\lighthouse_keeper\]').innerText"), /慢慢進行中[\s\S]*0 \/ 2[\s\S]*放下委託/);
+assert.match(await evaluate("document.querySelector('[data-resident=\lighthouse_keeper\]').innerText"), /今日提案 · 進行中[\s\S]*不影響主線[\s\S]*0 \/ 2[\s\S]*放下今日提案/);
 await click('[data-view="fishing"]');
 assert.match(await evaluate("document.querySelector('#tutorial').innerText"), /航海教學 · 2 \/ 6[\s\S]*拋下魚線/);
 assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).tutorialStep`), 1);
@@ -388,14 +437,18 @@ for (let i = 0; i < 180; i++) {
 await evaluate(`window.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:1}))`);
 const finalStage = await evaluate(`({ modal: Boolean(document.querySelector('.catch-modal')), failed: Boolean(document.querySelector('.fishing-result-fail')), text: document.querySelector('#danger-text')?.innerText || '' })`);
 assert.equal(caught, true, `tension minigame can be completed: ${JSON.stringify({ lastReelState, finalStage, exceptions })}`);
-assert.match(await evaluate("document.querySelector('.catch-modal').innerText"), /cm[\s\S]*kg[\s\S]*金幣/);
+assert.match(await evaluate("document.querySelector('.catch-modal').innerText"), /新紀錄[\s\S]*本次長度[\s\S]*cm[\s\S]*最高紀錄[\s\S]*cm/);
 assert.match(await evaluate("document.querySelector('.catch-modal').innerText"), /閃光個體/);
-assert.match(await evaluate("document.querySelector('.catch-modal').innerText"), /首次閃光研究獎勵 75 金幣/);
-assert.match(await evaluate("document.querySelector('.catch-modal').innerText"), /熟悉度提升[\s\S]*初次相遇/);
+assert.doesNotMatch(await evaluate("document.querySelector('.catch-modal').innerText"), /重量|kg|售價|金幣|熟悉度/);
+assert.equal(await evaluate("Boolean(document.querySelector('.catch-modal .new-record-ribbon'))"), true);
 assert.match(await evaluate("document.querySelector('.catch-modal').innerText"), /海灣事件進度[\s\S]*銀潮靠岸 · 1 \/ 3/);
+await command("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+assert.equal(await evaluate("document.querySelector('.catch-modal').getBoundingClientRect().right <= window.innerWidth"), true);
+assert.equal(await evaluate("document.documentElement.scrollWidth <= window.innerWidth"), true);
+await command("Emulation.clearDeviceMetricsOverride");
 
 await click('[data-action="close-catch"]');
-assert.equal(await evaluate("document.querySelector('#resident-badge').innerText"), "進行中");
+assert.equal(await evaluate("document.querySelector('#resident-badge').innerText"), "提案中");
 await click('[data-view="residents"]');
 assert.match(await evaluate("document.querySelector('[data-resident=\lighthouse_keeper\]').innerText"), /淺灘的潮聲[\s\S]*1 \/ 2/);
 await click('[data-resident="lighthouse_keeper"] [data-action="talk-resident"]');
@@ -580,9 +633,9 @@ assert.equal(await evaluate("document.querySelector('#app').dataset.region"), "l
 
 await click('[data-view="residents"]');
 assert.equal(await evaluate("document.querySelectorAll('.resident-card').length"), 1);
-assert.match(await evaluate("document.querySelector('[data-resident=\"chengye\"]').innerText"), /澄野[\s\S]*港口相遇 · 0 \/ 6[\s\S]*繞了半片海的觀測器/);
-await click('[data-resident="chengye"] [data-action="talk-resident"]');
-assert.match(await evaluate("document.querySelector('.resident-story-modal').innerText"), /繞了半片海的觀測器[\s\S]*不適合被帶走的相遇/);
+assert.match(await evaluate("document.querySelector('[data-resident=\"chengye\"]').innerText"), /澄野[\s\S]*海域主線 · 新章節[\s\S]*繞了半片海的觀測器[\s\S]*接受主線任務/);
+await click('[data-resident="chengye"] [data-action="accept-resident-story"]');
+assert.match(await evaluate("document.querySelector('.resident-story-modal').innerText"), /主線任務已接受[\s\S]*繞了半片海的觀測器[\s\S]*替漂流觀測器補上淺灘資料/);
 await click('[data-action="close-modal"]');
 
 await click('[data-view="journal"]');
@@ -726,9 +779,12 @@ assert.equal(migratedV4Save.currentQuests, undefined);
 assert.equal(migratedV4Save.dailyBoard.entries[0].progress, 1);
 assert.equal(migratedV4Save.residentCommissions.offerDayByResident.lighthouse_keeper, migratedV4Save.day);
 assert.deepEqual(migratedV4Save.observations.recordsById, {});
-assert.deepEqual(migratedV4Save.residentStories.chengye.completedSceneIds, ["chengye_drifting_observer"]);
+assert.deepEqual(migratedV4Save.residentStories.chengye.completedSceneIds, []);
+assert.equal(migratedV4Save.residentStories.chengye.activeSceneId, "chengye_drifting_observer");
 assert.equal(migratedV4Save.tideglow.total, 0);
-assert.equal(migratedV4Save.journal.permanentEntries.length, 1);
+assert.equal(migratedV4Save.journal.version, 2);
+assert.equal("permanentEntries" in migratedV4Save.journal, false);
+assert.ok(migratedV4Save.journal.unreadEntryIds.includes("journal:story:sleeping_tide_bay:opening"));
 assert.equal(await evaluate(`localStorage.getItem("atlas-of-fins.backup")`), legacyV3Payload);
 
 await click("#menu-button");
@@ -776,13 +832,13 @@ assert.equal(await evaluate("document.querySelector('.cabin-view').classList.con
 assert.equal(await evaluate("document.querySelector('.aquarium-panel').classList.contains('aquarium-frame-seafoam-ceramic')"), true);
 assert.match(await evaluate("document.querySelector('.cabin-view').innerText"), /固定床台[\s\S]*航圖桌[\s\S]*潮聲居所/);
 await click('[data-action="show-logbook"]');
-await click('[data-action="select-logbook-entry"][data-id="journal:ship:tidewhisper_residence"]');
-assert.match(await evaluate("document.querySelector('.logbook-page').innerText"), /新船靠岸 · 潮聲居所[\s\S]*潮光沒有被花掉[\s\S]*港口便多出一盞屬於我的燈/);
-assert.equal(await evaluate("Boolean(document.querySelector('[data-action=\"logbook-cross-link\"][data-kind=\"ship\"]'))"), true);
-await click('[data-action="logbook-cross-link"][data-kind="ship"]');
-assert.equal(await evaluate("document.querySelectorAll('[data-ship-card]').length"), 6);
+assert.equal(await evaluate("document.querySelector('[data-id=\"journal:ship:tidewhisper_residence\"]') === null"), true);
+assert.equal(await evaluate("document.querySelector('[data-action=\"logbook-cross-link\"]') === null"), true);
+assert.match(await evaluate("document.querySelector('.logbook-page').innerText"), /純文字唯讀頁面[\s\S]*不通往其他系統/);
+await click('[data-action="close-modal"]');
 await click('[data-view="shop"]');
 await click('[data-action="shop-tab"][data-id="ships"]');
+assert.equal(await evaluate("document.querySelectorAll('[data-ship-card]').length"), 6);
 await click('[data-action="switch-ship"][data-id="drifting_home"]');
 assert.equal(await evaluate("JSON.parse(localStorage.getItem('atlas-of-fins.save')).ships.activeShipId"), "drifting_home");
 await click('[data-action="shop-tab"][data-id="furniture"]');

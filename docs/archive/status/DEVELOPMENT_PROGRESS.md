@@ -1,5 +1,7 @@
 # Atlas of Fins｜開發項目與進度
 
+> 封存文件：保存至 2026-07-18 的歷史流水帳；目前狀態請看 [`CURRENT.md`](../../CURRENT.md)。
+>
 > 最後更新：2026-07-18
 > 目前版本：v0.5.0-alpha.6「把遠方安放成家」
 > 目前狀態：v0.5 Slice A～F 已完成並通過 156 項單元、完整 Chromium、390px 與長期壓測
@@ -65,7 +67,7 @@
 
 ## 4. v0.2｜收藏航程
 
-完整設計規格位於 [`PHASE_2_GAME_DESIGN.md`](versions/v0.2/PHASE_2_GAME_DESIGN.md)。
+完整設計規格位於 [`PHASE_2_GAME_DESIGN.md`](../../versions/v0.2/PHASE_2_GAME_DESIGN.md)。
 
 ### Slice A｜資料與圖鑑
 
@@ -150,7 +152,7 @@ npm run test:browser:stress
 
 ## 6. v0.3｜海灣事件與魚誌擴充
 
-完整設計規格位於 [`PHASE_3_GAME_DESIGN.md`](versions/v0.3/PHASE_3_GAME_DESIGN.md)。
+完整設計規格位於 [`PHASE_3_GAME_DESIGN.md`](../../versions/v0.3/PHASE_3_GAME_DESIGN.md)。
 
 ### Slice A｜銀潮靠岸
 
@@ -187,7 +189,7 @@ npm run test:browser:stress
 
 ### Slice D｜魚誌擴充
 
-完整設計表位於 [`FISH_EXPANSION_DESIGN.md`](versions/v0.3/FISH_EXPANSION_DESIGN.md)。
+完整設計表位於 [`FISH_EXPANSION_DESIGN.md`](../../versions/v0.3/FISH_EXPANSION_DESIGN.md)。
 
 - [x] 新增 10 種具完整圖鑑文案、尺寸、價格與捕獲條件的魚類
 - [x] 新魚配置為 4 常見、4 少見、2 稀有，總魚種增加至 30
@@ -226,9 +228,9 @@ npm run test:browser:stress
 
 ## 7. v0.4～v0.5 已完成；v0.6～v1.0 已定案
 
-未來實作的最高依據為 [`FINAL_GAME_DESIGN.md`](FINAL_GAME_DESIGN.md)。其餘長期文件保留架構推導與歷史討論，但若內容不同，以正式定案文件為準。
+未來實作的最高依據為 [`FINAL_GAME_DESIGN.md`](../../GAME_DESIGN.md)。其餘長期文件保留架構推導與歷史討論，但若內容不同，以正式定案文件為準。
 
-v0.4 的完成工作包與驗收紀錄見 [`V0_4_IMPLEMENTATION_PLAN.md`](versions/v0.4/V0_4_IMPLEMENTATION_PLAN.md)；v0.5 Slice A～F 與經濟／壓測基線見 [`V0_5_IMPLEMENTATION_PLAN.md`](versions/v0.5/V0_5_IMPLEMENTATION_PLAN.md) 及 [`V0_5_STRESS_REPORT.md`](versions/v0.5/V0_5_STRESS_REPORT.md)。下一步需為 v0.6 霧岬寒流水道另建實作計畫。
+v0.4 的完成工作包與驗收紀錄見 [`V0_4_IMPLEMENTATION_PLAN.md`](../../versions/v0.4/V0_4_IMPLEMENTATION_PLAN.md)；v0.5 Slice A～F 與經濟／壓測基線見 [`V0_5_IMPLEMENTATION_PLAN.md`](../../versions/v0.5/V0_5_IMPLEMENTATION_PLAN.md) 及 [`V0_5_STRESS_REPORT.md`](../../versions/v0.5/V0_5_STRESS_REPORT.md)。下一步需為 v0.6 霧岬寒流水道另建實作計畫。
 
 ### 已完成設計定案
 
@@ -307,7 +309,7 @@ v0.4 的完成工作包與驗收紀錄見 [`V0_4_IMPLEMENTATION_PLAN.md`](versio
 
 ### 2026-07-18
 
-- [x] 完成 v0.5 Slice F，版本更新為 v0.5.0-alpha.6；六個 Slice 各自保留已驗證 commit，完整結果見 [`V0_5_STRESS_REPORT.md`](versions/v0.5/V0_5_STRESS_REPORT.md)
+- [x] 完成 v0.5 Slice F，版本更新為 v0.5.0-alpha.6；六個 Slice 各自保留已驗證 commit，完整結果見 [`V0_5_STRESS_REPORT.md`](../../versions/v0.5/V0_5_STRESS_REPORT.md)
 - [x] 以不領每日／成就獎勵的保守正常流程驗證 20／50 潮光與 1,800／4,200／1,500 金幣節奏；三船家具總價 7,970 金幣仍可負擔，既有經濟數值不需調整
 - [x] 新增 500 筆事件、181 日日誌封存、300 次船隻切換及 240 次離線釣架結算測試；成熟開發者存檔 164,073 bytes，符合 500 KB／1.5 MB 預算
 - [x] 延伸 Chromium 壓測至 300 次船隻切換；Documents 與監聽器不增加、DOM +118、heap +537,760 bytes、未捕捉例外為 0
@@ -327,7 +329,7 @@ v0.4 的完成工作包與驗收紀錄見 [`V0_4_IMPLEMENTATION_PLAN.md`](versio
 - [x] 開發者面板可發送 11 種日誌事件、填滿 181 篇潮記、檢查封存與來源去重；135 項單元測試及完整 Chromium／390px 流程通過，未捕捉例外為 0
 - [x] 完成 v0.5 最後一組工程方向：採 v5 存檔、v4 原文備份與保留進度遷移、漸進式事件相容層、完整開發者控制，以及單元／Chromium／壓測共同驗收
 - [x] 將 v0.5 拆為 A～F 六片，依序完成存檔與潮光、船隻、場景家具、日誌、自動釣架及整合；每片對應 `alpha.1～alpha.6` 並在綠燈後各建一個 commit
-- [x] 建立 [`V0_5_IMPLEMENTATION_PLAN.md`](versions/v0.5/V0_5_IMPLEMENTATION_PLAN.md)，把全部定案轉為資料、遷移、去重、切片與完成門檻
+- [x] 建立 [`V0_5_IMPLEMENTATION_PLAN.md`](../../versions/v0.5/V0_5_IMPLEMENTATION_PLAN.md)，把全部定案轉為資料、遷移、去重、切片與完成門檻
 - [x] 存檔預算定為一般成熟檔目標小於 500 KB、長期壓測單份硬上限小於 1.5 MB；上限保留主要檔、備份與暫存共存空間
 - [x] 文件依版本整理至 `docs/versions/v0.1～v0.5`，跨版本進度、驗收、正式定案、架構與授權文件留在 `docs/`
 - [x] v0.5 第六組方向定案：購買潮聲居所後，以 1,500 金幣解鎖全局靜潮自動釣架；所有船共用，但只在遊戲完全關閉時累積
@@ -359,7 +361,7 @@ v0.4 的完成工作包與驗收紀錄見 [`V0_4_IMPLEMENTATION_PLAN.md`](versio
 - [x] 新增一般／開發者模式隔離的可攜式存檔匯出與匯入，涵蓋格式、版本、模式、損壞 JSON、v1 遷移、未來版本拒絕與匯入前主要存檔備份
 - [x] 修正重訪區域停泊時遺失當地已捕獲釣點／時段研究紀錄的問題；240 趟序列化航程與反覆遷移後仍保留區域研究脈絡
 - [x] 完成 560 次畫面重繪、61 次切區與 12 次完整離線航程的隔離 Chromium 壓測；事件監聽器與文件數不累積、heap 增加 331,252 bytes、未捕捉例外為 0
-- [x] 單元測試增加至 98 項並全數通過；完整流程與壓測記錄於 [`SLICE_H_STRESS_REPORT.md`](versions/v0.4/SLICE_H_STRESS_REPORT.md)，本切片未新增圖片或外部素材
+- [x] 單元測試增加至 98 項並全數通過；完整流程與壓測記錄於 [`SLICE_H_STRESS_REPORT.md`](../../versions/v0.4/SLICE_H_STRESS_REPORT.md)，本切片未新增圖片或外部素材
 - [x] 完成 v0.4 Slice G，版本更新為 v0.4.0-alpha.7
 - [x] 星落觀察岬正式開放克氏雙鋸魚與雙棘甲尻魚觀察；到達合法時段即自動記錄，不需快速點擊，同一時段不重抽並具備分魚種保底
 - [x] 加入綠蠵龜換氣與礁烏賊微光兩項奇景，只在發現後顯示，且不計入正式觀察、區域研究或 100% 完成度
@@ -413,7 +415,7 @@ v0.4 的完成工作包與驗收紀錄見 [`V0_4_IMPLEMENTATION_PLAN.md`](versio
 - [x] 建立 `data/`、`systems/`、`persistence/`、`ui/` 漸進模組邊界
 - [x] 單元測試增加至 43 項並全數通過；完整瀏覽器回歸未捕捉例外為 0
 - [x] 完成十組長期設計問答的歸納、交叉檢查與衝突稽核
-- [x] 建立 [`FINAL_GAME_DESIGN.md`](FINAL_GAME_DESIGN.md)，作為 v0.4～v1.0 未來實作的最高設計依據
+- [x] 建立 [`FINAL_GAME_DESIGN.md`](../../GAME_DESIGN.md)，作為 v0.4～v1.0 未來實作的最高設計依據
 - [x] 定案世界航線、魚類圖鑑、觀察、研究、船屋、自動釣魚、日誌、居民、視聽、終局、存檔、操作與開發者模式規格
 - [x] 初版長期設計曾以單一高畫質為製作基準；Slice H 後已修正為先以單一 HTML／CSS／SVG 視覺出版，再由共用資產介面進行出版後升級
 - [x] 將離線／自動釣魚定案為需要魚餌、最多累積三小時、效率為手動一半，且不能發現新魚或閃光個體
@@ -421,7 +423,7 @@ v0.4 的完成工作包與驗收紀錄見 [`V0_4_IMPLEMENTATION_PLAN.md`](versio
 - [x] 每日系統只依遊戲內航海日更新，不加入現實日期、連續登入、限定收藏或錯過懲罰
 - [x] 記錄其他覆寫規則：居民不跨海聯繫、首次航程不可直接略過，且不提供減少動態選項
 - [x] 將 v0.4 定案為包含琉光群島／風棲港完整首航內容的垂直切片，而非只有海圖外殼
-- [x] 建立 [`V0_4_IMPLEMENTATION_PLAN.md`](versions/v0.4/V0_4_IMPLEMENTATION_PLAN.md)，拆分 Slice A～H、模組邊界、存檔遷移與逐切片驗收門檻
+- [x] 建立 [`V0_4_IMPLEMENTATION_PLAN.md`](../../versions/v0.4/V0_4_IMPLEMENTATION_PLAN.md)，拆分 Slice A～H、模組邊界、存檔遷移與逐切片驗收門檻
 
 ### 2026-07-16
 
@@ -480,7 +482,7 @@ v0.4 的完成工作包與驗收紀錄見 [`V0_4_IMPLEMENTATION_PLAN.md`](versio
 
 每次開始新開發項目時：
 
-1. 先核對 [`FINAL_GAME_DESIGN.md`](FINAL_GAME_DESIGN.md)；若是新決策，先更新正式定案與對應架構文件，再把項目加入本文件並標記為 `[-]`。
+1. 先核對 [`FINAL_GAME_DESIGN.md`](../../GAME_DESIGN.md)；若是新決策，先更新正式定案與對應架構文件，再把項目加入本文件並標記為 `[-]`。
 2. 完成實作與測試後才改為 `[x]`，並加入 `TEST_CHECKLIST.md`。
 3. 更新「目前驗證狀態」、README 目前功能與最後更新日期。
 4. 在「開發紀錄」新增當日完成內容與必要的遷移說明。

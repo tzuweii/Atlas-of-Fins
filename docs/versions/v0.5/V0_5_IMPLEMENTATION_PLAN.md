@@ -4,7 +4,7 @@
 > 建立日期：2026-07-18
 > 起始版本：v0.4.0-alpha.8
 > 目標版本：v0.5「船屋與航程記憶」
-> 設計依據：[`FINAL_GAME_DESIGN.md`](../../FINAL_GAME_DESIGN.md)、[`COLLECTION_EXPERIENCE_SYSTEMS.md`](../../COLLECTION_EXPERIENCE_SYSTEMS.md)
+> 設計依據：[`FINAL_GAME_DESIGN.md`](../../GAME_DESIGN.md)、[`COLLECTION_EXPERIENCE_SYSTEMS.md`](../../archive/proposals/COLLECTION_EXPERIENCE_SYSTEMS.md)
 > 前版基線：[`V0_4_IMPLEMENTATION_PLAN.md`](../v0.4/V0_4_IMPLEMENTATION_PLAN.md)、[`SLICE_H_STRESS_REPORT.md`](../v0.4/SLICE_H_STRESS_REPORT.md)
 
 ## 1. 完成目標
@@ -397,7 +397,7 @@ src/
 
 ### F3. 文件與版本
 
-- [x] 把已完成項目加入 [`TEST_CHECKLIST.md`](../../TEST_CHECKLIST.md)，更新 [`DEVELOPMENT_PROGRESS.md`](../../DEVELOPMENT_PROGRESS.md)、[根 README](../../../README.md)、[文件索引](../../README.md)與[`素材授權紀錄`](../../ASSET_LICENSES.md)。
+- [x] 把已完成項目加入 [`TEST_CHECKLIST.md`](../../archive/status/TEST_CHECKLIST.md)，更新 [`DEVELOPMENT_PROGRESS.md`](../../CURRENT.md)、[根 README](../../../README.md)、[文件索引](../../README.md)與[`素材授權紀錄`](../../ASSET_LICENSES.md)。
 - [x] 建立 [`V0_5_STRESS_REPORT.md`](V0_5_STRESS_REPORT.md)，記錄環境、暖機基線、測後數值與差異。
 - [x] 版本更新為 `v0.5.0-alpha.6`，完成 Slice F commit。
 

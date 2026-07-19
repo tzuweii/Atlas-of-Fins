@@ -242,4 +242,4 @@ state.bayEventHistory = {
 
 3. 區域化：世界航線實作後，事件只在對應海域產生與顯示。
 
-新增內容前先觀察玩家是否會因事件主動改變釣點、魚餌或遊玩時段；若玩家只把事件視為額外金幣來源，應先改善收藏獎勵與事件敘事回饋。長期世界方向見 [`LONG_TERM_GAME_DESIGN.md`](../../LONG_TERM_GAME_DESIGN.md) 與 [`WORLD_ROUTE_SYSTEM_DESIGN.md`](../../WORLD_ROUTE_SYSTEM_DESIGN.md)。
+新增內容前先觀察玩家是否會因事件主動改變釣點、魚餌或遊玩時段；若玩家只把事件視為額外金幣來源，應先改善收藏獎勵與事件敘事回饋。長期世界方向見 [`LONG_TERM_GAME_DESIGN.md`](../../archive/proposals/LONG_TERM_GAME_DESIGN.md) 與 [`WORLD_ROUTE_SYSTEM_DESIGN.md`](../../archive/proposals/WORLD_ROUTE_SYSTEM_DESIGN.md)。

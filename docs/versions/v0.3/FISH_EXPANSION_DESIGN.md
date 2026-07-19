@@ -55,4 +55,4 @@
 - 真實魚類若延伸至新海域，必須先確認實際分布與區域生態依據。
 - 同一魚種可在多海域出現，但世界總圖鑑只計算一次；各區另記錄當地捕獲。
 - 現有月紗皇帶魚的傳說魚候選定位，留待區域資料遷移時正式確認。
-- 詳細遷移規格見 [`WORLD_ROUTE_SYSTEM_DESIGN.md`](../../WORLD_ROUTE_SYSTEM_DESIGN.md)。
+- 詳細遷移規格見 [`WORLD_ROUTE_SYSTEM_DESIGN.md`](../../archive/proposals/WORLD_ROUTE_SYSTEM_DESIGN.md)。

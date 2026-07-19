@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   ACHIEVEMENTS, AQUARIUM_DECORATIONS, AUTO_FISHING_EQUIPMENT, BAITS, BAY_EVENTS, COMMISSION_TEMPLATES, CONTENT_VALIDATION,
-  CHART_REGION_POINTS, CHART_ROUTE_PATHS, DAILY_GOAL_TEMPLATES, FISH, FURNITURE, JOURNAL_EVENT_TEMPLATES, RARITY,
+  CHART_REGION_POINTS, CHART_ROUTE_PATHS, DAILY_GOAL_TEMPLATES, FISH, FURNITURE, JOURNAL_CATEGORIES,
+  JOURNAL_EVENT_TEMPLATES, MAIN_STORY_JOURNAL_ENTRIES, RARE_FISH_JOURNAL_ENTRIES, RARITY,
   REGIONS, RESIDENTS, RODS, ROUTES, SHIPS, SHIP_FURNITURE, SHIP_INTERIOR_SCENES,
   SPOTS, TIDEGLOW_SOURCES, TIMES
 } from "../src/data.js";
@@ -31,6 +32,8 @@ const currentCatalog = () => ({
   shipFurniture: structuredClone(SHIP_FURNITURE),
   shipInteriors: structuredClone(SHIP_INTERIOR_SCENES),
   journalTemplates: structuredClone(JOURNAL_EVENT_TEMPLATES),
+  journalCategories: structuredClone(JOURNAL_CATEGORIES),
+  journalEntries: structuredClone([...RARE_FISH_JOURNAL_ENTRIES, ...MAIN_STORY_JOURNAL_ENTRIES]),
   autoFishingEquipment: [structuredClone(AUTO_FISHING_EQUIPMENT)]
 });
 
@@ -132,11 +135,21 @@ test("journal templates reject duplicate event types, empty page types, and temp
   const catalog = currentCatalog();
   catalog.journalTemplates[1].eventType = catalog.journalTemplates[0].eventType;
   catalog.journalTemplates[2].entryType = "";
-  catalog.journalTemplates[3].permanent = false;
+  catalog.journalTemplates[2].permanent = false;
   const report = validateContentCatalog(catalog);
   assert.ok(report.errors.some(error => error.collection === "journalTemplates" && error.code === "duplicate-event-type"));
   assert.ok(report.errors.some(error => error.collection === "journalTemplates" && error.code === "invalid-type"));
   assert.ok(report.errors.some(error => error.collection === "journalTemplates" && error.code === "invalid-retention"));
+});
+
+test("fixed journal pages require valid categories, rare fish, and story references", () => {
+  const catalog = currentCatalog();
+  catalog.journalCategories[0].kind = "event-feed";
+  catalog.journalEntries.find(entry => entry.fishId).fishId = "missing-fish";
+  catalog.journalEntries.find(entry => entry.type === "story").categoryId = "missing-category";
+  const report = validateContentCatalog(catalog);
+  assert.ok(report.errors.some(error => error.collection === "journalCategories" && error.code === "invalid-type"));
+  assert.ok(report.errors.some(error => error.collection === "journalEntries" && error.code === "missing-reference"));
 });
 
 test("automatic fishing equipment validates its unlock ship and offline limits", () => {

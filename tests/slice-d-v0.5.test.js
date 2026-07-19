@@ -1,16 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  FISH, JOURNAL_EVENT_TEMPLATES, LUMINOUS_ARCHIPELAGO_ID, SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID
+  DAILY_TIDE_ESSAYS, FISH, JOURNAL_CATEGORIES, JOURNAL_EVENT_TEMPLATES,
+  MAIN_STORY_JOURNAL_ENTRIES, RARE_FISH_JOURNAL_ENTRIES
 } from "../src/data.js";
 import {
-  advanceTime, beginRouteTravel, buyShip, createDeveloperState, createInitialState,
-  developerEmitJournalEvent, developerFillJournalArchive, dispatchGameEvent, filterJournalEntries,
-  markJournalEntriesRead, migrateState, recordCatch
+  advanceTime, createInitialState, dispatchGameEvent, getJournalCategories, getJournalEntries,
+  getJournalEntry, getJournalUnreadCount, markJournalEntriesRead, migrateState, recordCatch,
+  syncJournalUnlocks
 } from "../src/core.js";
-import {
-  DAILY_JOURNAL_LIMIT, allJournalEntries, applyJournalEvent, createJournalState, sealJournalDay
-} from "../src/systems/journal.js";
+import { JOURNAL_VERSION, applyJournalEvent, createJournalState, normalizeJournalState } from "../src/systems/journal.js";
 
 const caught = (fishId, overrides = {}) => ({
   uid: overrides.uid || `journal-${fishId}-${overrides.variant || "normal"}`,
@@ -32,135 +31,129 @@ const caught = (fishId, overrides = {}) => ({
   }
 });
 
-test("journal templates own unique normalized event types", () => {
-  assert.equal(JOURNAL_EVENT_TEMPLATES.length, 11);
-  assert.equal(new Set(JOURNAL_EVENT_TEMPLATES.map(template => template.id)).size, JOURNAL_EVENT_TEMPLATES.length);
-  assert.equal(new Set(JOURNAL_EVENT_TEMPLATES.map(template => template.eventType)).size, JOURNAL_EVENT_TEMPLATES.length);
-  assert.ok(JOURNAL_EVENT_TEMPLATES.every(template => template.permanent));
+test("journal catalogs fix eight categories, current rare encounters, and two completed sea chapters", () => {
+  assert.equal(JOURNAL_CATEGORIES.length, 8);
+  assert.deepEqual(JOURNAL_CATEGORIES.slice(0, 2).map(category => category.id), ["today", "rare_fish"]);
+  assert.equal(JOURNAL_CATEGORIES.filter(category => category.kind === "story").length, 6);
+  assert.equal(RARE_FISH_JOURNAL_ENTRIES.length, FISH.filter(fish => fish.rarity === "rare").length);
+  assert.equal(MAIN_STORY_JOURNAL_ENTRIES.filter(entry => entry.categoryId === "sleeping_tide_bay").length, 4);
+  assert.equal(MAIN_STORY_JOURNAL_ENTRIES.filter(entry => entry.categoryId === "luminous_archipelago").length, 6);
+  assert.equal(DAILY_TIDE_ESSAYS.length, 12);
+  assert.equal(JOURNAL_EVENT_TEMPLATES.length, 3);
 });
 
-test("every new fish gets one encounter line while common and uncommon fish get no empty page", () => {
+test("today tide note always exists, ignores gameplay events, and changes only with the sailing day", () => {
+  const state = createInitialState();
+  const dayOne = getJournalEntries(state, "today")[0];
+  assert.equal(dayOne.type, "today");
+  assert.equal(dayOne.sailingDay, 1);
+  assert.ok(dayOne.body.length >= 2);
+  const journalBefore = structuredClone(state.journal);
+  const common = FISH.find(fish => fish.rarity === "common");
+  recordCatch(state, caught(common.id, { variant: "shimmer", weather: "rain" }));
+  assert.equal(getJournalEntries(state, "today")[0].id, dayOne.id);
+  assert.equal(Object.hasOwn(state.journal, "dailyEntries"), false);
+  for (let index = 0; index < 4; index += 1) advanceTime(state, () => 1);
+  const dayTwo = getJournalEntries(state, "today")[0];
+  assert.equal(dayTwo.sailingDay, 2);
+  assert.notEqual(dayTwo.id, dayOne.id);
+  assert.deepEqual(Object.keys(state.journal).sort(), Object.keys(journalBefore).sort());
+});
+
+test("common and uncommon fish keep a short field note without entering the journal", () => {
   const state = createInitialState();
   const common = FISH.find(fish => fish.rarity === "common");
   const uncommon = FISH.find(fish => fish.rarity === "uncommon");
   recordCatch(state, caught(common.id));
-  recordCatch(state, caught(uncommon.id, { uid: "journal-uncommon", caughtAt: "2026-07-18T02:00:00.000Z" }));
-  const firstLine = state.journal.fishEncounterLineById[common.id];
-  assert.match(firstLine, new RegExp(common.name));
+  recordCatch(state, caught(uncommon.id, { uid: "journal-uncommon" }));
+  assert.match(state.journal.fishEncounterLineById[common.id], new RegExp(common.name));
   assert.match(state.journal.fishEncounterLineById[uncommon.id], new RegExp(uncommon.name));
-  assert.equal(state.journal.permanentEntries.filter(entry => entry.sourceId === `fish:${common.id}`).length, 0);
-  assert.equal(state.journal.permanentEntries.filter(entry => entry.sourceId === `fish:${uncommon.id}`).length, 0);
-  recordCatch(state, caught(common.id, { uid: "journal-common-repeat", caughtAt: "2026-07-18T03:00:00.000Z" }));
-  assert.equal(state.journal.fishEncounterLineById[common.id], firstLine);
+  assert.equal(getJournalEntries(state, "rare_fish").length, 0);
 });
 
-test("rare fish receive one immutable full encounter page even when events are resent", () => {
+test("the first manual rare catch unlocks exactly one fixed encounter page", () => {
   const state = createInitialState();
   const rare = FISH.find(fish => fish.rarity === "rare");
   recordCatch(state, caught(rare.id, { weather: "rain", variant: "shimmer" }));
-  const page = state.journal.permanentEntries.find(entry => entry.sourceId === `fish:${rare.id}`);
-  assert.ok(page);
-  assert.match(page.body, new RegExp(rare.name));
-  assert.ok(page.poeticLine.length > 10);
-  const savedText = `${page.title}\n${page.body}\n${page.poeticLine}`;
+  const page = getJournalEntries(state, "rare_fish")[0];
+  assert.equal(page.id, `journal:fish:${rare.id}`);
+  assert.match(`${page.title} ${page.body.join(" ")}`, new RegExp(rare.name));
+  assert.ok(state.journal.unreadEntryIds.includes(page.id));
   dispatchGameEvent(state, { eventId: "rare-resend", type: "fish.discovered", source: "manual", refs: { fishId: rare.id } });
-  assert.equal(state.journal.permanentEntries.filter(entry => entry.sourceId === `fish:${rare.id}`).length, 1);
+  assert.equal(state.journal.unreadEntryIds.filter(id => id === page.id).length, 1);
   const reloaded = migrateState(structuredClone(state));
-  const reloadedPage = reloaded.journal.permanentEntries.find(entry => entry.sourceId === `fish:${rare.id}`);
-  assert.equal(`${reloadedPage.title}\n${reloadedPage.body}\n${reloadedPage.poeticLine}`, savedText);
+  assert.deepEqual(getJournalEntry(reloaded, page.id), getJournalEntry(state, page.id));
 });
 
-test("automatic, offline, and migration sources never invent encounter history", () => {
+test("automatic, offline, and migration sources never invent rare encounter history", () => {
   let journal = createJournalState();
   const rare = FISH.find(fish => fish.rarity === "rare");
   for (const source of ["auto", "offline", "migration"]) {
     journal = applyJournalEvent(journal, { eventId: `ignored:${source}`, type: "fish.discovered", source, sailingDay: 1, refs: { fishId: rare.id } }).state;
   }
   assert.deepEqual(journal.fishEncounterLineById, {});
-  assert.equal(journal.permanentEntries.length, 1);
-
-  const legacy = migrateState({ version: 4, discovered: { [rare.id]: { count: 9, bestLength: 30, bestWeight: 2 } } });
-  assert.deepEqual(legacy.journal.fishEncounterLineById, {});
-  assert.equal(legacy.journal.permanentEntries.length, 1);
+  assert.equal(journal.unreadEntryIds.includes(`journal:fish:${rare.id}`), false);
 });
 
-test("today tide notes merge meaningful facts once and seal without later rewriting", () => {
+test("initial categories expose only today's essay and the first Sleeping Tide story page", () => {
   const state = createInitialState();
-  const common = FISH.find(fish => fish.rarity === "common");
-  recordCatch(state, caught(common.id, { variant: "shimmer", weather: "rain" }));
-  const draft = state.journal.dailyEntries[0];
-  assert.equal(state.journal.dailyEntries.length, 1);
-  assert.equal(draft.sealed, false);
-  assert.match(draft.body, /閃光/);
-  assert.match(draft.body, /細雨/);
-  assert.ok(draft.poeticLine.length > 10);
-
-  dispatchGameEvent(state, { eventId: "same-rain-fact", type: "fish.caught", source: "manual", refs: { fishId: common.id }, payload: { caught: { variant: "normal" } }, weatherId: "rain" });
-  assert.equal(state.journal.dailyEntries.length, 1);
-  assert.equal(state.journal.dailyEntries[0].facts.filter(fact => fact.key.startsWith("rain:")).length, 1);
-  for (let index = 0; index < 4; index += 1) advanceTime(state, () => 1);
-  const sealed = state.journal.dailyEntries.find(entry => entry.sailingDay === 1);
-  assert.equal(sealed.sealed, true);
-  const sealedText = `${sealed.body}\n${sealed.poeticLine}`;
-  dispatchGameEvent(state, { eventId: "late-day-one", type: "region.revisited", source: "manual", sailingDay: 1, refs: { regionId: "sleeping_tide_bay" } });
-  assert.equal(`${state.journal.dailyEntries.find(entry => entry.sailingDay === 1).body}\n${sealed.poeticLine}`, sealedText);
+  const categories = Object.fromEntries(getJournalCategories(state).map(category => [category.id, category]));
+  assert.equal(categories.today.unlockedCount, 1);
+  assert.equal(categories.rare_fish.unlockedCount, 0);
+  assert.deepEqual([categories.sleeping_tide_bay.unlockedCount, categories.sleeping_tide_bay.totalCount], [1, 4]);
+  assert.deepEqual([categories.luminous_archipelago.unlockedCount, categories.luminous_archipelago.totalCount], [0, 6]);
+  assert.equal(categories.mist_cape_cold_current.totalCount, 0);
 });
 
-test("daily notes archive the oldest ten-day batch after the 180-page limit", () => {
-  const state = createDeveloperState();
-  const permanentBefore = structuredClone(state.journal.permanentEntries);
-  assert.equal(developerFillJournalArchive(state, 181), true);
-  assert.ok(state.journal.dailyEntries.length <= DAILY_JOURNAL_LIMIT);
-  assert.equal(state.journal.dailyEntries.length, 171);
-  assert.equal(state.journal.dailyArchives.length, 1);
-  assert.equal(state.journal.dailyArchives[0].stats.entryCount, 10);
-  assert.deepEqual(state.journal.permanentEntries, permanentBefore);
-  assert.ok(JSON.stringify(state.journal).length < 500_000);
-  assert.equal(developerFillJournalArchive(state, 181), true);
-  assert.equal(state.journal.dailyEntries.length, 171);
-  assert.equal(state.journal.dailyArchives.length, 1);
-  const reloaded = migrateState(structuredClone(state));
-  assert.equal(reloaded.journal.dailyEntries.length, 171);
-  assert.equal(reloaded.journal.dailyArchives.length, 1);
-});
-
-test("permanent route, ship, research, and world pages use stable source IDs", () => {
+test("completed regional events unlock only their predefined sea story page", () => {
   const state = createInitialState();
-  beginRouteTravel(state, SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID, Date.parse("2026-07-18T00:00:00.000Z"));
-  assert.equal(filterJournalEntries(state.journal, "route", SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID).length, 1);
-  state.world.travel = null;
-  state.world.docking = { status: "docked", regionId: "sleeping_tide_bay" };
-  state.money = 5000;
-  state.tideglow.total = 20;
-  buyShip(state, "tidewhisper_residence", "2026-07-18T03:00:00.000Z");
-  assert.equal(filterJournalEntries(state.journal, "ship", "tidewhisper_residence").length, 1);
-
-  const developer = createDeveloperState();
-  const first = developerEmitJournalEvent(developer, "world.completed", {}, "developer:world-complete");
-  const second = developerEmitJournalEvent(developer, "world.completed", {}, "developer:world-complete");
-  assert.equal(first.results.journal.createdEntries.length, 1);
-  assert.equal(second.duplicate, true);
-  assert.equal(developer.journal.permanentEntries.filter(entry => entry.sourceId === "world-complete").length, 1);
+  state.bayEventHistory.silver_tide = { completions: 1, firstCompletedAt: "2026-07-18T01:00:00.000Z", lastCompletedDay: 1 };
+  state.journal = syncJournalUnlocks(state);
+  const pages = getJournalEntries(state, "sleeping_tide_bay");
+  assert.deepEqual(pages.map(page => page.id), [
+    "journal:story:sleeping_tide_bay:opening",
+    "journal:story:sleeping_tide_bay:silver_tide"
+  ]);
+  assert.equal(getJournalEntries(state, "luminous_archipelago").length, 0);
 });
 
-test("unread state, queued notices, filters, and read actions remain independent", () => {
+test("completed Chengye scenes appear in Luminous chapter order", () => {
   const state = createInitialState();
-  const rare = FISH.find(fish => fish.rarity === "rare");
-  recordCatch(state, caught(rare.id));
-  const page = filterJournalEntries(state.journal, "fish", rare.id)[0];
-  assert.ok(state.journal.pendingNoticeEntryIds.includes(page.id));
-  assert.ok(state.journal.unreadEntryIds.includes(page.id));
-  const read = markJournalEntriesRead(state.journal, [page.id]);
-  assert.equal(read.unreadEntryIds.includes(page.id), false);
-  assert.equal(read.pendingNoticeEntryIds.includes(page.id), true);
-  assert.ok(filterJournalEntries(read, "permanent").some(entry => entry.id === page.id));
-  assert.ok(filterJournalEntries(read, "day", 1).some(entry => entry.id === page.id));
-  assert.equal(filterJournalEntries(read, "day", 2).some(entry => entry.id === page.id), false);
-  assert.ok(allJournalEntries(read).some(entry => entry.type === "intro"));
+  state.residentStories.chengye = {
+    completedSceneIds: ["chengye_drifting_observer", "chengye_lagoon_margin"],
+    rewardIds: []
+  };
+  state.journal = syncJournalUnlocks(state);
+  assert.deepEqual(getJournalEntries(state, "luminous_archipelago").map(page => page.id), [
+    "journal:story:luminous_archipelago:chengye_drifting_observer",
+    "journal:story:luminous_archipelago:chengye_lagoon_margin"
+  ]);
 });
 
-test("sealing an empty day never creates a fictional daily page", () => {
-  const journal = sealJournalDay(createJournalState(), 1);
-  assert.deepEqual(journal.dailyEntries, []);
-  assert.deepEqual(journal.dailyArchives, []);
+test("reading a fixed page clears unread state without affecting today's automatic page", () => {
+  const state = createInitialState();
+  const opening = getJournalEntries(state, "sleeping_tide_bay")[0];
+  assert.equal(getJournalUnreadCount(state), 1);
+  state.journal = markJournalEntriesRead(state.journal, [opening.id]);
+  assert.equal(getJournalUnreadCount(state), 0);
+  assert.equal(getJournalEntries(state, "today").length, 1);
+});
+
+test("legacy event journals migrate only compatible rare and story reading state", () => {
+  const legacy = normalizeJournalState({
+    version: 1,
+    fishEncounterLineById: { mahi: "舊初遇短句" },
+    permanentEntries: [
+      { id: "journal:intro", sourceId: "intro:v0.5", title: "舊開篇", body: "舊文字" },
+      { id: "journal:fish:mahi", sourceId: "fish:mahi", title: "鬼頭刀", body: "舊文字" },
+      { id: "journal:ship:tidewhisper_residence", sourceId: "ship:tidewhisper_residence", title: "舊船頁", body: "舊文字" }
+    ],
+    dailyEntries: [{ id: "journal:daily:1", body: "舊潮記" }],
+    unreadEntryIds: ["journal:fish:mahi"]
+  });
+  assert.equal(legacy.version, JOURNAL_VERSION);
+  assert.ok(legacy.readEntryIds.includes("journal:story:sleeping_tide_bay:opening"));
+  assert.ok(legacy.unreadEntryIds.includes("journal:fish:mahi"));
+  assert.equal(Object.hasOwn(legacy, "dailyEntries"), false);
+  assert.equal(legacy.unreadEntryIds.some(id => id.includes("ship")), false);
 });

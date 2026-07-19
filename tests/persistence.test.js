@@ -240,7 +240,7 @@ test("Slice B v5 save is backed up before same-version Slice C interior normaliz
   assert.deepEqual(result.state.ships.interiorsByShipId.drifting_home.ownedFurnitureIds, ["sleeping_bag"]);
 });
 
-test("Slice C v5 save is backed up before same-version Slice D journal normalization", () => {
+test("legacy v1 journal is backed up before fixed-page v2 normalization", () => {
   const alpha3 = createInitialState();
   alpha3.journal = {
     introCreated: true,
@@ -260,7 +260,10 @@ test("Slice C v5 save is backed up before same-version Slice D journal normaliza
   assert.equal(result.migratedFromVersion, 5);
   assert.equal(result.preserveBackupOnWrite, true);
   assert.equal(result.shouldRewritePrimary, true);
-  assert.equal(result.state.journal.version, 1);
-  assert.equal(result.state.journal.permanentEntries.length, 1);
+  assert.equal(result.state.journal.version, 2);
+  assert.equal("permanentEntries" in result.state.journal, false);
+  assert.equal("dailyEntries" in result.state.journal, false);
+  assert.deepEqual(result.state.journal.readEntryIds, []);
+  assert.deepEqual(result.state.journal.unreadEntryIds, ["journal:story:sleeping_tide_bay:opening"]);
   assert.deepEqual(result.state.journal.fishEncounterLineById, {});
 });

@@ -7,8 +7,8 @@ import {
 } from "../src/data.js";
 import {
   activeShipSpeed, beginRouteTravel, buyAutoFishingEquipment, buyShip, configureAutoFishing,
-  createDeveloperState, createInitialState, developerFillJournalArchive, dispatchGameEvent,
-  dockAtDestination, getRouteDurationForState, markAutoFishingClosed, migrateState, progressTravel,
+  createDeveloperState, createInitialState, dispatchGameEvent, dockAtDestination, getJournalEntries,
+  getRouteDurationForState, markAutoFishingClosed, migrateState, progressTravel,
   recordCatch, sellCatches, settleAutoFishing, shipInterior, stopAutoFishing, switchActiveShip
 } from "../src/core.js";
 import { RECENT_GAME_EVENT_LIMIT } from "../src/systems/game-events.js";
@@ -132,10 +132,12 @@ test("the rack benchmark is exactly half of the relaxed thirty-catch manual hour
   assert.equal(automaticCatchesPerHour * 3, AUTO_FISHING_EQUIPMENT.maxCatchCount);
 });
 
-test("five hundred normalized event inputs compact while Tideglow and permanent journal sources deduplicate", () => {
+test("five hundred normalized event inputs compact while Tideglow and fixed journal pages deduplicate", () => {
   const state = createInitialState();
   const rare = FISH.find(fish => fish.rarity === "rare");
-  for (let index = 0; index < 500; index += 1) {
+  const habitat = rare.habitats.find(entry => entry.regionId === SLEEPING_TIDE_BAY_ID);
+  recordCatch(state, economicCatch(rare, habitat, 0));
+  for (let index = 2; index < 500; index += 1) {
     const result = dispatchGameEvent(state, {
       eventId: `slice-f:event:${index}`,
       type: "fish.discovered",
@@ -149,7 +151,8 @@ test("five hundred normalized event inputs compact while Tideglow and permanent 
   assert.equal(state.gameEvents.recent.length, RECENT_GAME_EVENT_LIMIT);
   assert.equal(state.tideglow.total, 1);
   assert.equal(Object.keys(state.tideglow.ledgerBySourceId).length, 1);
-  assert.equal(state.journal.permanentEntries.filter(entry => entry.sourceId === `fish:${rare.id}`).length, 1);
+  assert.equal(getJournalEntries(state, "rare_fish").filter(entry => entry.fishId === rare.id).length, 1);
+  assert.equal(state.journal.unreadEntryIds.filter(id => id === `journal:fish:${rare.id}`).length, 1);
   assert.equal(Object.keys(state.journal.fishEncounterLineById).length, 1);
 });
 
@@ -232,9 +235,9 @@ test("two hundred forty offline settlements survive limits, stops, reloads, and 
   assert.deepEqual(migrateState(structuredClone(state)), state);
 });
 
-test("journal archives, ship switches, and a mature developer save stay compact and structurally stable", () => {
+test("derived daily journal, ship switches, and a mature developer save stay compact and structurally stable", () => {
   const state = createDeveloperState();
-  developerFillJournalArchive(state, 181);
+  const todayBefore = getJournalEntries(state, "today");
   const aquariumBefore = state.aquarium.fish.map(caught => caught.uid);
   const inventoryBefore = state.catchInventory.map(caught => caught.uid);
   for (let index = 0; index < 300; index += 1) {
@@ -243,11 +246,13 @@ test("journal archives, ship switches, and a mature developer save stay compact 
   }
   assert.deepEqual(state.aquarium.fish.map(caught => caught.uid), aquariumBefore);
   assert.deepEqual(state.catchInventory.map(caught => caught.uid), inventoryBefore);
-  assert.equal(state.journal.dailyEntries.length, 171);
-  assert.equal(state.journal.dailyArchives.length, 1);
+  assert.equal(todayBefore.length, 1);
+  assert.equal("dailyEntries" in state.journal, false);
+  assert.equal("dailyArchives" in state.journal, false);
   const bytes = Buffer.byteLength(JSON.stringify(state));
   assert.ok(bytes < 500_000, `mature developer save was ${bytes} bytes`);
   const reloaded = migrateState(structuredClone(state));
-  assert.equal(reloaded.journal.dailyEntries.length, 171);
-  assert.equal(reloaded.journal.dailyArchives.length, 1);
+  assert.deepEqual(getJournalEntries(reloaded, "today"), todayBefore);
+  assert.equal("dailyEntries" in reloaded.journal, false);
+  assert.equal("dailyArchives" in reloaded.journal, false);
 });

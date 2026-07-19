@@ -6,8 +6,10 @@ import {
   getShipFurniture, shipFurnitureById, shipInteriorSceneByShipId
 } from "./data/ship-interiors.js";
 import {
-  DAILY_POETIC_LINES, FISH_ENCOUNTER_LINES, JOURNAL_ENTRY_TYPE_LABELS, JOURNAL_EVENT_TEMPLATES,
-  JOURNAL_TEMPLATE_VERSION, journalTemplateByEventType
+  DAILY_TIDE_ESSAYS, FISH_ENCOUNTER_LINES, JOURNAL_CATEGORIES, JOURNAL_ENTRY_TYPE_LABELS,
+  JOURNAL_EVENT_TEMPLATES, JOURNAL_REGION_CATEGORIES, JOURNAL_TEMPLATE_VERSION,
+  MAIN_STORY_JOURNAL_ENTRIES, RARE_FISH_JOURNAL_ENTRIES, journalTemplateByEventType,
+  rareFishJournalEntryByFishId, storyJournalEntryByEvent
 } from "./data/journal-templates.js";
 import {
   AUTO_FISHING_EQUIPMENT, AUTO_FISHING_POETIC_LINES, AUTO_FISHING_REASON_LABELS
@@ -66,8 +68,10 @@ export {
   IMPLEMENTED_SHIP_IDS, SHIPS, shipById,
   FURNITURE, SHIP_FURNITURE, SHIP_INTERIOR_SCENES, SHIP_LIGHTING, SHIP_SLOT_TYPES,
   getShipFurniture, shipFurnitureById, shipInteriorSceneByShipId,
-  DAILY_POETIC_LINES, FISH_ENCOUNTER_LINES, JOURNAL_ENTRY_TYPE_LABELS, JOURNAL_EVENT_TEMPLATES,
-  JOURNAL_TEMPLATE_VERSION, journalTemplateByEventType,
+  DAILY_TIDE_ESSAYS, FISH_ENCOUNTER_LINES, JOURNAL_CATEGORIES, JOURNAL_ENTRY_TYPE_LABELS,
+  JOURNAL_EVENT_TEMPLATES, JOURNAL_REGION_CATEGORIES, JOURNAL_TEMPLATE_VERSION,
+  MAIN_STORY_JOURNAL_ENTRIES, RARE_FISH_JOURNAL_ENTRIES, journalTemplateByEventType,
+  rareFishJournalEntryByFishId, storyJournalEntryByEvent,
   AUTO_FISHING_EQUIPMENT, AUTO_FISHING_POETIC_LINES, AUTO_FISHING_REASON_LABELS
 };
 
@@ -269,9 +273,9 @@ export const FISH = [
 ];
 
 export const RARITY = {
-  common: { name: "常見", multiplier: 1, color: "#7fa8a0" },
-  uncommon: { name: "少見", multiplier: 1.8, color: "#5c91b9" },
-  rare: { name: "稀有", multiplier: 4, color: "#d19b4a" }
+  common: { name: "常見", multiplier: 1, color: "#686f73" },
+  uncommon: { name: "少見", multiplier: 1.8, color: "#477ca5" },
+  rare: { name: "稀有", multiplier: 4, color: "#76529b" }
 };
 
 export const BAY_EVENTS = [
@@ -470,5 +474,7 @@ export const CONTENT_VALIDATION = validateContentCatalog({
   shipFurniture: SHIP_FURNITURE,
   shipInteriors: SHIP_INTERIOR_SCENES,
   journalTemplates: JOURNAL_EVENT_TEMPLATES,
+  journalCategories: JOURNAL_CATEGORIES,
+  journalEntries: [...RARE_FISH_JOURNAL_ENTRIES, ...MAIN_STORY_JOURNAL_ENTRIES],
   autoFishingEquipment: [AUTO_FISHING_EQUIPMENT]
 });

@@ -1,7 +1,7 @@
 import {
   ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, AUTO_FISHING_EQUIPMENT, BAITS, BAY_EVENTS, CHART_REGION_POINTS, CHART_ROUTE_PATHS,
   CHENGYE_ID, COMMISSION_TEMPLATES, CONTENT_VALIDATION, DAILY_GOAL_TEMPLATES, FISH, FURNITURE,
-  JOURNAL_ENTRY_TYPE_LABELS, JOURNAL_EVENT_TEMPLATES, MILESTONES,
+  JOURNAL_ENTRY_TYPE_LABELS, MILESTONES,
   LUMINOUS_ARCHIPELAGO_ID, OBSERVATION_SUBJECTS, RARITY, REGIONS, RESEARCH_NODES, RESIDENTS, RODS,
   SHIPS, SHIP_INTERIOR_SCENES, SHIP_LIGHTING, SHIP_SLOT_TYPES, SLEEPING_TIDE_BAY_ID, SPOTS, TIDEGLOW_SOURCES, TIMES, WONDERS,
   fishAssetSrcSet, getFishHabitat, getResidentCommissionTemplates, getRegionFishingSpots, getRegionObservationSpots,
@@ -10,23 +10,23 @@ import {
 import {
   BACKUP_KEY, CHART_VIEW_LIMITS, DEVELOPER_TRAVEL_SCALES, DEV_BACKUP_KEY, DEV_SAVE_KEY, DEV_TEMP_SAVE_KEY,
   SAVE_KEY, SAVE_VERSION, TEMP_SAVE_KEY,
-  acceptResidentCommission, acknowledgeAutoFishing, activeShip, activeShipSpeed, activeShipFurnitureCatalog,
-  advanceResidentStory, advanceTime, applyMilestones, autoFishingSummaryView, baitById, beginRouteTravel,
+  acceptResidentCommission, acceptResidentStory, acknowledgeAutoFishing, activeShip, activeShipSpeed, activeShipFurnitureCatalog,
+  advanceTime, applyMilestones, autoFishingSummaryView, baitById, beginRouteTravel,
   buyAutoFishingEquipment, buyBait, buyRod, buyShip, buyShipFurniture, chooseFish, claimAchievement,
-  claimAllCompletedDailyGoals, claimQuest, createDeveloperState, createInitialState, deliverResidentCommission,
+  claimAllCompletedDailyGoals, claimQuest, completeResidentStory, createDeveloperState, createInitialState, deliverResidentCommission,
   cancelAutoFishingClosed, configureAutoFishing, developerArriveTravel, developerClearResidentCommissionHistory, developerCompleteDailyGoals,
   developerCompleteRegionResearch, developerCompleteResidentCommission, developerRecordObservation,
   developerResetChengyeStory, developerResetDailyBoard, developerResetObservations, developerResetRouteState,
   developerDockRegion, developerResetAutoFishing, developerSetDailyGoal, developerSetRegionEvent, developerSetResidentOffer,
   developerSetTravelScale, developerAdjustTideglow, developerEmitTideglowEvent,
-  developerClearActiveShipFurniture, developerEmitJournalEvent, developerFillActiveShipFurniture,
-  developerFillJournalArchive, developerResetActiveShipSlots,
+  developerClearActiveShipFurniture, developerFillActiveShipFurniture, developerResetActiveShipSlots,
   developerRevealShips, developerSetActiveShipLighting, developerSetShipOwned, developerSetShipSpeed,
   developerSimulateAutoFishing, discoveredCount,
-  dockAtDestination, dropResidentCommission, equipTitle, filterJournalEntries, fishById,
+  dockAtDestination, dropResidentCommission, equipTitle, fishById,
   furnitureById, generateCatch, getAchievementProgress, getActiveBayEvent, getActiveBayEventState,
   getAquariumCapacity, getAutoFishingFishPool, getBayEventHint, getEligibleAutoFishingBaits,
   getEligibleAutoFishingSpots, getFamiliarity, getObservationHint,
+  getJournalCategories, getJournalEntries, getJournalEntry, getJournalUnreadCount,
   getRegionResearchStatus, getResidentStoryStatus, getShipPurchaseState,
   getRouteDurationForState, getTensionConfig, getTravelStatus, getUnclaimedAchievementCount, isUnlocked,
   markAutoFishingClosed, markJournalEntriesRead, acknowledgeJournalNotices, migrateState, moveCatchToAquarium,
@@ -57,7 +57,7 @@ let currentView = "fishing";
 let activeSaveMode = "normal";
 let journalFilter = "all";
 let selectedJournalFish = null;
-let logbookFilter = { type: "all", value: null };
+let logbookCategoryId = "today";
 let selectedLogbookEntryId = null;
 let shopTab = "rods";
 let chartPointer = null;
@@ -201,7 +201,7 @@ function startGame(isNew = false, mode = "normal") {
   activeSaveMode = mode;
   journalFilter = "all";
   selectedJournalFish = null;
-  logbookFilter = { type: "all", value: null };
+  logbookCategoryId = "today";
   selectedLogbookEntryId = null;
   shouldRewriteLoadedSave = false;
   let autoFishingUpdate = { changed: false, summary: null };
@@ -252,16 +252,25 @@ function syncWorld() {
   $("#journal-badge").textContent = `${discoveredCount(state)}/${FISH.length}${unclaimed?` · ${unclaimed}`:""}`;
   $("#journal-badge").title = unclaimed?`${unclaimed} 項成就獎勵待領取`:"圖鑑探索進度";
   $("#catch-badge").textContent = state.catchInventory.length;
-  const journalUnread=state.journal?.unreadEntryIds?.length||0;
+  const journalUnread=getJournalUnreadCount(state);
   const logbookBadge=$("#logbook-badge");
-  if(logbookBadge){logbookBadge.hidden=!journalUnread;logbookBadge.textContent=journalUnread>9?"9+":String(journalUnread);logbookBadge.title=`航海日誌有 ${journalUnread} 篇未讀`;}
+  if(logbookBadge){logbookBadge.hidden=!journalUnread;logbookBadge.textContent=journalUnread>9?"9+":String(journalUnread);logbookBadge.title=`日誌有 ${journalUnread} 篇未讀`;}
   const activeCommission = state.residentCommissions?.active;
-  const storyReady = RESIDENTS.some(resident => resident.regionId === state.world?.currentRegionId
-    && getResidentStoryStatus(state, resident.id).nextAvailable);
-  $("#resident-badge").hidden = !activeCommission && !storyReady;
-  $("#resident-badge").textContent = activeCommission
-    ? activeCommission.progress >= activeCommission.goal ? "可交付" : "進行中"
-    : "新相遇";
+  const localStoryStatuses = RESIDENTS.filter(resident => resident.regionId === state.world?.currentRegionId)
+    .map(resident => getResidentStoryStatus(state, resident.id));
+  const storyCanComplete = localStoryStatuses.some(status => status.canComplete);
+  const storyCanAccept = localStoryStatuses.some(status => status.canAccept);
+  const storyInProgress = localStoryStatuses.some(status => status.activeScene);
+  $("#resident-badge").hidden = !activeCommission && !storyCanComplete && !storyCanAccept && !storyInProgress;
+  $("#resident-badge").textContent = storyCanComplete
+    ? "主線完成"
+    : activeCommission?.progress >= activeCommission?.goal
+      ? "提案可交"
+      : storyCanAccept
+        ? "新主線"
+        : storyInProgress
+          ? "主線中"
+          : "提案中";
   $("#developer-tools-button").hidden = activeSaveMode !== "developer";
   $("#sound-button").textContent = state.settings.sound ? "♪" : "×";
   const luminousSail = Object.values(state.world?.regionProgress || {})
@@ -457,20 +466,29 @@ function residentCard(resident) {
   const offer = state.residentCommissions.offersByResident?.[resident.id];
   const history = state.residentCommissions.history?.[resident.id];
   const anotherActive = state.residentCommissions.active && !active;
-  let commission = `<div class="commission-panel"><p class="quiet-note">今天沒有新的提案。放下的委託會等到下一個航海日再更新。</p></div>`;
+  let commission = `<section class="resident-commission-panel is-empty"><div class="resident-section-heading"><span class="section-label">今日提案 · 選填</span><small>不影響主線</small></div><p class="quiet-note">今天沒有新的提案。每日提案只是可選的港口小事，下一個航海日會自然更新。</p></section>`;
   if (offer) {
-    commission = `<div class="commission-panel"><span class="section-label">今日提案</span><h4>${offer.title}</h4><p>${offer.description}</p><div class="commission-meta"><span>獎勵 ${rewardLabel(offer.reward)}</span><span>0 / ${offer.goal}</span></div><div class="resident-actions"><button class="primary-button" data-action="accept-commission" data-id="${resident.id}" ${anotherActive ? "disabled" : ""}>${anotherActive ? "已有進行中的委託" : "接受委託"}</button></div></div>`;
+    commission = `<section class="resident-commission-panel"><div class="resident-section-heading"><span class="section-label">今日提案 · 選填</span><small>不影響主線</small></div><h4>${escapeText(offer.title)}</h4><p>${escapeText(offer.description)}</p><blockquote>「${escapeText(resident.dialogue.offer)}」</blockquote><div class="commission-meta"><span>一般獎勵 ${escapeText(rewardLabel(offer.reward))}</span><span>0 / ${offer.goal}</span></div><div class="resident-actions"><button class="soft-button" data-action="accept-commission" data-id="${resident.id}" ${anotherActive ? "disabled" : ""}>${anotherActive ? "已有進行中的今日提案" : "接受今日提案"}</button></div></section>`;
   }
   if (active) {
     const complete = active.progress >= active.goal;
-    commission = `<div class="commission-panel"><span class="section-label">${complete ? "可以交付" : "慢慢進行中"}</span><h4>${active.title}</h4><p>${active.description}</p><div class="commission-meta"><span>獎勵 ${rewardLabel(active.reward)}</span><span>${Math.floor(active.progress)} / ${active.goal}</span></div><div class="progress-track"><i style="width:${Math.min(100,active.progress/active.goal*100)}%"></i></div><div class="resident-actions">${complete ? `<button class="primary-button" data-action="deliver-commission" data-id="${resident.id}">當面交付</button>` : ""}<button class="soft-button" data-action="drop-commission">放下委託</button></div></div>`;
+    commission = `<section class="resident-commission-panel ${complete ? "is-ready" : "is-active"}"><div class="resident-section-heading"><span class="section-label">今日提案 · ${complete ? "可交付" : "進行中"}</span><small>選填 · 不影響主線</small></div><h4>${escapeText(active.title)}</h4><p>${escapeText(active.description)}</p><blockquote>「${escapeText(complete ? resident.dialogue.ready : resident.dialogue.active)}」</blockquote><div class="commission-meta"><span>一般獎勵 ${escapeText(rewardLabel(active.reward))}</span><span>${Math.floor(active.progress)} / ${active.goal}</span></div><div class="progress-track"><i style="width:${Math.min(100,active.progress/active.goal*100)}%"></i></div><div class="resident-actions">${complete ? `<button class="soft-button" data-action="deliver-commission" data-id="${resident.id}">交付今日提案</button>` : ""}<button class="soft-button" data-action="drop-commission">放下今日提案</button></div></section>`;
   }
-  const dialogue = active ? (active.progress >= active.goal ? resident.dialogue.ready : resident.dialogue.active) : offer ? resident.dialogue.offer : resident.dialogue.greeting;
   const story = getResidentStoryStatus(state, resident.id);
-  const storyPanel = story.scenes.length ? `<div class="resident-story-panel ${story.complete ? "is-complete" : ""}"><span class="section-label">港口相遇 · ${story.completedSceneIds.length} / ${story.scenes.length}</span><h4>${story.complete ? "故事留在風棲港" : story.nextAvailable ? story.nextScene.title : "下一頁還在海上"}</h4><p>${story.complete ? "澄野的手繪黑潮生態圖已收進旅程紀念；她仍會在觀測棚整理日常紀錄。" : story.nextAvailable ? "這段相遇已隨你的真實旅程自然亮起。" : "正常釣魚、觀察與研究即可推進；委託次數不影響故事。"}</p></div>` : "";
-  const talkLabel = story.nextAvailable ? "繼續這段相遇" : "聊一會兒";
-  const journalLink=filterJournalEntries(state.journal,"resident",resident.id).length?`<button class="soft-button" data-action="show-logbook" data-filter="resident" data-id="${resident.id}">居民日誌</button>`:"";
-  return `<article class="card resident-card" data-resident="${resident.id}"><div class="resident-heading"><span class="resident-icon">${resident.icon}</span><div><h3>${resident.name}</h3><p>${resident.role} · ${resident.portLocationName}</p></div></div><p class="resident-dialogue">「${dialogue}」</p>${storyPanel}${commission}<div class="resident-actions"><button class="soft-button" data-action="talk-resident" data-id="${resident.id}">${talkLabel}</button>${journalLink}<span class="quiet-note">已完成 ${history?.completions || 0} 次當地委託</span></div></article>`;
+  let storyPanel = "";
+  if (story.scenes.length) {
+    const scene = story.activeScene || story.nextScene;
+    const progress = story.objectiveProgress;
+    const goal = story.objectiveGoal;
+    const statusLabel = story.complete ? "全部完成" : story.canComplete ? "等待回報" : story.activeScene ? "任務進行中" : story.canAccept ? "新章節" : "尚未開啟";
+    const action = story.canAccept
+      ? `<button class="primary-button" data-action="accept-resident-story" data-id="${resident.id}">接受主線任務</button>`
+      : story.canComplete
+        ? `<button class="primary-button" data-action="complete-resident-story" data-id="${resident.id}">完成主線任務</button>`
+        : "";
+    storyPanel = `<section class="resident-main-story-panel ${story.complete ? "is-complete" : story.canComplete ? "is-ready" : story.activeScene ? "is-active" : ""}"><div class="resident-section-heading"><span class="section-label">海域主線 · ${statusLabel}</span><small>推進琉光群島故事</small></div><h4>${escapeText(story.complete ? "第二章 · 留在海裡的收藏" : `第 ${scene?.chapter || story.completedSceneIds.length + 1} 節 · ${scene?.title || "等待新的潮路"}`)}</h4>${story.complete ? `<p>澄野的手繪黑潮生態圖已成為永久旅程紀念；六節故事與對應日誌均已完成。</p>` : story.activeScene ? `<div class="resident-story-objective"><b>${escapeText(scene.objective.title)}</b><p>${escapeText(scene.objective.description)}</p><div class="commission-meta"><span>主線目標</span><span>${progress} / ${goal}</span></div><div class="progress-track"><i style="width:${Math.min(100,progress/goal*100)}%"></i></div></div>` : `<p>${story.canAccept ? "閱讀完整開場後接受任務；完成指定的實際行動，再回來交付這一節故事。" : "先完成前一節主線，新的章節才會開啟。"}</p>`}<div class="resident-actions">${action}${story.activeScene&&!story.canComplete ? '<span class="resident-story-hint">請先親手完成上方主線目標</span>' : ""}</div></section>`;
+  }
+  return `<article class="card resident-card" data-resident="${resident.id}"><div class="resident-heading"><span class="resident-icon">${resident.icon}</span><div><h3>${escapeText(resident.name)}</h3><p>${escapeText(resident.role)} · ${escapeText(resident.portLocationName)}</p></div></div><p class="resident-dialogue">「${escapeText(resident.dialogue.greeting)}」</p>${storyPanel}${commission}<div class="resident-social-row"><button class="soft-button" data-action="talk-resident" data-id="${resident.id}">一般交談</button><span>今日提案完成紀錄 ${history?.completions || 0} 次</span></div></article>`;
 }
 
 function renderResidents() {
@@ -480,9 +498,9 @@ function renderResidents() {
   const body = docked && residents.length
     ? `<div class="resident-grid">${residents.map(residentCard).join("")}</div>`
     : docked
-      ? `<div class="card resident-empty"><span class="resident-icon">⌂</span><h3>港口居民仍在準備相遇</h3><p class="modal-copy">${regionById(regionId)?.name || "這座港口"}的澄野相遇、研究與當地委託會在 Slice G 接上。現在不會從其他海域遠端出現。</p></div>`
+      ? `<div class="card resident-empty"><span class="resident-icon">⌂</span><h3>港口居民仍在準備故事</h3><p class="modal-copy">${regionById(regionId)?.name || "這座港口"}的主要居民、海域主線與今日提案仍在設計中；不會暫時借用其他海域的角色內容。</p></div>`
       : `<div class="card resident-empty"><span class="resident-icon">⌂</span><h3>先回港停泊</h3><p class="modal-copy">居民只在自己的港口生活，不會跨海追蹤旅程。回到有效港口後再來聊聊吧。</p></div>`;
-  content.innerHTML = `${panelHeading("港口居民", "沒有好感度、連續拜訪或期限。接受後的委託會安靜保留，直到你回來交付或自行放下。")} ${body}`;
+  content.innerHTML = `${panelHeading("港口居民", "海域主線會推進固定故事章節；今日提案是可自由接受或放下的日常小事，兩者不共用進度與解鎖。")} ${body}`;
 }
 
 function renderObservationPreview() {
@@ -607,8 +625,7 @@ function chartCurrentCard() {
     return `<div class="card chart-current-card"><span class="section-label">目前船位</span><h3>◉ ${region?.name || "目的地"}外海</h3><p>已收帆，正在等待手動停泊</p></div>`;
   }
   const region = regionById(state.world.currentRegionId);
-  const journalLink=filterJournalEntries(state.journal,"region",region?.id).length?`<button class="soft-button chart-journal-link" data-action="show-logbook" data-filter="region" data-id="${region.id}">查看此海域日誌</button>`:"";
-  return `<div class="card chart-current-card"><span class="section-label">目前船位 · ${activeShip(state).name}</span><h3>⚓ ${region?.name || "眠潮灣"}</h3><p>${region?.portName || "眠潮泊地"} · 已安全停泊</p>${journalLink}</div>`;
+  return `<div class="card chart-current-card"><span class="section-label">目前船位 · ${activeShip(state).name}</span><h3>⚓ ${region?.name || "眠潮灣"}</h3><p>${region?.portName || "眠潮泊地"} · 已安全停泊</p></div>`;
 }
 
 function applyChartView() {
@@ -709,20 +726,22 @@ function showObservationPreview(spotId) {
   modalRoot.innerHTML = `<div class="modal-backdrop observation-backdrop"><div class="modal observation-modal"><div class="observation-scene-mark" aria-hidden="true">${spot.icon}</div><span class="section-label">${regionById(spot.regionId)?.name || "群島"} · 完整觀察</span><h2>${result.repeatedPeriod ? "同一片光仍停在礁盤上" : "今天，海只留下潮聲"}</h2><p class="modal-copy">${result.repeatedPeriod ? "這個航海時段已經好好看過一次。沒有漏掉任何需要追趕的身影。" : "沒有遇見新生物，也是一筆真實紀錄。風向、礁影與等待的時間都已被記住。"}</p><p class="quiet-note">${result.hint}</p><div class="modal-actions"><button class="primary-button" data-action="close-modal">沿岬角回港</button></div></div></div>`;
 }
 
+function residentStoryBeats(beats) {
+  return (beats || []).map(beat => `<div class="resident-story-beat ${beat.speaker === "旁白" ? "is-narration" : "is-dialogue"}"><b>${escapeText(beat.speaker)}</b><p>${escapeText(beat.text)}</p></div>`).join("");
+}
+
+function showResidentStoryScene(scene, phase, status) {
+  const accepting = phase === "opening";
+  const progress = accepting ? status.objectiveProgress : scene.objective.goal;
+  const beats = accepting ? scene.opening : scene.completion;
+  modalRoot.innerHTML = `<div class="modal-backdrop resident-story-backdrop"><div class="modal resident-story-modal"><div class="resident-story-modal-heading"><span class="section-label">琉光群島主線 · 第 ${scene.chapter} 節／6</span><small>${accepting ? "主線任務已接受" : "主線任務已完成"}</small></div><h2>${escapeText(scene.title)}</h2><p class="resident-story-location">${escapeText(scene.locationName)}</p><div class="resident-story-lines">${residentStoryBeats(beats)}</div>${accepting ? `<aside class="resident-story-task"><span>本節主線目標</span><h3>${escapeText(scene.objective.title)}</h3><p>${escapeText(scene.objective.description)}</p><div class="commission-meta"><span>目前進度</span><span>${progress} / ${scene.objective.goal}</span></div></aside>` : ""}${scene.reward && !accepting ? `<div class="resident-story-reward"><span>永久旅程紀念</span><b>${escapeText(scene.reward.label)}</b></div>` : ""}<p class="quiet-note">主線只由上方指定的實際玩法推進；今日提案、提案完成次數與主線章節完全分開。</p><div class="modal-actions"><button class="primary-button" data-action="close-modal">${accepting ? "開始執行主線任務" : "完成並返回港口"}</button></div></div></div>`;
+}
+
 function showResidentDialogue(residentId, deliveredDialogue = null) {
   const resident = residentById(residentId);
   if (!resident) return;
-  if (!deliveredDialogue) {
-    const storyResult = advanceResidentStory(state, residentId);
-    if (storyResult.ok) {
-      saveGame(); render(); notifyTideglow([storyResult.tideglowEvent]);
-      const scene = storyResult.scene;
-      modalRoot.innerHTML = `<div class="modal-backdrop resident-story-backdrop"><div class="modal resident-story-modal"><span class="section-label">${scene.locationName} · 港口相遇 ${storyResult.status.completedSceneIds.length} / ${storyResult.status.scenes.length}</span><h2>${scene.title}</h2><div class="resident-story-lines">${scene.lines.map(line => `<p>「${line}」</p>`).join("")}</div>${scene.reward ? `<div class="resident-story-reward"><span>旅程紀念</span><b>${scene.reward.label}</b></div>` : ""}<p class="quiet-note">故事只由旅程、觀察與研究自然推進；居民委託、好感度或拜訪次數都不是門檻。</p><div class="modal-actions"><button class="primary-button" data-action="close-modal">${scene.jointObservation ? "讓礁影繼續安靜" : "和澄野道別"}</button></div></div></div>`;
-      return;
-    }
-  }
   const dialogue = deliveredDialogue || resident.dialogue.greeting;
-  modalRoot.innerHTML = `<div class="modal-backdrop"><div class="modal"><span class="section-label">${resident.portLocationName}</span><h2>${resident.name}</h2><p class="modal-copy">「${dialogue}」</p><p class="quiet-note">${resident.role}。居民留在自己的港口生活，不登船，也不會跨海聯絡或追蹤玩家。</p><div class="modal-actions"><button class="primary-button" data-action="close-modal">道別</button></div></div></div>`;
+  modalRoot.innerHTML = `<div class="modal-backdrop"><div class="modal"><span class="section-label">一般交談 · ${escapeText(resident.portLocationName)}</span><h2>${escapeText(resident.name)}</h2><p class="modal-copy">「${escapeText(dialogue)}」</p><p class="quiet-note">這是一般港口對話，不會接受、完成或推進主線，也不會改變今日提案。</p><div class="modal-actions"><button class="primary-button" data-action="close-modal">結束交談</button></div></div></div>`;
 }
 
 function renderFishingStage() {
@@ -822,14 +841,14 @@ function clearFishing(){ clearTimeout(fishing.timer); cancelAnimationFrame(fishi
 
 function showCatchModal(fish,caught,result,milestones) {
   const isShimmer=caught.variant==="shimmer";
-  const localStamp=result.isNewRegional&&caught.context?.regionId===LUMINOUS_ARCHIPELAGO_ID;
-  const tags=[result.isNew&&isShimmer?"圖鑑新增":null,localStamp?"琉光群島印章":null,result.isLengthRecord?"最長紀錄":null,result.isWeightRecord?"最重紀錄":null].filter(Boolean).join(" · ");
-  const familiarityText=result.familiarity.nextCount?`${result.record.count} / ${result.familiarity.nextCount}`:"已精通";
-  const ribbon=isShimmer?'<span class="new-ribbon is-shimmer">✦ 閃光個體</span>':result.isNew?'<span class="new-ribbon">NEW · 圖鑑新增</span>':localStamp?'<span class="new-ribbon">✓ 琉光群島印章</span>':`<span class="new-ribbon">${RARITY[fish.rarity].name}</span>`;
-  const rewards=[result.isNew?"首次發現獎勵已收入錢袋":null,result.isFirstShimmer?"首次閃光研究獎勵 75 金幣":null].filter(Boolean).join(" · ");
+  const caughtRegion=regionById(caught.context?.regionId);
+  const localStamp=result.isNewRegional&&caughtRegion;
+  const tags=[result.isNew?"圖鑑新增":null,localStamp?`${caughtRegion.name}印章`:null].filter(Boolean).join(" · ");
+  const highestLength=result.record?.bestLength||caught.length;
+  const resultBadges=`<div class="catch-result-badges"><span class="is-${fish.rarity}">${RARITY[fish.rarity].name}</span>${isShimmer?'<span class="is-shimmer">✦ 閃光個體</span>':""}</div>`;
   const eventUpdate=result.bayEventUpdate;
-  const eventFeedback=eventUpdate?.updated?`<div class="catch-event ${eventUpdate.completed?"is-complete":""}"><span>${eventUpdate.completed?"事件完成":"海灣事件進度"}</span><b>${eventUpdate.event.name} · ${eventUpdate.progress} / ${eventUpdate.event.goal}</b><small>${eventUpdate.completed?`獲得 ${eventUpdate.reward.label}`:getBayEventHint(state)}</small></div>`:"";
-  modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal catch-modal ${isShimmer?"is-shimmer":""}"><div class="catch-hero">${fishArt(fish,false,caught.variant,"scene")}</div>${ribbon}<h2>${fish.name}</h2><p class="catch-subtitle">${fish.english}</p><p class="modal-copy">${fish.short}</p><div class="catch-stats"><div><small>體長</small><b>${caught.length} cm</b></div><div><small>重量</small><b>${caught.weight} kg</b></div><div><small>售價</small><b>${caught.price} 金幣</b></div></div>${tags?`<div class="record-tag">✦ ${tags}</div>`:""}<div class="catch-familiarity ${result.familiarityChanged?"is-level-up":""}"><span>${result.familiarityChanged?"熟悉度提升":"圖鑑熟悉度"}</span><b>${result.familiarity.name}</b><small>${familiarityText}</small></div>${eventFeedback}${rewards?`<p class="record-tag">${rewards}</p>`:""}<div class="modal-actions"><button class="soft-button" data-action="modal-journal" data-id="${fish.id}">查看圖鑑</button><button class="primary-button" data-action="close-catch">收進漁獲箱</button></div></div></div>`;
+  const eventFeedback=eventUpdate?.updated?`<div class="catch-event ${eventUpdate.completed?"is-complete":""}"><span>${eventUpdate.completed?"事件完成":"海灣事件進度"}</span><b>${eventUpdate.event.name} · ${eventUpdate.progress} / ${eventUpdate.event.goal}</b><small>${eventUpdate.completed?"事件獎勵已自動收入":getBayEventHint(state)}</small></div>`:"";
+  modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal catch-modal ${isShimmer?"is-shimmer":""}"><div class="catch-hero">${fishArt(fish,false,caught.variant,"scene")}${result.isLengthRecord?'<span class="new-record-ribbon">新紀錄</span>':""}</div>${resultBadges}<h2>${fish.name}</h2><p class="catch-subtitle">${fish.english}</p><p class="modal-copy">${fish.short}</p><div class="catch-stats"><div><small>本次長度</small><b>${caught.length} cm</b></div><div><small>最高紀錄</small><b>${highestLength} cm</b></div></div>${tags?`<div class="record-tag">✦ ${tags}</div>`:""}${eventFeedback}<div class="modal-actions"><button class="soft-button" data-action="modal-journal" data-id="${fish.id}">查看圖鑑</button><button class="primary-button" data-action="close-catch">收進漁獲箱</button></div></div></div>`;
   for(const milestone of milestones) {
     const aquariumCapacity=AQUARIUM_CAPACITY_MILESTONES.find(item=>item.discoveries===milestone.count)?.capacity;
     const aquariumReward=aquariumCapacity?`${milestone.count===5?"海灣觀察箱":"水族箱擴建至"} ${aquariumCapacity} 格`:"";
@@ -840,11 +859,17 @@ function showCatchModal(fish,caught,result,milestones) {
 function renderJournal() {
   const unclaimed=getUnclaimedAchievementCount(state);
   const actions=`<div class="journal-heading-actions"><button class="soft-button achievement-open" data-action="show-achievements">收藏成就${unclaimed?`<i>${unclaimed}</i>`:""}</button><div class="completion-ring"><div><small>探索進度</small><b>${discoveredCount(state)} / ${FISH.length}</b></div></div></div>`;
-  const filtered=FISH.filter(f=>journalFilter==="all"||f.rarity===journalFilter||f.spots.includes(journalFilter)||Boolean(getFishHabitat(f,journalFilter)));
+  const regionCategories=REGIONS.filter(region=>region.status==="available"&&FISH.some(fish=>Boolean(getFishHabitat(fish,region.id))));
+  if(journalFilter!=="all"&&!regionCategories.some(region=>region.id===journalFilter))journalFilter="all";
+  const activeRegion=regionCategories.find(region=>region.id===journalFilter)||null;
+  const filtered=FISH.filter(f=>journalFilter==="all"||Boolean(getFishHabitat(f,journalFilter)));
   selectedJournalFish ||= (filtered.find(f=>state.discovered[f.id])||filtered[0])?.id;
   if (!filtered.some(f=>f.id===selectedJournalFish)) selectedJournalFish=filtered[0]?.id;
   const selected=fishById(selectedJournalFish), record=state.discovered[selected?.id];
-  content.innerHTML=`${panelHeading("魚類圖鑑","每次相遇都會累積熟悉度；跨區魚必須在當地實際捕獲，才會蓋上那片海域的印章。",actions)}<div class="filter-row"><button class="filter-chip ${journalFilter==="all"?"is-active":""}" data-action="journal-filter" data-id="all">全部</button><button class="filter-chip ${journalFilter===SLEEPING_TIDE_BAY_ID?"is-active":""}" data-action="journal-filter" data-id="${SLEEPING_TIDE_BAY_ID}">眠潮灣</button><button class="filter-chip ${journalFilter===LUMINOUS_ARCHIPELAGO_ID?"is-active":""}" data-action="journal-filter" data-id="${LUMINOUS_ARCHIPELAGO_ID}">琉光群島</button><button class="filter-chip ${journalFilter==="common"?"is-active":""}" data-action="journal-filter" data-id="common">常見</button><button class="filter-chip ${journalFilter==="uncommon"?"is-active":""}" data-action="journal-filter" data-id="uncommon">少見</button><button class="filter-chip ${journalFilter==="rare"?"is-active":""}" data-action="journal-filter" data-id="rare">稀有</button><button class="filter-chip ${journalFilter==="shore"?"is-active":""}" data-action="journal-filter" data-id="shore">近岸</button><button class="filter-chip ${journalFilter==="reef"?"is-active":""}" data-action="journal-filter" data-id="reef">礁石</button><button class="filter-chip ${journalFilter==="deep"?"is-active":""}" data-action="journal-filter" data-id="deep">深水</button></div><div class="journal-layout" style="margin-top:16px"><div class="fish-grid">${filtered.map(fish=>fishCard(fish)).join("")}</div>${selected?fishDetail(selected,record):""}</div>`;
+  const regionTabs=`<button class="filter-chip ${journalFilter==="all"?"is-active":""}" role="tab" aria-selected="${journalFilter==="all"}" data-action="journal-filter" data-id="all">全部 <small>${FISH.length}</small></button>${regionCategories.map(region=>{const count=FISH.filter(fish=>Boolean(getFishHabitat(fish,region.id))).length;return `<button class="filter-chip ${journalFilter===region.id?"is-active":""}" role="tab" aria-selected="${journalFilter===region.id}" data-action="journal-filter" data-id="${region.id}">${region.name} <small>${count}</small></button>`;}).join("")}`;
+  const title=activeRegion?`${activeRegion.name}魚類圖鑑`:"全部魚類圖鑑";
+  const subtitle=activeRegion?`收錄所有可在${activeRegion.name}獲得的魚；跨海域魚也會出現在這一頁。`:"依海域翻閱魚類；卡片以灰白、藍、紫色背景分別標示常見、少見與稀有。";
+  content.innerHTML=`${panelHeading(title,subtitle,actions)}<div class="filter-row fish-region-filters" role="tablist" aria-label="魚類圖鑑海域分類">${regionTabs}</div><div class="journal-layout" style="margin-top:16px"><div class="fish-grid">${filtered.map(fish=>fishCard(fish)).join("")}</div>${selected?fishDetail(selected,record):""}</div>`;
 }
 
 function showAchievementsModal() {
@@ -862,7 +887,7 @@ function showAchievementsModal() {
 function fishCard(fish) {
   const found=state.discovered[fish.id];
   const familiarity=getFamiliarity(found?.count || 0);
-  return `<button class="fish-card ${found?"":"is-unknown"} ${found?.caughtShimmer?"has-shimmer":""} ${selectedJournalFish===fish.id?"is-active":""}" data-action="select-fish" data-id="${fish.id}">${found?.caughtShimmer?'<span class="shimmer-mark" title="曾捕獲閃光個體">✦</span>':""}${fishArt(fish,!found,"normal",found?"journal":"silhouette")}<b>${found?fish.name:"未發現"}</b><small>${found?`${RARITY[fish.rarity].name} · 捕獲 ${found.count} 次`:unknownHint(fish)}</small>${found?`<span class="familiarity-chip is-${familiarity.id}">${familiarity.name}</span>`:""}</button>`;
+  return `<button class="fish-card rarity-${fish.rarity} ${found?"":"is-unknown"} ${found?.caughtShimmer?"has-shimmer":""} ${selectedJournalFish===fish.id?"is-active":""}" data-rarity="${fish.rarity}" data-action="select-fish" data-id="${fish.id}">${found?.caughtShimmer?'<span class="shimmer-mark" title="曾捕獲閃光個體">✦</span>':""}${fishArt(fish,!found,"normal",found?"journal":"silhouette")}<b>${found?fish.name:"未發現"}</b><small><span class="fish-card-rarity">${RARITY[fish.rarity].name}</span> · ${found?`捕獲 ${found.count} 次`:unknownHint(fish)}</small>${found?`<span class="familiarity-chip is-${familiarity.id}">${familiarity.name}</span>`:""}</button>`;
 }
 function unknownHint(fish){
   const luminousOnly=Boolean(getFishHabitat(fish,LUMINOUS_ARCHIPELAGO_ID))&&!getFishHabitat(fish,SLEEPING_TIDE_BAY_ID);
@@ -895,8 +920,7 @@ function fishDetail(fish,record) {
   const progress=familiarity.nextCount?`${record.count} / ${familiarity.nextCount}`:"已完成全部熟悉度階段";
   const ecologySource=full&&fish.ecologySource?`<div class="fact-box ecology-source">生態資料：<a href="${fish.ecologySource.url}" target="_blank" rel="noreferrer">${fish.ecologySource.label}</a></div>`:"";
   const encounterLine=state.journal?.fishEncounterLineById?.[fish.id];
-  const rareEntry=state.journal?.permanentEntries?.find(entry=>entry.sourceId===`fish:${fish.id}`);
-  const encounterNote=encounterLine?`<div class="fish-encounter-note"><span>初遇短句</span><p>${escapeText(encounterLine)}</p>${rareEntry?`<button class="soft-button" data-action="show-logbook" data-filter="fish" data-id="${fish.id}" data-entry="${rareEntry.id}">閱讀完整初遇頁</button>`:""}</div>`:"";
+  const encounterNote=encounterLine?`<div class="fish-encounter-note"><span>初遇短句</span><p>${escapeText(encounterLine)}</p></div>`:"";
   return `<aside class="card fish-detail"><div class="fish-detail-hero ${record.caughtShimmer?"has-shimmer":""}">${fishArt(fish,false,record.caughtShimmer?"shimmer":"normal","journal")}</div><h3>${fish.name}</h3><span class="latin">${fish.english} · ${fish.scientific}</span><span class="rarity-pill" style="background:${RARITY[fish.rarity].color}">${RARITY[fish.rarity].name}</span>${record.caughtShimmer?`<span class="shimmer-record">✦ 閃光紀錄 ${record.shimmerCount} 次</span>`:""}${renderRegionStamps(fish)}${encounterNote}<div class="familiarity-summary"><span>${familiarity.name}</span><b>${progress}</b></div><p class="fish-detail-copy">${full?fish.detail:fish.short}</p><div class="detail-stats"><div><small>捕獲次數</small><b>${record.count}</b></div><div><small>最長紀錄</small><b>${record.bestLength} cm</b></div><div><small>最重紀錄</small><b>${record.bestWeight} kg</b></div></div><div class="catch-dates"><span>初次：${formatCatchDate(record.firstCaught)}</span><span>最近：${formatCatchDate(record.lastCaught)}</span></div>${full?`<div class="fact-box">✦ ${fish.fact}</div><div class="fact-box">推薦：${fish.baits.map(id=>baitById(id).name).join("、")} · ${fish.times.map(id=>TIMES.find(t=>t.id===id).name).join("／")}</div>${ecologySource}`:`<div class="fact-box">再捕獲 ${3-record.count} 次，解鎖偏好魚餌、活躍時間與有趣知識。</div>`}${record.count>=5?recordedConditionNames(record):`<div class="fact-box">再捕獲 ${5-record.count} 次，整理完整的相遇地點、時段與天氣紀錄。</div>`}</aside>`;
 }
 
@@ -974,8 +998,7 @@ function shipStoreItem(ship) {
     : eligibility.reason === "money" ? `還需要 ${Math.max(0, ship.price - state.money)} 金幣`
       : eligibility.reason === "not-docked" ? "需先停泊已實作港口" : future ? "未來版本預告" : owned ? "永久擁有" : "可購買";
   const price = future ? "價格將於開放時定案" : ship.price ? `${ship.price.toLocaleString("zh-TW")} 金幣` : "初始擁有";
-  const journalLink=filterJournalEntries(state.journal,"ship",ship.id).length?`<button class="ship-journal-link" data-action="show-logbook" data-filter="ship" data-id="${ship.id}">查看船隻日誌</button>`:"";
-  return `<article class="card shop-item ship-store-item ${active ? "is-active-ship" : ""} ${revealed ? "is-revealed" : "is-misted"}" data-ship-card="${ship.id}"><div class="ship-store-silhouette is-${ship.silhouette}" aria-hidden="true"><i></i><b></b></div><span class="section-label">${future ? "未來船影" : owned ? "已收藏" : revealed ? "潮光已揭露" : "潮光中的輪廓"}</span><h3>${ship.name}</h3><p>${ship.description}</p><div class="ship-store-stats"><span>✦ ${ship.tideglowRequired} 潮光</span><span>航速 ${ship.speedMultiplier.toFixed(2)}×</span></div><div class="price-row"><span class="price">${price}</span><span class="item-state">${reason}</span></div>${action}${journalLink}</article>`;
+  return `<article class="card shop-item ship-store-item ${active ? "is-active-ship" : ""} ${revealed ? "is-revealed" : "is-misted"}" data-ship-card="${ship.id}"><div class="ship-store-silhouette is-${ship.silhouette}" aria-hidden="true"><i></i><b></b></div><span class="section-label">${future ? "未來船影" : owned ? "已收藏" : revealed ? "潮光已揭露" : "潮光中的輪廓"}</span><h3>${ship.name}</h3><p>${ship.description}</p><div class="ship-store-stats"><span>✦ ${ship.tideglowRequired} 潮光</span><span>航速 ${ship.speedMultiplier.toFixed(2)}×</span></div><div class="price-row"><span class="price">${price}</span><span class="item-state">${reason}</span></div>${action}</article>`;
 }
 
 function showShipPurchaseConfirmation(shipId) {
@@ -1095,45 +1118,31 @@ function finishAquariumAction(result,message) {
   modalRoot.innerHTML="";sound.play("coin");saveGame();toast(message);render();notifyCompletedAchievements(result.completedAchievements);return true;
 }
 
-function journalEntryDay(entry) {
-  if(entry.type==="archive")return `第 ${entry.dayFrom}～${entry.dayTo} 日`;
-  return `第 ${entry.sailingDay||1} 日`;
-}
-
-function journalEntryLinks(entry) {
-  const links=[];
-  const first=(key)=>entry.refs?.[key]?.[0];
-  if(first("fishIds"))links.push(`<button class="soft-button" data-action="logbook-cross-link" data-kind="fish" data-id="${first("fishIds")}">前往魚類圖鑑</button>`);
-  if(first("regionIds")||first("routeIds"))links.push(`<button class="soft-button" data-action="logbook-cross-link" data-kind="chart" data-id="${first("regionIds")||first("routeIds")}">前往古海圖</button>`);
-  if(first("shipIds"))links.push(`<button class="soft-button" data-action="logbook-cross-link" data-kind="ship" data-id="${first("shipIds")}">前往船隻商店</button>`);
-  if(first("residentIds"))links.push(`<button class="soft-button" data-action="logbook-cross-link" data-kind="resident" data-id="${first("residentIds")}">前往港口居民</button>`);
-  if(first("researchIds")||first("observationIds")||first("wonderIds"))links.push(`<button class="soft-button" data-action="logbook-cross-link" data-kind="research" data-id="${first("researchIds")||first("observationIds")||first("wonderIds")}">前往研究海域</button>`);
-  return links.join("");
-}
-
-function showLogbook({filter=logbookFilter.type,value=logbookFilter.value,entryId=selectedLogbookEntryId}={}) {
-  logbookFilter={type:filter||"all",value:value||null};
-  const entries=filterJournalEntries(state.journal,logbookFilter.type,logbookFilter.value);
+function showLogbook({categoryId=logbookCategoryId,entryId=selectedLogbookEntryId}={}) {
+  const categories=getJournalCategories(state);
+  logbookCategoryId=categories.some(category=>category.id===categoryId)?categoryId:"today";
+  const entries=getJournalEntries(state,logbookCategoryId);
   selectedLogbookEntryId=entries.some(entry=>entry.id===entryId)?entryId:entries[0]?.id||null;
-  const selected=entries.find(entry=>entry.id===selectedLogbookEntryId)||null;
-  const unreadBefore=new Set(state.journal.unreadEntryIds||[]);
-  if(selected&&(unreadBefore.has(selected.id)||state.journal.pendingNoticeEntryIds.includes(selected.id))){
+  let selected=entries.find(entry=>entry.id===selectedLogbookEntryId)||null;
+  if(selected&&selected.type!=="today"&&(state.journal.unreadEntryIds.includes(selected.id)||state.journal.pendingNoticeEntryIds.includes(selected.id))){
     state.journal=acknowledgeJournalNotices(markJournalEntriesRead(state.journal,[selected.id]),[selected.id]);
     saveGame();syncWorld();
   }
   const unreadNow=new Set(state.journal.unreadEntryIds||[]);
-  const filterButtons=[
-    ["all",null,"全部"],["unread",null,"未讀"],["day",String(state.day),`第 ${state.day} 日`],["permanent",null,"永久頁"],["daily",null,"今日潮記"]
-  ].map(([type,filterValue,label])=>`<button class="filter-chip ${logbookFilter.type===type&&String(logbookFilter.value||"")===String(filterValue||"")?"is-active":""}" data-action="logbook-filter" data-filter="${type}" data-id="${filterValue||""}">${label}</button>`).join("");
-  const contextFilter=logbookFilter.value?`<span class="logbook-context-filter">目前交叉篩選：${escapeText(logbookFilter.type)} · ${escapeText(logbookFilter.value)}</span>`:"";
-  const list=entries.map(entry=>`<button class="logbook-entry-card ${entry.id===selectedLogbookEntryId?"is-active":""} ${unreadNow.has(entry.id)?"is-unread":""}" data-action="select-logbook-entry" data-id="${entry.id}"><span>${escapeText(JOURNAL_ENTRY_TYPE_LABELS[entry.type]||entry.type)}</span><b>${escapeText(entry.title)}</b><small>${journalEntryDay(entry)}${entry.sealed===false?" · 草稿":""}</small></button>`).join("");
-  const detail=selected?`<article class="logbook-page"><div class="logbook-page-meta"><span>${escapeText(JOURNAL_ENTRY_TYPE_LABELS[selected.type]||selected.type)}</span><small>${journalEntryDay(selected)}${selected.sealed===false?" · 今日草稿":""}</small></div><h3>${escapeText(selected.title)}</h3><p>${escapeText(selected.body)}</p>${selected.poeticLine?`<blockquote>${escapeText(selected.poeticLine)}</blockquote>`:""}<div class="logbook-links">${journalEntryLinks(selected)}</div><p class="quiet-note">這一頁在事件發生時已保存完整文字；日後模板更新不會改寫它。</p></article>`:`<div class="modal-empty">這個篩選目前沒有日誌頁。真正相遇後，頁面才會出現。</div>`;
-  modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal logbook-modal"><div class="logbook-heading"><div><span class="section-label">${activeShip(state).name} · 固定日誌架</span><h2>航海日誌</h2><p class="modal-copy">只讀、沒有期限，也不提供編輯或閱讀獎勵。</p></div><b>${state.journal.unreadEntryIds.length} 未讀</b></div><div class="filter-row">${filterButtons}</div>${contextFilter}<div class="logbook-layout"><aside class="logbook-entry-list">${list||'<div class="modal-empty">沒有符合的頁面。</div>'}</aside>${detail}</div><div class="modal-actions"><button class="soft-button" data-action="close-modal">闔上日誌</button></div></div></div>`;
+  const categoryOutline=categories.map(category=>{
+    const expanded=category.id===logbookCategoryId;
+    const count=category.id==="today"?"每日更新":category.totalCount?`${category.unlockedCount} / ${category.totalCount}`:"尚待設計";
+    const childEntries=expanded?entries.map((entry,index)=>`<button type="button" class="logbook-entry-row ${entry.id===selectedLogbookEntryId?"is-active":""} ${unreadNow.has(entry.id)?"is-unread":""}" data-action="select-logbook-entry" data-id="${entry.id}"><span aria-hidden="true">${entry.id===selectedLogbookEntryId?"◆":"◇"}</span><span><b>${escapeText(entry.title)}</b><small>${entry.type==="today"?"今日唯一頁":`第 ${index+1} 頁 · ${escapeText(JOURNAL_ENTRY_TYPE_LABELS[entry.type]||entry.type)}`}</small></span></button>`).join(""):"";
+    return `<section class="logbook-tree-group ${expanded?"is-expanded":""}"><button type="button" class="logbook-category-row ${expanded?"is-active":""}" data-action="logbook-category" data-id="${category.id}" aria-expanded="${expanded}"><span class="logbook-tree-arrow" aria-hidden="true">${expanded?"▾":"▸"}</span><span class="logbook-category-copy"><small>${category.kind==="story"?`主線第 ${category.chapter} 章`:category.kind==="fish"?"相遇收藏":"每日閱讀"}</small><b>${escapeText(category.name)}</b></span><span class="logbook-category-count">${count}</span>${category.unreadCount?`<i>${category.unreadCount}</i>`:""}</button>${expanded?`<div class="logbook-tree-entries">${childEntries||'<p class="logbook-tree-empty">尚無可讀頁</p>'}</div>`:""}</section>`;
+  }).join("");
+  const paragraphs=selected?.body?.map(paragraph=>`<p>${escapeText(paragraph)}</p>`).join("")||"";
+  const detail=selected?`<article class="logbook-page" aria-live="polite"><div class="logbook-page-meta"><span>${escapeText(JOURNAL_ENTRY_TYPE_LABELS[selected.type]||selected.type)}</span><small>${escapeText(selected.meta||"")}</small></div><h3>${escapeText(selected.title)}</h3><div class="logbook-page-copy">${paragraphs}</div><blockquote>${escapeText(selected.closing||"")}</blockquote><p class="quiet-note">純文字唯讀頁面，不影響進度，也不通往其他系統。</p></article>`:`<div class="modal-empty logbook-empty-page"><b>這一類目前還沒有可閱讀的頁面。</b><span>${logbookCategoryId==="rare_fish"?"第一次親手釣到稀有魚後，固定相遇頁會收進這裡。":"完成這片海域的主線事件後，預先寫好的章節頁會依序出現。"}</span></div>`;
+  modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal logbook-modal"><div class="logbook-heading"><div><span class="section-label">${activeShip(state).name} · 我的船屋</span><h2>潮聲日誌</h2><p class="modal-copy">今日短文、稀有魚相遇與六片海域主線，都只在這本冊子裡閱讀。</p></div><b>${getJournalUnreadCount(state)} 未讀</b></div><div class="logbook-layout"><aside class="logbook-sidebar"><div class="logbook-sidebar-heading"><b>日誌目錄</b><small>選擇分類與頁次</small></div><nav class="logbook-outline" aria-label="日誌分類與頁面">${categoryOutline}</nav></aside>${detail}</div><div class="modal-actions"><button class="soft-button" data-action="close-modal">闔上日誌</button></div></div></div>`;
 }
 
 function flushJournalNotices() {
   if(!gameIsActive()||modalRoot.innerHTML||!state.journal?.pendingNoticeEntryIds?.length)return;
-  const ids=[...state.journal.pendingNoticeEntryIds],entries=filterJournalEntries(state.journal,"all").filter(entry=>ids.includes(entry.id));
+  const ids=[...state.journal.pendingNoticeEntryIds],entries=ids.map(id=>getJournalEntry(state,id)).filter(Boolean);
   state.journal=acknowledgeJournalNotices(state.journal,ids);saveGame();syncWorld();
   if(entries.length)toast(entries.length===1?`航海日誌新增「${entries[0].title}」`:`航海日誌安靜收進 ${entries.length} 篇新頁`,"gold");
 }
@@ -1150,11 +1159,12 @@ function renderHome() {
   }).join("");
   const ownedFurniture=(interior?.ownedFurnitureIds||[]).map(furnitureById).filter(Boolean);
   const autoOwned=state.autoFishing?.owned,autoSession=state.autoFishing?.activeSession;
+  const todayJournal=getJournalEntries(state,"today")[0],journalUnread=getJournalUnreadCount(state);
   const autoRack=autoOwned?`<button class="cabin-auto-rack ${autoSession?"is-active":""}" data-action="show-auto-fishing" title="${AUTO_FISHING_EQUIPMENT.name}"><i></i><span>${autoSession?"釣架待命":"自動釣架"}</span></button>`:"";
   const autoCard=autoOwned?`<div class="card home-card auto-fishing-home-card"><span class="section-label">固定船用設備 · 不占插槽</span><h3>${AUTO_FISHING_EQUIPMENT.name}</h3><p>${autoSession?`已設定在${regionById(autoSession.regionId)?.portName||"目前港口"}的${SPOTS.find(spot=>spot.id===autoSession.spotId)?.name||"熟悉釣點"}；完整關閉遊戲後才會開始守候。`:"釣架已固定在船屋一角，設定後只會守著目前停泊的港口。"}</p><button class="${autoSession?"primary-button":"soft-button"}" data-action="show-auto-fishing">${autoSession?"查看或調整設定":"設定自動釣魚"}</button></div>`:"";
   content.innerHTML=`${panelHeading(ship.name,`目前船屋 · 航速 ${activeShipSpeed(state).toFixed(2)}×。外面是未知的海，這裡是永遠為你亮著燈的家。`)}
     ${renderAquariumPanel()}<div class="home-layout"><div class="cabin-view theme-${scene?.theme||"default"} lighting-${interior?.lightingId||"default"}" data-ship="${ship.id}"><div class="cabin-fixed-structure fixed-bed-platform"><span>固定床台</span></div><div class="cabin-fixed-structure fixed-chart-desk"><span>航圖桌</span></div><div class="cabin-fixed-structure fixed-journal-shelf"><span>日誌架</span></div>${autoRack}<div class="cabin-glow"></div><div class="cabin-window"><i class="window-rain"></i></div>${slots}<div class="cabin-identity"><b>${ship.name}</b><small>${lighting}</small></div></div>
-    <aside class="home-side">${renderHomeChartCard()}<div class="card home-card logbook-home-card"><span class="section-label">固定日誌架 · ${state.journal.unreadEntryIds.length} 篇未讀</span><h3>${filterJournalEntries(state.journal,"all")[0]?.title||"把潮聲整理成冊"}</h3><p>永久相遇頁與今日潮記都收在同一本冊子裡；空船也能免費閱讀。</p><button class="soft-button" data-action="show-logbook">翻開航海日誌</button></div>${autoCard}<div class="card home-card"><span class="section-label">休息一下</span><h3>${TIMES[state.timeIndex].name}的船屋</h3><p>${state.weather==="rain"?"細雨落在窗上，固定床台與室內暖光讓木牆顯得更加溫柔。":"光線從舷窗落進來，船身隨著海面緩緩呼吸。即使沒有添購寢具，也能安心休息。"}</p><button class="primary-button sleep-button" data-action="sleep">睡到下一個時段</button></div><div class="card home-card"><span class="section-label">${ship.name}的家具</span><div class="owned-list">${ownedFurniture.length?ownedFurniture.map(item=>`<button class="owned-chip ${interior.placedFurniture[item.slot]===item.id?"is-placed":""}" data-action="place-furniture" data-id="${item.id}">${item.icon} ${item.name}</button>`).join(""):'<p class="quiet-note">這艘船還沒有可替換家具；固定床台、航圖桌與水族箱仍可使用。</p>'}</div></div><div class="card home-card"><span class="section-label">圖鑑里程碑</span><div class="milestone-list">${MILESTONES.map(m=>`<div class="milestone-row ${state.completedMilestones.includes(m.count)?"is-done":""}"><i></i><span>${m.count} 種 · ${m.reward}</span></div>`).join("")}</div></div></aside></div>`;
+    <aside class="home-side">${renderHomeChartCard()}<div class="card home-card logbook-home-card"><span class="section-label">固定日誌架 · ${journalUnread} 篇未讀</span><h3>${escapeText(todayJournal.title)}</h3><p>今日潮記每天自動換成一篇海上短文；稀有魚相遇與主線章節也收在同一本冊子裡。</p><button class="soft-button" data-action="show-logbook">翻開潮聲日誌</button></div>${autoCard}<div class="card home-card"><span class="section-label">休息一下</span><h3>${TIMES[state.timeIndex].name}的船屋</h3><p>${state.weather==="rain"?"細雨落在窗上，固定床台與室內暖光讓木牆顯得更加溫柔。":"光線從舷窗落進來，船身隨著海面緩緩呼吸。即使沒有添購寢具，也能安心休息。"}</p><button class="primary-button sleep-button" data-action="sleep">睡到下一個時段</button></div><div class="card home-card"><span class="section-label">${ship.name}的家具</span><div class="owned-list">${ownedFurniture.length?ownedFurniture.map(item=>`<button class="owned-chip ${interior.placedFurniture[item.slot]===item.id?"is-placed":""}" data-action="place-furniture" data-id="${item.id}">${item.icon} ${item.name}</button>`).join(""):'<p class="quiet-note">這艘船還沒有可替換家具；固定床台、航圖桌與水族箱仍可使用。</p>'}</div></div><div class="card home-card"><span class="section-label">圖鑑里程碑</span><div class="milestone-list">${MILESTONES.map(m=>`<div class="milestone-row ${state.completedMilestones.includes(m.count)?"is-done":""}"><i></i><span>${m.count} 種 · ${m.reward}</span></div>`).join("")}</div></div></aside></div>`;
 }
 
 function placeFurniture(id) {
@@ -1315,31 +1325,13 @@ function developerTideglowRefs(eventType) {
   return refs;
 }
 
-function developerJournalRefs(eventType) {
-  const rareFish=FISH.find(fish=>fish.rarity==="rare");
-  const values={
-    "fish.discovered":{fishId:rareFish?.id},
-    "route.departed":{routeId:"sleeping_tide_to_luminous_archipelago",fromRegionId:SLEEPING_TIDE_BAY_ID,toRegionId:LUMINOUS_ARCHIPELAGO_ID,shipId:state.ships.activeShipId},
-    "region.arrived":{regionId:LUMINOUS_ARCHIPELAGO_ID},
-    "observation.recorded":{observationId:OBSERVATION_SUBJECTS[0]?.id,regionId:LUMINOUS_ARCHIPELAGO_ID},
-    "wonder.recorded":{wonderId:WONDERS[0]?.id,regionId:LUMINOUS_ARCHIPELAGO_ID},
-    "research.node.completed":{nodeId:RESEARCH_NODES[0]?.id,regionId:LUMINOUS_ARCHIPELAGO_ID},
-    "research.region.completed":{regionId:LUMINOUS_ARCHIPELAGO_ID},
-    "resident.story.completed":{residentId:CHENGYE_ID,milestoneId:getResidentStoryStatus(state,CHENGYE_ID).scenes[0]?.id},
-    "ship.purchased":{shipId:state.ships.activeShipId},
-    "region.completed":{regionId:state.world.currentRegionId},
-    "world.completed":{}
-  };
-  return values[eventType]||{};
-}
-
 function showDeveloperTools() {
   if (!state.developerMode) return;
   const dailyOptions = DAILY_GOAL_TEMPLATES.map(template => `<option value="${template.id}">${template.id} · ${template.text}</option>`).join("");
   const commissionOptions = RESIDENTS.map(resident => `<optgroup label="${resident.name}">${getResidentCommissionTemplates(resident.id).map(template => `<option value="${template.id}">${template.id} · ${template.title}</option>`).join("")}</optgroup>`).join("");
   const residentOptions = RESIDENTS.map(resident => `<option value="${resident.id}">${resident.name}</option>`).join("");
   const active = state.residentCommissions.active;
-  modalRoot.innerHTML = `<div class="modal-backdrop"><div class="modal developer-modal"><span class="section-label">資料驅動測試入口</span><h2>Slice D 開發者控制</h2><p class="modal-copy">每日模板與居民委託選項直接由正式內容資料產生；所有操作只寫入獨立開發者存檔。</p><div class="developer-control-grid"><section class="developer-control-card"><h3>每日小目標</h3><label>卡片位置<select id="developer-daily-slot"><option value="0">第 1 張</option><option value="1">第 2 張</option><option value="2">第 3 張</option></select></label><label>正式模板<select id="developer-daily-template">${dailyOptions}</select></label><div class="developer-control-actions"><button class="soft-button" data-action="developer-set-daily">指定模板</button><button class="soft-button" data-action="developer-complete-daily">全部完成</button><button class="soft-button" data-action="developer-claim-daily">領取完成</button><button class="soft-button" data-action="developer-next-day">推進航海日</button><button class="soft-button" data-action="developer-reset-daily">重置今日</button></div></section><section class="developer-control-card"><h3>居民委託</h3><label>居民<select id="developer-resident">${residentOptions}</select></label><label>正式模板<select id="developer-commission-template">${commissionOptions}</select></label><p class="quiet-note">${active ? `進行中：${active.title} · ${active.progress}/${active.goal}` : "目前沒有 active 委託"}</p><div class="developer-control-actions"><button class="soft-button" data-action="developer-set-offer">指定提案</button><button class="soft-button" data-action="developer-accept-offer">接受提案</button><button class="soft-button" data-action="developer-complete-commission">完成進度</button><button class="soft-button" data-action="developer-deliver-commission">交付</button><button class="soft-button" data-action="developer-drop-commission">放下</button><button class="soft-button" data-action="developer-clear-commission-history">清除歷史</button></div></section></div><div class="modal-actions"><button class="primary-button" data-action="close-modal">完成測試</button></div></div></div>`;
+  modalRoot.innerHTML = `<div class="modal-backdrop"><div class="modal developer-modal"><span class="section-label">資料驅動測試入口</span><h2>Slice D 開發者控制</h2><p class="modal-copy">每日模板與居民今日提案直接由正式內容資料產生；所有操作只寫入獨立開發者存檔。</p><div class="developer-control-grid"><section class="developer-control-card"><h3>每日小目標</h3><label>卡片位置<select id="developer-daily-slot"><option value="0">第 1 張</option><option value="1">第 2 張</option><option value="2">第 3 張</option></select></label><label>正式模板<select id="developer-daily-template">${dailyOptions}</select></label><div class="developer-control-actions"><button class="soft-button" data-action="developer-set-daily">指定模板</button><button class="soft-button" data-action="developer-complete-daily">全部完成</button><button class="soft-button" data-action="developer-claim-daily">領取完成</button><button class="soft-button" data-action="developer-next-day">推進航海日</button><button class="soft-button" data-action="developer-reset-daily">重置今日</button></div></section><section class="developer-control-card"><h3>居民今日提案</h3><label>居民<select id="developer-resident">${residentOptions}</select></label><label>正式模板<select id="developer-commission-template">${commissionOptions}</select></label><p class="quiet-note">${active ? `進行中：${active.title} · ${active.progress}/${active.goal}` : "目前沒有進行中的今日提案"}</p><div class="developer-control-actions"><button class="soft-button" data-action="developer-set-offer">指定提案</button><button class="soft-button" data-action="developer-accept-offer">接受提案</button><button class="soft-button" data-action="developer-complete-commission">完成進度</button><button class="soft-button" data-action="developer-deliver-commission">交付</button><button class="soft-button" data-action="developer-drop-commission">放下</button><button class="soft-button" data-action="developer-clear-commission-history">清除歷史</button></div></section></div><div class="modal-actions"><button class="primary-button" data-action="close-modal">完成測試</button></div></div></div>`;
   const travelStatus = getTravelStatus(state.world);
   const scaleOptions = DEVELOPER_TRAVEL_SCALES.map(scale => `<option value="${scale}" ${state.travelSettings.developerDurationScale === scale ? "selected" : ""}>${scale === 1 ? "正式速度 100%" : `測試速度 ${Math.round(scale * 100)}%`}</option>`).join("");
   $(".developer-modal h2")?.replaceChildren("v0.5 Slice E 整合控制");
@@ -1361,8 +1353,8 @@ function showDeveloperTools() {
   const activeInterior=shipInterior(state),lightingOptions=SHIP_LIGHTING.map(option=>`<option value="${option.id}" ${activeInterior?.lightingId===option.id?"selected":""}>${option.name}</option>`).join("");
   const invalidInteriorRefs=collectInvalidInteriorReferences(state);
   $(".developer-control-grid")?.insertAdjacentHTML("beforeend", `<section class="developer-control-card"><h3>船別家具與燈光</h3><label>${activeShip(state).name}燈光<select id="developer-ship-lighting">${lightingOptions}</select></label><p class="quiet-note">擁有 ${activeInterior?.ownedFurnitureIds.length||0}/${activeShipFurnitureCatalog(state).length} · 已配置 ${Object.values(activeInterior?.placedFurniture||{}).filter(Boolean).length}/${SHIP_SLOT_TYPES.length} · 失效引用 ${invalidInteriorRefs.length}</p><div class="developer-control-actions"><button class="soft-button" data-action="developer-fill-ship-furniture">購齊並填入</button><button class="soft-button" data-action="developer-clear-ship-furniture">清除船別家具</button><button class="soft-button" data-action="developer-reset-ship-slots">重置插槽</button><button class="soft-button" data-action="developer-set-ship-lighting">套用燈光</button><button class="soft-button" data-action="developer-inspect-interiors">檢查失效引用</button></div></section>`);
-  const journalOptions=JOURNAL_EVENT_TEMPLATES.map(template=>`<option value="${template.eventType}">${template.entryType} · ${template.eventType}</option>`).join("");
-  $(".developer-control-grid")?.insertAdjacentHTML("beforeend", `<section class="developer-control-card"><h3>初遇與航海日誌</h3><label>永久頁事件<select id="developer-journal-event">${journalOptions}</select></label><p class="quiet-note">永久 ${state.journal.permanentEntries.length} · 潮記 ${state.journal.dailyEntries.length} · 十日摘要 ${state.journal.dailyArchives.length} · 未讀 ${state.journal.unreadEntryIds.length}</p><div class="developer-control-actions"><button class="soft-button" data-action="developer-emit-journal">發送新事件</button><button class="soft-button" data-action="developer-resend-journal">重送驗證去重</button><button class="soft-button" data-action="developer-fill-journal">填滿 181 篇潮記</button><button class="soft-button" data-action="developer-check-journal">檢查頁面引用</button><button class="soft-button" data-action="show-logbook">開啟日誌</button></div></section>`);
+  const journalCategories=getJournalCategories(state),journalUnlocked=journalCategories.reduce((sum,category)=>sum+category.unlockedCount,0);
+  $(".developer-control-grid")?.insertAdjacentHTML("beforeend", `<section class="developer-control-card"><h3>潮聲日誌</h3><p class="quiet-note">分類 ${journalCategories.length} · 可讀 ${journalUnlocked} · 未讀 ${getJournalUnreadCount(state)} · 今日潮記不保存歷史</p><div class="developer-control-actions"><button class="soft-button" data-action="developer-check-journal">檢查固定內容</button></div></section>`);
   const autoSession=state.autoFishing?.activeSession,autoSummary=state.autoFishing?.lastSummary;
   const autoScenarios=[["returned","正常返回 · 20 分"],["returned-early","提早返回"],["bait-empty","魚餌耗盡"],["three-hour-limit","三小時上限"],["clock-rollback","時間倒退"],["no-eligible-fish","無合格魚種"],["region-changed","停泊海域改變"],["departed","直接出航停止"],["manual","手動收起"]].map(([value,label])=>`<option value="${value}">${label}</option>`).join("");
   $(".developer-control-grid")?.insertAdjacentHTML("beforeend", `<section class="developer-control-card"><h3>靜潮自動釣架</h3><label>停止情境<select id="developer-auto-scenario">${autoScenarios}</select></label><p class="quiet-note">${state.autoFishing?.owned?"已擁有":"未擁有"} · ${autoSession?`${autoSession.spotId} / ${autoSession.baitId} 待命`:"未設定"} · ${autoSummary?`最近 ${autoSummary.catchCount} 尾 / ${autoSummary.stopReason}`:"尚無回報"}</p><div class="developer-control-actions"><button class="soft-button" data-action="show-auto-fishing" ${state.autoFishing?.owned?"":"disabled"}>固定種子設定</button><button class="soft-button" data-action="developer-auto-owned">重置為已擁有</button><button class="soft-button" data-action="developer-auto-locked">重置為未擁有</button><button class="soft-button" data-action="developer-auto-simulate" ${autoSession?"":"disabled"}>模擬情境</button>${autoSummary&&!autoSummary.acknowledged?'<button class="soft-button" data-action="developer-auto-summary">顯示最近回報</button>':""}</div></section>`);
@@ -1391,34 +1383,36 @@ document.addEventListener("click", event => {
   if(action==="preview-observation")showObservationPreview(id);
   if(action==="claim-quest"&&claimQuest(state,id)){sound.play("coin");saveGame();toast("今日目標完成，獎勵已收入錢袋");render();}
   if(action==="talk-resident")showResidentDialogue(id);
+  if(action==="accept-resident-story"){
+    const result=acceptResidentStory(state,id);
+    if(result.ok){saveGame();render();showResidentStoryScene(result.scene,"opening",result.status);toast(`已接受主線任務「${result.scene.title}」`);}
+    else toast("這一節主線目前還不能接受");
+  }
+  if(action==="complete-resident-story"){
+    const result=completeResidentStory(state,id);
+    if(result.ok){sound.play("new");saveGame();render();notifyTideglow([result.tideglowEvent]);showResidentStoryScene(result.scene,"completion",result.status);toast(`主線完成：${result.scene.title}`,"gold");}
+    else toast(result.reason==="wrong-port"?"需要回到這位居民所在的港口完成主線":"請先親手完成主線目標");
+  }
   if(action==="accept-commission"){
     const result=acceptResidentCommission(state,id);
-    if(result.ok){saveGame();render();toast(`已接受「${result.commission.title}」，委託不會隨換日過期`);}
+    if(result.ok){saveGame();render();toast(`已接受今日提案「${result.commission.title}」，不會隨換日過期`);}
   }
   if(action==="drop-commission"){
     const result=dropResidentCommission(state);
-    if(result.ok){saveGame();render();toast("委託已輕輕放下，沒有任何懲罰");}
+    if(result.ok){saveGame();render();toast("今日提案已放下，沒有任何懲罰");}
   }
   if(action==="deliver-commission"){
     const result=deliverResidentCommission(state,id);
-    if(result.ok){sound.play("coin");saveGame();render();showResidentDialogue(id,result.dialogue);toast(`委託完成：${rewardLabel(result.reward)}`,"gold");}
-    else toast("需要回到正確居民所在的港口，才能當面交付");
+    if(result.ok){sound.play("coin");saveGame();render();showResidentDialogue(id,result.dialogue);toast(`今日提案完成：${rewardLabel(result.reward)}`,"gold");}
+    else toast("需要回到正確居民所在的港口，才能交付今日提案");
   }
   if(action==="close-catch"){modalRoot.innerHTML="";render();setTimeout(flushJournalNotices,0);}
   if(action==="modal-journal"){modalRoot.innerHTML="";selectedJournalFish=id;setView("journal");}
   if(action==="journal-filter"){journalFilter=id;renderJournal();}
   if(action==="select-fish"){selectedJournalFish=id;renderJournal();}
-  if(action==="show-logbook")showLogbook({filter:filter||"all",value:filter?id:null,entryId:entry||null});
-  if(action==="logbook-filter")showLogbook({filter:filter||"all",value:id||null,entryId:null});
-  if(action==="select-logbook-entry")showLogbook({filter:logbookFilter.type,value:logbookFilter.value,entryId:id});
-  if(action==="logbook-cross-link"){
-    modalRoot.innerHTML="";
-    if(kind==="fish"){selectedJournalFish=id;journalFilter="all";setView("journal");}
-    if(kind==="chart")setView("chart");
-    if(kind==="ship"){shopTab="ships";setView("shop");}
-    if(kind==="resident")setView("residents");
-    if(kind==="research")setView("fishing");
-  }
+  if(action==="show-logbook")showLogbook();
+  if(action==="logbook-category"){logbookCategoryId=id;selectedLogbookEntryId=null;showLogbook({categoryId:id,entryId:null});}
+  if(action==="select-logbook-entry")showLogbook({categoryId:logbookCategoryId,entryId:id});
   if(action==="show-achievements")showAchievementsModal();
   if(action==="claim-achievement"){
     const result=claimAchievement(state,id);
@@ -1584,20 +1578,10 @@ document.addEventListener("click", event => {
     const result=developerEmitTideglowEvent(state,eventType,developerTideglowRefs(eventType));
     if(result)finishDeveloperAction(result.results?.tideglow?.awarded?"合法潮光來源已入帳":"來源已存在，帳本正確阻止重複入帳");
   }
-  if(action==="developer-emit-journal"){
-    const eventType=$("#developer-journal-event")?.value;
-    const result=developerEmitJournalEvent(state,eventType,developerJournalRefs(eventType));
-    if(result)finishDeveloperAction(result.results?.journal?.createdEntries?.length?"日誌事件已立即保存完整頁面":"事件已處理，沒有建立不符合條件的空頁");
-  }
-  if(action==="developer-resend-journal"){
-    const eventType=$("#developer-journal-event")?.value;
-    const result=developerEmitJournalEvent(state,eventType,developerJournalRefs(eventType),`developer:journal:dedupe:${eventType}`);
-    if(result)finishDeveloperAction(result.duplicate?"同一事件 ID 已正確去重":"固定事件已發送；再次按下可驗證去重");
-  }
-  if(action==="developer-fill-journal"&&developerFillJournalArchive(state,181))finishDeveloperAction("已建立並封存 181 篇潮記，最舊十日已整理為區域摘要");
   if(action==="developer-check-journal"){
-    const sourceIds=state.journal.permanentEntries.map(entry=>entry.sourceId),valid=sourceIds.length===new Set(sourceIds).size&&state.journal.dailyEntries.length<=180&&state.journal.permanentEntries.every(entry=>entry.body&&entry.title);
-    toast(valid?"日誌來源、完整文字與 180 篇上限皆通過":"日誌檢查發現重複或缺漏",valid?"gold":"");
+    const categories=getJournalCategories(state),entries=categories.flatMap(category=>getJournalEntries(state,category.id));
+    const valid=categories.length===8&&entries.every(entry=>entry.title&&Array.isArray(entry.body)&&entry.body.length&&entry.closing)&&!document.querySelector('[data-action="logbook-cross-link"]');
+    toast(valid?"八個分類、固定文字與純閱讀規則皆通過":"日誌檢查發現分類、文字或入口異常",valid?"gold":"");
   }
   if(action==="developer-auto-owned"&&developerResetAutoFishing(state,true))finishDeveloperAction("自動釣架已重置為永久擁有");
   if(action==="developer-auto-locked"&&developerResetAutoFishing(state,false))finishDeveloperAction("自動釣架已重置為未擁有");

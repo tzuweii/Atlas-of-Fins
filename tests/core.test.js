@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ACHIEVEMENTS, BAITS, BAY_EVENTS, FISH, FURNITURE, LUMINOUS_ARCHIPELAGO_ID, RODS, SLEEPING_TIDE_BAY_ID } from "../src/data.js";
+import { ACHIEVEMENTS, BAITS, BAY_EVENTS, FISH, FURNITURE, LUMINOUS_ARCHIPELAGO_ID, RARITY, RODS, SLEEPING_TIDE_BAY_ID } from "../src/data.js";
 import {
   SAVE_VERSION, SHIMMER_CONFIG, advanceTime, applyMilestones, buyBait, buyRod, chooseFish, claimAchievement,
   createBayEventState, createDeveloperState, createInitialState, equipTitle, evaluateAchievements, fishWeight, generateCatch, getAchievementProgress,
@@ -17,6 +17,11 @@ const NEW_FISH_IDS = [
 test("catalog preserves the thirty legacy fish and adds eleven distinct island fish", () => {
   assert.equal(FISH.length, 41);
   assert.equal(new Set(FISH.map(fish => fish.id)).size, 41);
+  assert.deepEqual(Object.fromEntries(Object.entries(RARITY).map(([id, rarity]) => [id, rarity.color])), {
+    common: "#686f73",
+    uncommon: "#477ca5",
+    rare: "#76529b"
+  });
   assert.deepEqual(FISH.slice(20, 30).map(fish => fish.id), NEW_FISH_IDS);
   assert.equal(FISH.slice(30).every(fish => fish.habitats.some(habitat => habitat.regionId === LUMINOUS_ARCHIPELAGO_ID)), true);
 });
@@ -297,12 +302,22 @@ test("catch price uses size and rarity and records discoveries", () => {
   assert.deepEqual(caught.context, context);
   const outcome = recordCatch(state, caught);
   assert.equal(outcome.isNew, true);
+  assert.equal(outcome.isLengthRecord, true);
+  assert.equal(outcome.record.bestLength, caught.length);
   assert.equal(outcome.familiarity.name, "初次相遇");
   assert.equal(state.discovered[rare.id].count, 1);
   assert.deepEqual(state.discovered[rare.id].spots, ["deep"]);
   assert.deepEqual(state.discovered[rare.id].times, ["night"]);
   assert.deepEqual(state.discovered[rare.id].weathers, ["rain"]);
   assert.equal(state.catchInventory.length, 1);
+
+  const shorter = recordCatch(state, { ...caught, uid: `${caught.uid}-shorter`, length: caught.length - 1 });
+  assert.equal(shorter.isLengthRecord, false);
+  assert.equal(shorter.record.bestLength, caught.length);
+
+  const longer = recordCatch(state, { ...caught, uid: `${caught.uid}-longer`, length: caught.length + 1 });
+  assert.equal(longer.isLengthRecord, true);
+  assert.equal(longer.record.bestLength, caught.length + 1);
 });
 
 test("familiarity progresses at one, three, five, and ten catches", () => {

@@ -2,7 +2,8 @@ const COLLECTION_NAMES = [
   "times", "spots", "rods", "baits", "furniture", "fish", "dailyGoals",
   "events", "achievements", "aquariumDecorations", "regions", "routes", "residents", "commissions",
   "observations", "wonders", "researchNodes", "residentStoryScenes", "chartRegions", "chartRoutes",
-  "tideglowSources", "ships", "shipFurniture", "shipInteriors", "journalTemplates", "autoFishingEquipment"
+  "tideglowSources", "ships", "shipFurniture", "shipInteriors", "journalTemplates", "journalCategories",
+  "journalEntries", "autoFishingEquipment"
 ];
 
 const WEATHER_IDS = new Set(["sunny", "rain"]);
@@ -283,6 +284,36 @@ export function validateContentCatalog(content = {}) {
     if (scene?.trigger?.regionId) requireReference("residentStoryScenes", scene, "trigger.regionId", scene.trigger.regionId, ids.regions, "區域");
     if (scene?.trigger?.observationId) requireReference("residentStoryScenes", scene, "trigger.observationId", scene.trigger.observationId, ids.observations, "正式觀察");
     if (scene?.trigger?.nodeId) requireReference("residentStoryScenes", scene, "trigger.nodeId", scene.trigger.nodeId, ids.researchNodes, "研究節點");
+    for (const section of ["opening", "completion"]) {
+      const beats = asArray(scene?.[section]);
+      if (beats.length < 4 || beats.some(beat => typeof beat?.speaker !== "string" || !beat.speaker.trim()
+        || typeof beat?.text !== "string" || !beat.text.trim())) {
+        addError(
+          "missing-story-copy",
+          "residentStoryScenes",
+          scene?.id,
+          `residentStoryScenes[${scene?.id || "missing-id"}].${section}`,
+          `主線${section === "opening" ? "開場" : "完成"}至少需要四段具名敘事`
+        );
+      }
+    }
+    const objective = scene?.objective;
+    if (!objective || !["catch", "observation", "region-main-research"].includes(objective.kind)) {
+      addError("invalid-type", "residentStoryScenes", scene?.id, `residentStoryScenes[${scene?.id || "missing-id"}].objective.kind`, "主線需要受支援的手動任務類型");
+      continue;
+    }
+    if (typeof objective.title !== "string" || !objective.title.trim()
+      || typeof objective.description !== "string" || !objective.description.trim()
+      || !(Number(objective.goal) > 0)) {
+      addError("missing-objective", "residentStoryScenes", scene?.id, `residentStoryScenes[${scene?.id || "missing-id"}].objective`, "主線任務需要標題、說明與大於零的目標數量");
+    }
+    if (objective.kind === "catch") validateProgressCondition("residentStoryScenes", scene, objective.condition, "objective.condition");
+    if (objective.kind === "observation") {
+      requireReference("residentStoryScenes", scene, "objective.observationId", objective.observationId, ids.observations, "正式觀察");
+    }
+    if (objective.kind === "region-main-research") {
+      requireReference("residentStoryScenes", scene, "objective.regionId", objective.regionId, ids.regions, "區域");
+    }
   }
   for (const point of collections.chartRegions) {
     requireReference("chartRegions", point, "regionId", point?.regionId, ids.regions, "區域");
@@ -386,6 +417,46 @@ export function validateContentCatalog(content = {}) {
     }
     if (template?.permanent !== true) {
       addError("invalid-retention", "journalTemplates", template?.id, `journalTemplates[${template?.id || "missing-id"}].permanent`, "世界事件日誌模板必須永久保存");
+    }
+  }
+
+  const categoryKinds = new Set(["daily", "fish", "story"]);
+  for (const category of collections.journalCategories) {
+    if (!categoryKinds.has(category?.kind)) {
+      addError("invalid-type", "journalCategories", category?.id, `journalCategories[${category?.id || "missing-id"}].kind`, "日誌分類必須為 daily、fish 或 story");
+    }
+    if (typeof category?.name !== "string" || !category.name.trim()) {
+      addError("missing-copy", "journalCategories", category?.id, `journalCategories[${category?.id || "missing-id"}].name`, "日誌分類需要顯示名稱");
+    }
+  }
+
+  const rareFishEntryIds = new Set();
+  for (const entry of collections.journalEntries) {
+    requireReference("journalEntries", entry, "categoryId", entry?.categoryId, ids.journalCategories, "日誌分類");
+    if (!Array.isArray(entry?.body) || !entry.body.length || entry.body.some(paragraph => typeof paragraph !== "string" || !paragraph.trim())) {
+      addError("missing-copy", "journalEntries", entry?.id, `journalEntries[${entry?.id || "missing-id"}].body`, "固定日誌頁需要至少一段原創文字");
+    }
+    if (typeof entry?.title !== "string" || !entry.title.trim() || typeof entry?.closing !== "string" || !entry.closing.trim()) {
+      addError("missing-copy", "journalEntries", entry?.id, `journalEntries[${entry?.id || "missing-id"}]`, "固定日誌頁需要標題與收尾短句");
+    }
+    if (entry?.type === "fish") {
+      requireReference("journalEntries", entry, "fishId", entry?.fishId, ids.fish, "魚種");
+      const fish = collections.fish.find(candidate => candidate.id === entry?.fishId);
+      if (fish && fish.rarity !== "rare") {
+        addError("invalid-rarity", "journalEntries", entry?.id, `journalEntries[${entry.id}].fishId`, "魚類相遇日誌只收錄稀有魚");
+      }
+      rareFishEntryIds.add(entry?.fishId);
+    }
+    if (entry?.type === "story" && entry?.unlock?.type === "region-event") {
+      requireReference("journalEntries", entry, "unlock.eventId", entry.unlock.eventId, ids.events, "區域事件");
+    }
+    if (entry?.type === "story" && entry?.unlock?.type === "resident-scene") {
+      requireReference("journalEntries", entry, "unlock.sceneId", entry.unlock.sceneId, ids.residentStoryScenes, "居民故事場景");
+    }
+  }
+  for (const fish of collections.fish.filter(entry => entry?.rarity === "rare")) {
+    if (!rareFishEntryIds.has(fish.id)) {
+      addError("missing-journal-entry", "fish", fish.id, `fish[${fish.id}]`, "每種稀有魚都需要一篇固定相遇日誌");
     }
   }
 

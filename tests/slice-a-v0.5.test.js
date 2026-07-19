@@ -2,13 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  CHENGYE_ID, LUMINOUS_ARCHIPELAGO_ID, SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID,
+  CHENGYE_ID, FISH, LUMINOUS_ARCHIPELAGO_ID, SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID,
   STARLIGHT_OBSERVATION_CAPE_ID, TIDEGLOW_SOURCES
 } from "../src/data.js";
 import {
-  SAVE_VERSION, STARTER_SHIP_ID, TEMP_SAVE_KEY, advanceResidentStory, beginRouteTravel,
-  createDeveloperState, createInitialState, developerDockRegion, developerResetObservations,
-  dispatchGameEvent, dockAtDestination, migrateState, observeAtSpot, progressTravel, recordCatch
+  SAVE_VERSION, STARTER_SHIP_ID, TEMP_SAVE_KEY, acceptResidentStory, beginRouteTravel,
+  completeResidentStory, createDeveloperState, createInitialState, developerDockRegion, developerResetObservations,
+  dispatchGameEvent, dockAtDestination, migrateState, observeAtSpot, progressTravel, recordCatch, updateQuestProgress
 } from "../src/core.js";
 import { writeStoredState } from "../src/persistence/migrations.js";
 import {
@@ -139,7 +139,15 @@ test("first docking, formal observation, research node, and resident story share
   const observation = observeAtSpot(developer, STARLIGHT_OBSERVATION_CAPE_ID, () => 1, "2026-07-18T02:00:00.000Z");
   assert.equal(observation.kind, "subject");
   assert.equal(developer.tideglow.total, 5);
-  assert.equal(advanceResidentStory(developer, CHENGYE_ID).ok, true);
+  const accepted = acceptResidentStory(developer, CHENGYE_ID);
+  assert.equal(accepted.ok, true);
+  for (let index = 0; index < accepted.scene.objective.goal; index += 1) {
+    updateQuestProgress(developer, {
+      type: "catch", source: "manual", fish: FISH[0], caught: { sizeTier: "standard" },
+      regionId: LUMINOUS_ARCHIPELAGO_ID, spotId: "windrest_shallows", timeId: "day", weather: "sunny"
+    });
+  }
+  assert.equal(completeResidentStory(developer, CHENGYE_ID).ok, true);
   assert.equal(developer.tideglow.total, 6);
 });
 
@@ -152,7 +160,8 @@ test("four immutable v4 fixtures migrate to the v5 shell without retroactive rew
     if (raw.developerMode) assert.deepEqual(migrated.ships.ownedShipIds, [STARTER_SHIP_ID, "tidewhisper_residence", "voyager_study"], name);
     else assert.deepEqual(migrated.ships.ownedShipIds, [STARTER_SHIP_ID], name);
     assert.equal(migrated.ships.activeShipId, STARTER_SHIP_ID, name);
-    assert.equal(migrated.journal.permanentEntries.length, 1, name);
+    assert.equal(migrated.journal.version, 2, name);
+    assert.equal("permanentEntries" in migrated.journal, false, name);
     assert.deepEqual(migrated.journal.fishEncounterLineById, {}, name);
     assert.equal(migrated.autoFishing.owned, false, name);
     assert.equal(migrated.gameEvents.pending.length, 0, name);

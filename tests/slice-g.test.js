@@ -6,8 +6,8 @@ import {
   TWO_SPINED_ANGELFISH_OBSERVATION_ID, WONDERS, getFishHabitat, getRegionFish
 } from "../src/data.js";
 import {
-  advanceResidentStory, createDeveloperState, createInitialState, developerDockRegion,
-  developerResetObservations, getRegionResearchStatus, getResidentStoryStatus, observeAtSpot
+  acceptResidentStory, completeResidentStory, createDeveloperState, createInitialState, developerDockRegion,
+  developerResetObservations, getRegionResearchStatus, getResidentStoryStatus, migrateState, observeAtSpot, updateQuestProgress
 } from "../src/core.js";
 import { recordObservationSubject } from "../src/systems/observations.js";
 import { evaluateResearchProgress } from "../src/systems/research.js";
@@ -141,21 +141,61 @@ test("research time nodes only read catches recorded inside their own region", (
   );
 });
 
-test("Chengye's six scenes follow world state while commissions remain independent", () => {
+test("Chengye's six story missions require accept, manual objectives, and completion while proposals stay independent", () => {
   const state = createDeveloperState();
   state.residentStories = {};
   developerDockRegion(state, LUMINOUS_ARCHIPELAGO_ID);
   const commissionSnapshot = structuredClone(state.residentCommissions);
   const scenes = [];
   for (let index = 0; index < 6; index += 1) {
-    const result = advanceResidentStory(state, CHENGYE_ID);
-    assert.equal(result.ok, true);
-    scenes.push(result.scene.id);
+    const accepted = acceptResidentStory(state, CHENGYE_ID);
+    assert.equal(accepted.ok, true);
+    assert.ok(accepted.scene.opening.length >= 4);
+    assert.ok(accepted.scene.completion.length >= 4);
+    if (accepted.scene.objective.kind === "catch") {
+      const fish = getRegionFish(FISH, LUMINOUS_ARCHIPELAGO_ID)[0];
+      const event = {
+        type: "catch",
+        fish,
+        caught: { sizeTier: "standard" },
+        regionId: LUMINOUS_ARCHIPELAGO_ID,
+        spotId: accepted.scene.objective.condition.spotIds[0],
+        timeId: "day",
+        weather: "sunny"
+      };
+      updateQuestProgress(state, { ...event, source: "auto" });
+      assert.equal(getResidentStoryStatus(state, CHENGYE_ID).objectiveProgress, 0);
+      for (let progress = 0; progress < accepted.scene.objective.goal; progress += 1) {
+        updateQuestProgress(state, { ...event, source: "manual" });
+      }
+    }
+    assert.equal(getResidentStoryStatus(state, CHENGYE_ID).canComplete, true);
+    const completed = completeResidentStory(state, CHENGYE_ID);
+    assert.equal(completed.ok, true);
+    scenes.push(completed.scene.id);
   }
   const status = getResidentStoryStatus(state, CHENGYE_ID);
   assert.equal(new Set(scenes).size, 6);
   assert.equal(status.complete, true);
   assert.deepEqual(status.rewardIds, ["chengye_handdrawn_current_map"]);
   assert.deepEqual(state.residentCommissions, commissionSnapshot);
-  assert.equal(advanceResidentStory(state, CHENGYE_ID).ok, false);
+  assert.equal(acceptResidentStory(state, CHENGYE_ID).ok, false);
+});
+
+test("an accepted main-story task and its manual progress survive save normalization", () => {
+  const state = createDeveloperState();
+  state.residentStories = {};
+  developerDockRegion(state, LUMINOUS_ARCHIPELAGO_ID);
+  const accepted = acceptResidentStory(state, CHENGYE_ID);
+  const fish = getRegionFish(FISH, LUMINOUS_ARCHIPELAGO_ID)[0];
+  updateQuestProgress(state, {
+    type: "catch", source: "manual", fish, caught: { sizeTier: "standard" },
+    regionId: LUMINOUS_ARCHIPELAGO_ID, spotId: "windrest_shallows", timeId: "day", weather: "sunny"
+  });
+
+  const restored = migrateState(JSON.parse(JSON.stringify(state)));
+  const status = getResidentStoryStatus(restored, CHENGYE_ID);
+  assert.equal(status.activeScene.id, accepted.scene.id);
+  assert.equal(status.objectiveProgress, 1);
+  assert.equal(status.canComplete, false);
 });

@@ -1,7 +1,7 @@
 import {
   ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, AQUARIUM_DECORATIONS, AUTO_FISHING_EQUIPMENT, BAITS, BAY_EVENTS,
   CHENGYE_ID, DAILY_GOAL_TEMPLATES, FISH, FURNITURE, LUMINOUS_ARCHIPELAGO_ID, MILESTONES, RARITY,
-  JOURNAL_EVENT_TEMPLATES, REGIONS, RODS, ROUTES, SHIPS, SHIP_FURNITURE, SLEEPING_TIDE_BAY_ID, SPOTS, TIDEGLOW_SOURCES, TIMES,
+  REGIONS, RODS, ROUTES, SHIPS, SHIP_FURNITURE, SLEEPING_TIDE_BAY_ID, SPOTS, TIDEGLOW_SOURCES, TIMES,
   getFishHabitat, getRegionFishingSpots, isRegionAvailable, shipFurnitureById as findShipFurnitureById
 } from "./data.js";
 import {
@@ -38,7 +38,8 @@ import {
   completeRegionResearchForDeveloper, evaluateResearchProgress, getRegionResearchStatus
 } from "./systems/research.js";
 import {
-  advanceResidentStory as advanceResidentStoryState, createResidentStoryState,
+  acceptResidentStory as acceptResidentStoryState, applyResidentStoryProgress,
+  completeResidentStory as completeResidentStoryState, createResidentStoryState,
   getResidentStoryStatus, normalizeResidentStoryState, resetResidentStory
 } from "./systems/resident-stories.js";
 import { normalizeDisplaySettings } from "./systems/accessibility.js";
@@ -65,9 +66,9 @@ import {
   purchaseShipFurniture, shipInterior, syncLegacyStarterFurniture
 } from "./systems/ship-interiors.js";
 import {
-  JOURNAL_VERSION, acknowledgeJournalNotices, allJournalEntries, applyJournalEvent,
-  createJournalState, developerFillDailyJournal, filterJournalEntries, markJournalEntriesRead,
-  normalizeJournalState, sealJournalDay
+  JOURNAL_VERSION, acknowledgeJournalNotices, applyJournalEvent, createJournalState,
+  getJournalCategories, getJournalEntries, getJournalEntry, getJournalUnreadCount,
+  markJournalEntriesRead, normalizeJournalState, sealJournalDay, syncJournalUnlocks
 } from "./systems/journal.js";
 import {
   AUTO_FISHING_VERSION, acknowledgeAutoFishingSummary as acknowledgeAutoSummaryState,
@@ -87,7 +88,8 @@ export {
   AUTO_FISHING_EQUIPMENT, AUTO_FISHING_VERSION, SHIPS, SHIP_FURNITURE, TIDEGLOW_SOURCES,
   activeShip, activeShipSpeed, activeShipFurnitureCatalog, autoFishingSummaryView,
   collectInvalidInteriorReferences, createDailyQuests, getShipPurchaseState, shipInterior,
-  acknowledgeJournalNotices, allJournalEntries, filterJournalEntries, markJournalEntriesRead,
+  acknowledgeJournalNotices, getJournalCategories, getJournalEntries, getJournalEntry,
+  getJournalUnreadCount, markJournalEntriesRead, syncJournalUnlocks,
   CHART_VIEW_LIMITS, canBeginChartRoute, createDefaultChartView, createDeveloperWorldState,
   createInitialWorldState, DEVELOPER_TRAVEL_SCALES, FAMILIAR_TRAVEL_DURATION_MS,
   FIRST_TRAVEL_DURATION_MS, getAutoFishingFishPool, getAutoFishingPurchaseState,
@@ -404,6 +406,7 @@ export function createInitialState() {
   const availability = getProgressAvailabilityContext(state);
   state.dailyBoard = createDailyBoard(state.day, availability);
   state.residentCommissions = createResidentCommissionState(state.day, availability);
+  state.journal = syncJournalUnlocks(state);
   return state;
 }
 
@@ -502,6 +505,7 @@ export function createDeveloperState() {
   syncLegacyStarterFurniture(state);
   state.observations = createDeveloperObservationState({ day: state.day, observedAt: caughtAt });
   evaluateResearchProgress(state, LUMINOUS_ARCHIPELAGO_ID);
+  state.journal = syncJournalUnlocks(state);
   state.settings.sound = false;
   return state;
 }
@@ -712,7 +716,9 @@ export function migrateState(raw) {
   evaluateAchievements(merged);
   revealEligibleShips(merged);
   syncLegacyStarterFurniture(merged);
-  return merged.developerMode ? migrateDeveloperUnlocks(merged, raw) : merged;
+  const result = merged.developerMode ? migrateDeveloperUnlocks(merged, raw) : merged;
+  result.journal = syncJournalUnlocks(result);
+  return result;
 }
 
 export function isCurrentSaveSchema(raw) {
@@ -741,10 +747,8 @@ export function isCurrentSaveSchema(raw) {
     && raw.ships.ownedShipIds.every(shipId => raw.ships.interiorsByShipId?.[shipId]?.placedFurniture)
     && raw?.journal && raw.journal.version === JOURNAL_VERSION
     && raw.journal.fishEncounterLineById && typeof raw.journal.fishEncounterLineById === "object"
-    && Array.isArray(raw.journal.permanentEntries) && Array.isArray(raw.journal.dailyEntries)
-    && Array.isArray(raw.journal.dailyArchives) && Array.isArray(raw.journal.unreadEntryIds)
+    && Array.isArray(raw.journal.readEntryIds) && Array.isArray(raw.journal.unreadEntryIds)
     && Array.isArray(raw.journal.pendingNoticeEntryIds)
-    && raw.journal.dailyEntries.filter(entry => entry?.sealed).length <= 180
     && raw?.autoFishing && raw.autoFishing.version === AUTO_FISHING_VERSION
     && Array.isArray(raw.autoFishing.settledSessionIds);
 }
@@ -964,6 +968,11 @@ function gameEventConsumers(state) {
         state.dailyBoard = applyDailyGoalProgress(state.dailyBoard, legacy);
         state.residentCommissions = applyResidentCommissionProgress(state.residentCommissions, legacy);
       }
+      return { ok: true };
+    },
+    story: event => {
+      const legacy = legacyProgressFromGameEvent(event);
+      if (legacy) state.residentStories = applyResidentStoryProgress(state, legacy);
       return { ok: true };
     },
     tideglow: event => {
@@ -1231,7 +1240,7 @@ export function updateProgressEvent(state, event) {
       ...(event?.observationId ? { observationId: event.observationId } : {})
     },
     payload: { ...event }
-  }, { consumerIds: ["progress"] });
+  }, { consumerIds: ["progress", "story"] });
   const researchUpdate = evaluateResearchWithEvents(
     state,
     event?.regionId || state.world?.currentRegionId,
@@ -1286,8 +1295,12 @@ export function observeAtSpot(state, spotId, random = Math.random, observedAt = 
   };
 }
 
-export function advanceResidentStory(state, residentId) {
-  const result = advanceResidentStoryState(state, residentId);
+export function acceptResidentStory(state, residentId) {
+  return acceptResidentStoryState(state, residentId);
+}
+
+export function completeResidentStory(state, residentId) {
+  const result = completeResidentStoryState(state, residentId);
   if (!result.ok) return result;
   const tideglowEvent = emitTideglowEvent(state, "resident.story.completed", {
     residentId,
@@ -1454,29 +1467,6 @@ export function developerAdjustTideglow(state, delta) {
 export function developerEmitTideglowEvent(state, eventType, refs = {}) {
   if (!state?.developerMode || !TIDEGLOW_SOURCES.some(source => source.eventType === eventType)) return null;
   return emitTideglowEvent(state, eventType, refs, { source: "developer" });
-}
-
-export function developerEmitJournalEvent(state, eventType, refs = {}, eventId = null) {
-  if (!state?.developerMode || !JOURNAL_EVENT_TEMPLATES.some(template => template.eventType === eventType)) return null;
-  return dispatchGameEvent(state, {
-    ...(eventId ? { eventId } : {}),
-    type: eventType,
-    source: "developer",
-    ...(refs.regionId ? { regionId: refs.regionId } : {}),
-    ...(refs.shipId ? { shipId: refs.shipId } : {}),
-    refs
-  });
-}
-
-export function developerFillJournalArchive(state, count = 181) {
-  if (!state?.developerMode) return false;
-  state.journal = developerFillDailyJournal(state.journal, {
-    startDay: Math.max(1, state.day - Math.max(0, Math.floor(Number(count) || 181)) + 1),
-    count,
-    regionId: state.world?.currentRegionId,
-    shipId: state.ships?.activeShipId
-  });
-  return true;
 }
 
 export function buyShip(state, shipId, purchasedAt) {

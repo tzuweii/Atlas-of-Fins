@@ -1,5 +1,7 @@
 # 驗收清單
 
+> 封存文件：保存舊版完整檢查清單，不再是每次改動的硬門檻；驗收分級見 [`DEVELOPMENT_GUIDE.md`](../../DEVELOPMENT_GUIDE.md)。
+>
 > 對應版本：v0.4.0-alpha.8
 > 最後完整驗證：2026-07-17
 > 文件範圍：只記錄已實作功能；v0.4 以後的設計草案驗收條件保留在各自設計文件
@@ -195,7 +197,7 @@
 - [x] 560 次畫面重繪、61 次切區、12 次完整離線航程後，Documents 與監聽器不累積、heap 增加 331,252 bytes、未捕捉例外為 0
 - [x] 98 項核心單元測試、完整 Chromium 流程、語法、資料驗證與 `git diff --check` 通過
 
-完整壓測方法、門檻與首次基線見 [`SLICE_H_STRESS_REPORT.md`](versions/v0.4/SLICE_H_STRESS_REPORT.md)。
+完整壓測方法、門檻與首次基線見 [`SLICE_H_STRESS_REPORT.md`](../../versions/v0.4/SLICE_H_STRESS_REPORT.md)。
 
 ## v0.5 Slice A
 
@@ -269,4 +271,4 @@
 - [x] 遷移或可攜式匯入建立的救援備份在同頁後續自動儲存期間持續受保護，一般／開發者模式不交叉
 - [x] 390px 最大文字與 UI 縮放、滑鼠、鍵盤與觸控流程通過；無橫向溢位及未捕捉例外
 - [x] 560 次畫面重繪、300 次切船、61 次切區與 12 次離線航程後，Documents 1→1、監聽器 25→25、DOM +118、heap +537,760 bytes
-- [x] 156 項單元測試、完整 Chromium、壓測、語法、資料驗證與 `git diff --check` 通過；詳細結果見 [`V0_5_STRESS_REPORT.md`](versions/v0.5/V0_5_STRESS_REPORT.md)
+- [x] 156 項單元測試、完整 Chromium、壓測、語法、資料驗證與 `git diff --check` 通過；詳細結果見 [`V0_5_STRESS_REPORT.md`](../../versions/v0.5/V0_5_STRESS_REPORT.md)
