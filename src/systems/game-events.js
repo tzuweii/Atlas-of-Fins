@@ -1,4 +1,4 @@
-export const GAME_EVENT_SOURCES = Object.freeze(["manual", "auto", "offline", "migration", "developer"]);
+export const GAME_EVENT_SOURCES = Object.freeze(["manual", "tutorial", "auto", "offline", "migration", "developer"]);
 export const RECENT_GAME_EVENT_LIMIT = 24;
 
 const isObject = value => Boolean(value && typeof value === "object" && !Array.isArray(value));

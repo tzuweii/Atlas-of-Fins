@@ -31,6 +31,7 @@ import {
   getRouteDurationForState, getTensionConfig, getTravelStatus, getUnclaimedAchievementCount, isUnlocked,
   markAutoFishingClosed, markJournalEntriesRead, acknowledgeJournalNotices, migrateState, moveCatchToAquarium,
   isBayEventConditionActive, isCurrentSaveSchema, observeAtSpot, recordCatch, removeFishFromAquarium, replaceAquariumFish, rodById, sellCatches,
+  rollCaptureSuccess,
   normalizeChartView, panChartView, placeShipFurniture, progressTravel, setAquariumDecoration, settleAutoFishing,
   shipInterior, stopAutoFishing, swapAquariumFish, switchActiveShip, collectInvalidInteriorReferences,
   zoomChartView
@@ -40,6 +41,9 @@ import { createPortableSave, parsePortableSave } from "./persistence/portable-sa
 import {
   TEXT_SCALE_OPTIONS, UI_SCALE_OPTIONS, displayScaleValue, normalizeDisplaySettings
 } from "./systems/accessibility.js";
+import {
+  TUTORIAL_TOTAL_STEPS, TUTORIAL_VERSION, tutorialIsActive
+} from "./systems/tutorial.js";
 import { applyContentValidationGate, renderContentValidationReport } from "./ui/content-error-view.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -47,9 +51,12 @@ const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const app = $("#app");
 const titleScreen = $("#title-screen");
 const gameShell = $("#game-shell");
+const worldScene = $("#world-scene");
 const content = $("#content-panel");
+const taskTracker = $("#task-tracker");
 const modalRoot = $("#modal-root");
 const tutorialEl = $("#tutorial");
+const tutorialSpotlight = $("#tutorial-spotlight");
 const escapeText = value => String(value ?? "").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 
 let state = createInitialState();
@@ -68,7 +75,30 @@ const protectedBackupModes = new Set();
 let shouldRewriteLoadedSave = false;
 let pendingPortableImport = null;
 let shipTransitionTimer = null;
-let fishing = { phase: "idle", fish: null, caught: null, context: null, timer: null, raf: null, held: false, tension: .38, progress: 0, danger: 0, last: 0 };
+let fishing = {
+  phase: "idle", fish: null, caught: null, context: null, timer: null, raf: null,
+  held: false, tension: .38, progress: 0, danger: 0, last: 0,
+  nibbleIndex: 0, falseNibbles: 0, failureReason: null, captureChance: null
+};
+let tutorialFocusFrame = null;
+let tutorialFocusedStep = null;
+
+const TUTORIAL_COPY = [
+  ["先看釣具", "點開甲板釣具台，確認這一竿所在的釣點、魚竿與魚餌。"],
+  ["認識釣具台", "這就是實際使用的甲板釣具台：釣點決定下竿位置，魚竿影響張力與捕獲，魚餌只改變魚種出現權重。確認後按「回到海面」。"],
+  ["拋下第一竿", "按下「拋竿」。教學期間魚餌不會消耗，可以安心練習。"],
+  ["等候魚訊", "先不要起竿。觀察魚影、浮標與魚線，等待真正吞餌的驚嘆提示。"],
+  ["現在起竿", "浮標下沉、魚線繃直且驚嘆號出現了。教學不會倒數，閱讀完再按「起竿」。"],
+  ["控制張力", "按住收線讓距離縮短；張力過高時放開。失敗或逃脫都能再拋一竿。"],
+  ["收好第一尾魚", "魚類紀錄已經寫入圖鑑，售出後也不會消失。先按「收進漁獲箱」，準備販售這尾魚。"],
+  ["販售第一尾魚", "這裡是今日漁獲。找到剛才釣起的魚，按下「販售」換成金幣。"],
+  ["前往魚類圖鑑", "販售完成，漁獲箱已經清空；魚類紀錄仍會永久保留。按下「魚類圖鑑」確認紀錄。"],
+  ["魚類圖鑑", "這裡是永久收藏你相遇過每種魚的地方：仍保留剛才售出的魚，連同相遇的地點、時段、天氣與最長／最重的尺寸紀錄都記在卡片裡。看完後，從下方發亮的「海灣商店」繼續。"],
+  ["海灣商店", "商店永久提供釣竿、魚餌、船隻與家具，不需要擔心限時商品。"],
+  ["魚餌", "魚餌只調整魚種的出現權重，不改變張力或最後的捕獲成功率。"],
+  ["補給完成", "購買的魚餌會直接加入庫存，船屋則是整理收藏與安排休息的地方。"],
+  ["我的船屋", "船屋可以佈置收藏、翻閱日誌，並透過休息切換釣魚時段。"]
+];
 
 class Sound {
   constructor() { this.context = null; this.ambientTimer = null; }
@@ -89,11 +119,13 @@ class Sound {
   }
   play(name) {
     if (name === "cast") { this.tone(310,.12,"sine",.035); this.tone(520,.16,"sine",.025,.08); }
+    if (name === "nibble") { this.tone(410,.07,"sine",.018); }
     if (name === "hook") { this.tone(640,.1,"square",.035); this.tone(880,.14,"sine",.03,.1); }
     if (name === "success") [523,659,784].forEach((n,i)=>this.tone(n,.34,"sine",.04,i*.1));
     if (name === "new") [659,784,1046].forEach((n,i)=>this.tone(n,.48,"triangle",.035,i*.13));
     if (name === "coin") { this.tone(740,.09,"sine",.035); this.tone(990,.15,"sine",.025,.07); }
     if (name === "fail") { this.tone(240,.28,"triangle",.03); }
+    if (name === "escape") { this.tone(360,.09,"triangle",.025); this.tone(210,.3,"sine",.025,.08); }
     if (name === "sleep") [430,380,330].forEach((n,i)=>this.tone(n,.42,"sine",.025,i*.16));
   }
   startAmbient() {
@@ -125,6 +157,207 @@ function saveKeys(mode = activeSaveMode) {
     : [SAVE_KEY, BACKUP_KEY, TEMP_SAVE_KEY];
 }
 function gameIsActive() { return !gameShell.classList.contains("is-hidden"); }
+
+function tutorialActive() {
+  return gameIsActive() && tutorialIsActive(state);
+}
+
+function setTutorialStep(step, { persist = true } = {}) {
+  if (!tutorialActive()) return false;
+  const next = Math.min(TUTORIAL_TOTAL_STEPS, Math.max(0, Math.floor(Number(step) || 0)));
+  if (state.tutorialStep === next) return false;
+  state.tutorialStep = next;
+  state.tutorialVersion = TUTORIAL_VERSION;
+  if (next >= TUTORIAL_TOTAL_STEPS) {
+    state.completedTutorial = true;
+    state.tutorialCatchUid = null;
+  }
+  if (persist) saveGame();
+  updateTutorial();
+  return true;
+}
+
+function advanceTutorial(expectedStep, nextStep, options) {
+  return tutorialActive() && state.tutorialStep === expectedStep
+    ? setTutorialStep(nextStep, options)
+    : false;
+}
+
+function tutorialPresentation() {
+  if (!tutorialActive()) return null;
+  const step = state.tutorialStep;
+  const [title, copy] = TUTORIAL_COPY[step] || TUTORIAL_COPY[0];
+  const presentation = { step, title, copy, actionSelector: null, spotlightSelector: null, spotlightFromAction: null };
+  if (step === 0) presentation.actionSelector = '[data-action="show-fishing-setup"]';
+  if (step === 1) {
+    presentation.actionSelector = '.fishing-setup-modal [data-action="close-modal"]';
+    presentation.spotlightSelector = '.fishing-setup-modal';
+  }
+  if (step === 2) presentation.actionSelector = '[data-action="cast"]';
+  if (step === 3) presentation.spotlightSelector = '.fishing-stage';
+  if (step === 4) presentation.actionSelector = '[data-action="strike"]';
+  if (step === 5) {
+    if (["failed", "escaped"].includes(fishing.phase)) {
+      presentation.title = "再試一次";
+      presentation.copy = "這尾魚掙脫了。按下「再拋一竿」回到海面；教學魚餌仍不會消耗。";
+      presentation.actionSelector = '[data-action="reset-fishing"]';
+    } else {
+      presentation.actionSelector = '#reel-button';
+      presentation.spotlightSelector = '.reel-ui';
+    }
+  }
+  if (step === 6) {
+    presentation.actionSelector = '[data-action="close-catch"]';
+    presentation.spotlightSelector = '.catch-modal';
+  }
+  if (step === 7) {
+    presentation.actionSelector = '[data-action="sell-one"]';
+    presentation.spotlightFromAction = '.catch-row';
+  }
+  if (step === 8) presentation.actionSelector = '[data-view="journal"]';
+  if (step === 9) {
+    // Teach the atlas: spotlight the caught fish's record card while the glowing 海灣商店 nav button
+    // (the action target) shows where to head next.
+    presentation.actionSelector = '[data-view="shop"]';
+    presentation.spotlightSelector = '.fish-detail';
+  }
+  if (step === 10) presentation.actionSelector = '[data-action="shop-tab"][data-id="baits"]';
+  if (step === 11) {
+    presentation.actionSelector = '[data-action="buy-bait"][data-id="bread"]';
+    presentation.spotlightSelector = '.shop-item[data-shop-type="bait"][data-shop-id="bread"]';
+  }
+  if (step === 12) presentation.actionSelector = '[data-view="home"]';
+  if (step === 13) presentation.actionSelector = '[data-action="sleep"]';
+  if (!presentation.spotlightFromAction) presentation.spotlightSelector ||= presentation.actionSelector;
+  return presentation;
+}
+
+// Resolve which element the spotlight frames: a card derived from the action target (e.g. the whole
+// catch row), an explicit selector (e.g. the full catch modal), or the action target itself.
+function tutorialSpotlightTarget(presentation, actionTarget) {
+  if (!presentation) return null;
+  if (presentation.spotlightFromAction && actionTarget) {
+    return actionTarget.closest(presentation.spotlightFromAction) || actionTarget;
+  }
+  if (presentation.spotlightSelector) return $(presentation.spotlightSelector);
+  return actionTarget;
+}
+
+function tutorialActionTarget(presentation = tutorialPresentation()) {
+  if (!presentation?.actionSelector) return null;
+  if (presentation.step === 7 && state.tutorialCatchUid) {
+    return $$('[data-action="sell-one"]').find(button => button.dataset.id === state.tutorialCatchUid)
+      || $(presentation.actionSelector);
+  }
+  return $(presentation.actionSelector);
+}
+
+function clearTutorialFocus() {
+  cancelAnimationFrame(tutorialFocusFrame);
+  tutorialFocusFrame = null;
+  $$(".is-tutorial-target").forEach(element => element.classList.remove("is-tutorial-target"));
+  $$(".is-tutorial-locked").forEach(element => element.classList.remove("is-tutorial-locked"));
+  app.classList.remove("is-tutorial-active");
+  app.classList.remove("is-tutorial-nav-target");
+  delete app.dataset.tutorialStep;
+  tutorialSpotlight.classList.add("is-hidden");
+  tutorialSpotlight.classList.remove("is-interactive");
+  tutorialFocusedStep = null;
+}
+
+function focusTutorialTarget(actionTarget) {
+  if (tutorialFocusedStep === state.tutorialStep) return;
+  tutorialFocusedStep = state.tutorialStep;
+  (actionTarget || tutorialEl).focus({ preventScroll: true });
+}
+
+function positionTutorialFocus() {
+  tutorialFocusFrame = null;
+  const presentation = tutorialPresentation();
+  if (!presentation) return;
+  const actionTarget = tutorialActionTarget(presentation);
+  const spotlightTarget = tutorialSpotlightTarget(presentation, actionTarget);
+  if (!spotlightTarget) {
+    tutorialSpotlight.classList.add("is-hidden");
+    tutorialSpotlight.classList.remove("is-interactive");
+    return;
+  }
+
+  if (spotlightTarget.closest(".content-panel.is-feature-view")) {
+    spotlightTarget.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+  }
+  const rect = spotlightTarget.getBoundingClientRect();
+  const gap = 9;
+  const spotlightLeft = Math.max(4, rect.left - gap);
+  const spotlightTop = Math.max(4, rect.top - gap);
+  tutorialSpotlight.style.left = `${spotlightLeft}px`;
+  tutorialSpotlight.style.top = `${spotlightTop}px`;
+  tutorialSpotlight.style.width = `${Math.max(0, Math.min(window.innerWidth - spotlightLeft - 4, rect.width + gap * 2))}px`;
+  tutorialSpotlight.style.height = `${Math.max(0, Math.min(window.innerHeight - spotlightTop - 4, rect.height + gap * 2))}px`;
+  tutorialSpotlight.classList.toggle("is-interactive", Boolean(actionTarget && spotlightTarget === actionTarget));
+  tutorialSpotlight.classList.remove("is-hidden");
+
+  const tooltipWidth = tutorialEl.offsetWidth;
+  const tooltipHeight = tutorialEl.offsetHeight;
+  const edge = 10;
+  const targetCenter = rect.left + rect.width / 2;
+  const left = Math.min(window.innerWidth - tooltipWidth - edge, Math.max(edge, targetCenter - tooltipWidth / 2));
+  let top = rect.top - tooltipHeight - 16;
+  if (top < edge) top = rect.bottom + 16;
+  if (top + tooltipHeight > window.innerHeight - edge) top = Math.max(edge, window.innerHeight - tooltipHeight - edge);
+  tutorialEl.style.left = `${left}px`;
+  tutorialEl.style.top = `${top}px`;
+  tutorialEl.style.right = "auto";
+  tutorialEl.style.bottom = "auto";
+
+  focusTutorialTarget(actionTarget);
+}
+
+function scheduleTutorialFocus() {
+  cancelAnimationFrame(tutorialFocusFrame);
+  tutorialFocusFrame = requestAnimationFrame(positionTutorialFocus);
+}
+
+function applyTutorialFocus() {
+  const presentation = tutorialPresentation();
+  if (!presentation) { clearTutorialFocus(); return; }
+  const actionTarget = tutorialActionTarget(presentation);
+  const spotlightTarget = tutorialSpotlightTarget(presentation, actionTarget);
+  $$(".is-tutorial-target").forEach(element => element.classList.remove("is-tutorial-target"));
+  $$(".is-tutorial-locked").forEach(element => element.classList.remove("is-tutorial-locked"));
+  actionTarget?.classList.add("is-tutorial-target");
+  if (spotlightTarget !== actionTarget) spotlightTarget?.classList.add("is-tutorial-target");
+  app.classList.toggle("is-tutorial-nav-target", Boolean(spotlightTarget?.closest(".main-nav")));
+  $$("button, select, input, textarea, a[href]", app).forEach(element => {
+    if (element === actionTarget || actionTarget?.contains(element)) return;
+    element.classList.add("is-tutorial-locked");
+  });
+  app.classList.add("is-tutorial-active");
+  app.dataset.tutorialStep = String(state.tutorialStep);
+  scheduleTutorialFocus();
+}
+
+function recoverTutorialSession() {
+  if (!tutorialActive()) return false;
+  let changed = false;
+  if (state.tutorialStep === 1 && !$(".fishing-setup-modal")) { state.tutorialStep = 0; changed = true; }
+  if ([3, 4, 5].includes(state.tutorialStep) && fishing.phase === "idle") { state.tutorialStep = 2; changed = true; }
+  if (state.tutorialStep === 6 && !$(".catch-modal")) { state.tutorialStep = 7; currentView = "catch"; changed = true; }
+  if (state.tutorialStep === 7) {
+    currentView = "catch";
+    const tutorialCatch = state.catchInventory.find(caught => caught.uid === state.tutorialCatchUid) || state.catchInventory[0];
+    if (tutorialCatch) state.tutorialCatchUid = tutorialCatch.uid;
+    else { state.tutorialStep = 8; state.tutorialCatchUid = null; changed = true; }
+  }
+  if (state.tutorialStep === 8) currentView = "catch";
+  if (state.tutorialStep === 9) currentView = "journal";
+  if ([10, 11, 12].includes(state.tutorialStep)) currentView = "shop";
+  if (state.tutorialStep === 10) shopTab = "rods";
+  if (state.tutorialStep === 11) shopTab = "baits";
+  if (state.tutorialStep === 13) currentView = "home";
+  if (changed) saveGame();
+  return changed;
+}
 function loadPreferences(fallback = state.settings) {
   try {
     const saved = JSON.parse(localStorage.getItem(PREFERENCES_KEY) || "null");
@@ -224,6 +457,7 @@ function startGame(isNew = false, mode = "normal") {
   gameShell.classList.remove("is-hidden");
   app.classList.toggle("is-developer-mode", mode === "developer");
   currentView = "fishing";
+  recoverTutorialSession();
   syncTravelClock(); syncWorld(); render(); updateTutorial(); sound.startAmbient();
   setTimeout(()=>{
     const summary=autoFishingUpdate.summary||(!state.autoFishing?.lastSummary?.acknowledged?state.autoFishing.lastSummary:null);
@@ -298,6 +532,16 @@ function syncWorld() {
 
 function render() {
   syncWorld();
+  const fishingView = currentView === "fishing";
+  gameShell.classList.toggle("is-fishing-view", fishingView);
+  // Reeling only happens on the fishing view; clear the fighting lock when we leave it so the
+  // catch modal or tutorial navigation can't strand `.is-fighting` (which disables the bottom nav).
+  if (!fishingView) gameShell.classList.remove("is-fighting");
+  gameShell.dataset.view = currentView;
+  worldScene.setAttribute("aria-hidden", String(!fishingView));
+  content.classList.toggle("is-feature-view", !fishingView);
+  // The cabin is a fixed, full-screen stage (like the fishing scene) rather than a scrolling page.
+  content.classList.toggle("is-home-view", currentView === "home");
   $$(".nav-button").forEach(button => button.classList.toggle("is-active", button.dataset.view === currentView));
   if (currentView === "fishing") renderFishing();
   if (currentView === "journal") renderJournal();
@@ -306,6 +550,52 @@ function render() {
   if (currentView === "residents") renderResidents();
   if (currentView === "chart") renderChart();
   if (currentView === "home") renderHome();
+  renderTaskTracker();
+  updateTutorial();
+}
+
+function trackerProgress(progress, goal) {
+  const safeGoal = Math.max(1, Number(goal) || 1);
+  const safeProgress = Math.min(safeGoal, Math.max(0, Number(progress) || 0));
+  return `<div class="tracker-progress"><i style="width:${safeProgress / safeGoal * 100}%"></i></div><small>${Math.floor(safeProgress)} / ${safeGoal}</small>`;
+}
+
+function renderTaskTracker() {
+  if (!taskTracker) return;
+  const show = currentView === "fishing" && fishing.phase !== "reeling";
+  taskTracker.hidden = !show;
+  if (!show) return;
+
+  const items = [];
+  const travelStatus = getTravelStatus(state.world);
+  if (travelStatus) {
+    items.push(`<article class="tracker-item is-voyage"><span>航行中</span><b>${escapeText(travelStatus.route.name)}</b><p>第 ${travelStatus.segment} / ${travelStatus.totalSegments} 段 · ${formatTravelTime(travelStatus.remainingMs)}</p><div class="tracker-progress"><i style="width:${travelStatus.progress * 100}%"></i></div></article>`);
+  } else if (isDockedAt(state.world?.currentRegionId)) {
+    const event = getActiveBayEvent(state);
+    const eventState = getActiveBayEventState(state);
+    if (event && eventState) {
+      const active = isBayEventConditionActive(state, event);
+      items.push(`<article class="tracker-item is-event"><span>${event.icon} 海域事件 · ${active ? "生效中" : "等待條件"}</span><b>${escapeText(event.name)}</b><p>${escapeText(event.objective)}</p>${trackerProgress(eventState.progress, event.goal)}</article>`);
+    }
+  }
+
+  const localStory = RESIDENTS
+    .filter(resident => resident.regionId === state.world?.currentRegionId)
+    .map(resident => ({ resident, status: getResidentStoryStatus(state, resident.id) }))
+    .find(entry => entry.status.activeScene);
+  if (localStory) {
+    const { status } = localStory;
+    items.push(`<button class="tracker-item is-story" data-action="tracker-residents" type="button"><span>海域主線</span><b>${escapeText(status.activeScene.title)}</b><p>${escapeText(status.activeScene.objective.title)}</p>${trackerProgress(status.objectiveProgress, status.objectiveGoal)}</button>`);
+  }
+
+  const dailyEntries = Array.isArray(state.dailyBoard?.entries) ? state.dailyBoard.entries : [];
+  for (const daily of dailyEntries) {
+    const complete = daily.progress >= daily.goal;
+    const status = daily.claimed ? "已領取" : complete ? "可領取" : "進行中";
+    items.push(`<article class="tracker-item is-daily ${daily.claimed ? "is-claimed" : complete ? "is-claimable" : "is-active"}"><span>每日目標 · ${status}</span><b>${escapeText(daily.text)}</b>${trackerProgress(daily.progress, daily.goal)}${complete && !daily.claimed ? `<button class="tracker-claim" data-action="claim-quest" data-id="${daily.instanceId}" type="button">領取 ${escapeText(rewardLabel(daily.reward))}</button>` : ""}</article>`);
+  }
+
+  taskTracker.innerHTML = `<div class="tracker-heading"><span>航程追蹤</span><small>${regionById(state.world?.currentRegionId)?.name || "海上"}</small></div>${items.join("") || '<p class="tracker-empty">目前沒有需要追蹤的目標。</p>'}`;
 }
 
 function panelHeading(title, subtitle, actions = "") {
@@ -400,27 +690,48 @@ function renderVoyageStateCard() {
 function renderFishing() {
   const docked = state.world?.docking?.status === "docked" && state.world.docking.regionId === state.world.currentRegionId;
   const regionSpots = docked ? getRegionFishingSpots(state.world.currentRegionId) : [];
+  gameShell.dataset.fishingPhase = fishing.phase;
+  gameShell.classList.toggle("is-fighting", fishing.phase === "reeling");
   if (!docked || !regionSpots.length) {
     if (fishing.phase !== "idle") { clearFishing(); fishing.phase = "idle"; }
-    content.innerHTML = `${panelHeading("航程甲板", "遠航期間不必守著畫面。可以關閉遊戲，也可以留在船上整理自己的收藏。")}<div class="fishing-layout"><div>${renderVoyageStateCard()}</div><div class="fishing-side">${renderQuests()}</div></div>`;
+    content.innerHTML = `<div class="fishing-scene-ui is-voyage">${renderVoyageStateCard()}</div>`;
     return;
   }
   if (!regionSpots.some(spot => spot.id === state.selectedSpot)) state.selectedSpot = regionSpots[0].id;
-  const currentRegion = regionById(state.world.currentRegionId);
   const rod = rodById(state.equippedRod), bait = baitById(state.equippedBait);
-  const fishArea = fishing.phase === "idle" ? `
-    <div class="cast-area"><p>${state.baitAmounts[state.equippedBait] ? "選好了嗎？海面正在等著你的下一竿。" : "這種魚餌用完了，去商店補充或換一種吧。"}</p>
-      <button class="primary-button cast-button" data-action="cast" ${state.baitAmounts[state.equippedBait] ? "" : "disabled"}>拋下魚線</button></div>` : renderFishingStage();
-  content.innerHTML = `${panelHeading(currentRegion?.id === LUMINOUS_ARCHIPELAGO_ID ? "琉光群島釣行" : "去釣魚", `從${currentRegion?.portName || "港口"}選擇釣點與裝備，放慢呼吸，感受魚線傳來的動靜。`)}
-    <div class="fishing-layout"><div class="card fishing-main">
-      <span class="section-label">選擇釣點</span><div class="spot-grid">${regionSpots.map(spot => {
-        const locked = spot.requires && !state.ownedRods.includes(spot.requires);
-        return `<button class="spot-card ${state.selectedSpot === spot.id ? "is-active" : ""}" data-action="spot" data-id="${spot.id}" ${locked || fishing.phase !== "idle" ? "disabled" : ""}><span class="spot-icon">${locked ? "⌑" : spot.icon}</span><b>${spot.name}</b><small>${locked ? "需要強化遠投竿" : spot.hint}</small></button>`;
-      }).join("")}</div>
-      <div class="loadout"><label><span class="section-label">魚竿</span><span class="select-wrap"><select data-action="equip-rod" ${fishing.phase !== "idle" ? "disabled" : ""}>${state.ownedRods.map(id => { const item=rodById(id); return `<option value="${id}" ${id===state.equippedRod?"selected":""}>${item.name}</option>`}).join("")}</select></span><div class="bait-stock">安全區寬度 ${Math.round(rod.tolerance*100)}%</div></label>
-      <label><span class="section-label">魚餌</span><span class="select-wrap"><select data-action="equip-bait" ${fishing.phase !== "idle" ? "disabled" : ""}>${BAITS.filter(item=>isUnlocked(item,state)).map(item=>`<option value="${item.id}" ${item.id===state.equippedBait?"selected":""}>${item.name} × ${state.baitAmounts[item.id]||0}</option>`).join("")}</select></span><div class="bait-stock">${bait.description}</div></label></div>${fishArea}
-    </div><div class="fishing-side">${renderObservationPreview()}${renderResearchPanel()}${renderBayEvent()}${renderQuests()}</div></div>`;
+  const spot = regionSpots.find(item => item.id === state.selectedSpot);
+  const hasBait = tutorialActive() || Boolean(state.baitAmounts[state.equippedBait]);
+  const action = fishing.phase === "idle"
+    ? { id: "cast", label: hasBait ? "拋竿" : "魚餌用完了", disabled: !hasBait }
+    : ["approaching", "nibbling", "biting"].includes(fishing.phase)
+      ? { id: "strike", label: "起竿", disabled: false }
+      : ["failed", "escaped"].includes(fishing.phase)
+        ? { id: "reset-fishing", label: "再拋一竿", disabled: false }
+        : null;
+  const controls = action
+    ? `<button class="fishing-context-action ${fishing.phase === "biting" ? "is-urgent" : ""}" data-action="${action.id}" type="button" ${action.disabled ? "disabled" : ""}><span>${fishing.phase === "biting" ? "!" : "⌁"}</span><b>${action.label}</b></button>`
+    : "";
+  content.innerHTML = `<div class="fishing-scene-ui is-${fishing.phase}">${renderFishingStage()}
+    <div class="fishing-loadout-bar">
+      <button data-action="show-fishing-setup" type="button" ${fishing.phase !== "idle" ? "disabled" : ""}><span>${spot?.icon || "⌁"}</span><b>${escapeText(spot?.name || "目前釣點")}</b><small>${escapeText(rod.name)} · ${escapeText(bait.name)} × ${state.baitAmounts[state.equippedBait] || 0}</small></button>
+    </div>${controls}</div>`;
   if (fishing.phase === "reeling") bindReelButton();
+  renderTaskTracker();
+}
+
+function showFishingSetup() {
+  if (fishing.phase !== "idle" || !isDockedAt(state.world?.currentRegionId)) return;
+  const regionSpots = getRegionFishingSpots(state.world.currentRegionId);
+  const rod = rodById(state.equippedRod), bait = baitById(state.equippedBait);
+  modalRoot.innerHTML = `<div class="modal-backdrop"><div class="modal fishing-setup-modal"><span class="section-label">甲板釣具台</span><h2>釣點與裝備</h2><p class="modal-copy">魚餌只改變魚影出現權重；釣竿也可能提高捕獲成功率。真正吞餌後再起竿，才會進入張力拼搏。</p>
+    <span class="section-label">選擇釣點</span><div class="spot-grid">${regionSpots.map(spot => {
+      const locked = spot.requires && !state.ownedRods.includes(spot.requires);
+      return `<button class="spot-card ${state.selectedSpot === spot.id ? "is-active" : ""}" data-action="spot" data-id="${spot.id}" ${locked ? "disabled" : ""}><span class="spot-icon">${locked ? "⌑" : spot.icon}</span><b>${escapeText(spot.name)}</b><small>${locked ? "需要強化遠投竿" : escapeText(spot.hint)}</small></button>`;
+    }).join("")}</div>
+    <div class="loadout"><label><span class="section-label">魚竿</span><span class="select-wrap"><select data-action="equip-rod">${state.ownedRods.map(id => { const item=rodById(id); return `<option value="${id}" ${id===state.equippedRod?"selected":""}>${escapeText(item.name)}</option>`}).join("")}</select></span><div class="bait-stock">安全區 ${Math.round(rod.tolerance*100)}% · 捕獲率 +${Math.round((rod.catchBonus || 0)*100)}%</div></label>
+    <label><span class="section-label">魚餌</span><span class="select-wrap"><select data-action="equip-bait">${BAITS.filter(item=>isUnlocked(item,state)).map(item=>`<option value="${item.id}" ${item.id===state.equippedBait?"selected":""}>${escapeText(item.name)} × ${state.baitAmounts[item.id]||0}</option>`).join("")}</select></span><div class="bait-stock">${escapeText(bait.description)}</div></label></div>
+    <div class="fishing-setup-context">${renderObservationPreview()}${renderResearchPanel()}</div>
+    <div class="modal-actions"><button class="primary-button" data-action="close-modal" type="button">回到海面</button></div></div></div>`;
 }
 
 function renderBayEvent() {
@@ -745,17 +1056,25 @@ function showResidentDialogue(residentId, deliveredDialogue = null) {
 }
 
 function renderFishingStage() {
-  if (fishing.phase === "waiting") return `<div class="fishing-stage"><div class="waiting-bobber"><div class="bobber"></div><h3>魚線已入水</h3><p>聽一會兒海浪，魚兒正在靠近……</p></div></div>`;
-  if (fishing.phase === "hooked") return `<div class="fishing-stage"><button class="primary-button hook-button" data-action="hook">魚上鉤了！開始收線</button></div>`;
-  if (fishing.phase === "failed") return `<div class="fishing-stage"><div class="fishing-result-fail"><h3>牠游回海裡了</h3><p>沒關係，海灣總會留著下一次相遇。</p><button class="secondary-button" data-action="reset-fishing">再拋一竿</button></div></div>`;
+  if (["approaching", "nibbling", "biting"].includes(fishing.phase)) {
+    return `<div class="fishing-stage is-${fishing.phase}"><div class="fish-shadow" aria-hidden="true"><i></i></div><div class="fishing-line-cue" aria-hidden="true"><i></i><b></b></div><div class="waiting-bobber" aria-hidden="true"><div class="bobber"></div><i class="bite-splash"></i></div><div class="bite-alert" role="status" aria-live="assertive"><strong aria-hidden="true">!</strong><span class="visually-hidden">真正吞餌，現在起竿</span></div></div>`;
+  }
+  if (fishing.phase === "failed") {
+    const early = fishing.failureReason === "early";
+    return `<div class="fishing-stage is-failed"><div class="fishing-result-fail"><span>⌁</span><h3>${early ? "起竿太早了" : "魚線沒有穩住"}</h3><p>${early ? "剛才只是試探咬餌；等到浮標下沉、魚線繃直與驚嘆提示同時出現。" : "牠掙開魚線，游回海裡了。"}</p></div></div>`;
+  }
+  if (fishing.phase === "escaped") return `<div class="fishing-stage is-escaped"><div class="fishing-result-fail is-capture-escape"><span>≈</span><h3>最後一刻逃脫了</h3><p>你已完成拼搏，但這尾魚掙脫了魚鉤。本次捕獲判定已結束，下一竿會重新獨立計算。</p></div></div>`;
   if (fishing.phase === "reeling") {
     const rod = rodById(state.equippedRod), config = getTensionConfig(fishing.fish, rod);
-    return `<div class="fishing-stage"><div class="reel-ui"><div class="reel-header"><b>穩住魚線</b><small>${behaviorName(fishing.fish.behavior)} · 按住收線，放開降張力</small></div><div class="tension-wrap"><div class="tension-labels"><span>鬆線</span><span>安全張力</span><span>危險</span></div><div class="tension-bar"><i class="safe-zone" style="left:${config.safeMin*100}%;width:${(config.safeMax-config.safeMin)*100}%"></i><i id="tension-needle" class="tension-needle" style="left:${fishing.tension*100}%"></i></div><div class="catch-progress"><i id="catch-progress-fill" style="width:${fishing.progress*100}%"></i></div><button id="reel-button" class="reel-button" type="button">按住收線</button><p id="danger-text" class="danger-text"></p></div></div></div>`;
+    const remaining = Math.ceil((1 - fishing.progress) * 100);
+    return `<div class="fishing-stage is-reeling"><div class="struggle-line" aria-hidden="true"></div><div class="struggle-fish-cue" aria-hidden="true"><i></i><span>≈</span></div><div class="fight-behavior-cue is-${fishing.fish.behavior}" role="status" aria-live="polite"><small>魚勢</small><strong>${behaviorName(fishing.fish.behavior)}</strong></div><div class="reel-ui" aria-label="釣魚拼搏"><div class="reel-meters"><div class="reel-meter tension-meter"><div class="reel-meter-label"><span>張力</span></div><div class="tension-bar"><i class="safe-zone" style="left:${config.safeMin*100}%;width:${(config.safeMax-config.safeMin)*100}%"></i><i id="tension-needle" class="tension-needle" style="left:${fishing.tension*100}%"></i></div></div><div class="reel-meter distance-meter"><div class="reel-meter-label"><span>距離</span><output id="distance-value">${remaining}%</output></div><div class="catch-progress"><i id="catch-progress-fill" style="width:${fishing.progress*100}%"></i></div></div></div><button id="reel-button" class="reel-button" type="button"><span aria-hidden="true">↟</span><b>收線</b></button><p id="danger-text" class="danger-text" aria-live="polite"></p></div></div>`;
   }
   return "";
 }
 
-function behaviorName(id){ return ({steady:"平穩型",sprint:"衝刺型",endurance:"耐力型",sway:"擺動型",rare:"稀有型"})[id]; }
+function behaviorName(id) {
+  return ({ steady:"平穩型", sprint:"衝刺型", endurance:"耐力型", sway:"擺動型", rare:"稀有型" })[id] || "未知魚勢";
+}
 
 function currentCatchContext() {
   return {
@@ -772,18 +1091,71 @@ function currentCatchContext() {
 function castLine() {
   const canFishHere = isDockedAt(state.world?.currentRegionId)
     && getRegionFishingSpots(state.world.currentRegionId).some(spot => spot.id === state.selectedSpot);
-  if (!canFishHere || fishing.phase !== "idle" || !state.baitAmounts[state.equippedBait]) return;
-  state.baitAmounts[state.equippedBait]--;
-  if (!state.completedTutorial && state.tutorialStep < 1) state.tutorialStep = 1;
-  fishing.phase = "waiting"; fishing.fish = chooseFish(state); fishing.context = currentCatchContext(); fishing.progress = 0; fishing.tension = .36; fishing.danger = 0;
+  const teaching = tutorialActive();
+  if (!canFishHere || fishing.phase !== "idle" || (!teaching && !state.baitAmounts[state.equippedBait])) return;
+  if (!teaching) state.baitAmounts[state.equippedBait]--;
+  if (teaching) advanceTutorial(2, 3, { persist: false });
+  fishing.phase = "approaching"; fishing.fish = chooseFish(state); fishing.context = currentCatchContext(); fishing.progress = 0; fishing.tension = .36; fishing.danger = 0;
+  fishing.nibbleIndex = 0;
+  fishing.falseNibbles = ({steady:1,sprint:2,endurance:2,sway:2,rare:3})[fishing.fish.behavior] || 1;
+  fishing.failureReason = null; fishing.captureChance = null;
   sound.play("cast"); saveGame(); renderFishing(); updateTutorial();
   const bait = baitById(state.equippedBait);
-  fishing.timer = setTimeout(() => { fishing.phase="hooked"; sound.play("hook"); renderFishing(); }, 1400 + Math.random()*1800*bait.bite);
+  fishing.timer = setTimeout(advanceBiteSequence, 2400 + Math.random()*1800*bait.bite);
+}
+
+function updateFishingCuePhase(phase) {
+  fishing.phase = phase;
+  gameShell.dataset.fishingPhase = phase;
+  const scene = $(".fishing-scene-ui", content);
+  const stage = $(".fishing-stage", content);
+  const action = $(".fishing-context-action", content);
+  for (const name of ["approaching", "nibbling", "biting"]) {
+    scene?.classList.remove(`is-${name}`);
+    stage?.classList.remove(`is-${name}`);
+  }
+  scene?.classList.add(`is-${phase}`);
+  stage?.classList.add(`is-${phase}`);
+  action?.classList.toggle("is-urgent", phase === "biting");
+  const icon = action?.querySelector("span");
+  if (icon) icon.textContent = phase === "biting" ? "!" : "⌁";
+  if (phase === "biting") advanceTutorial(3, 4);
+}
+
+function advanceBiteSequence() {
+  if (!["approaching", "nibbling"].includes(fishing.phase)) return;
+  if (fishing.nibbleIndex < fishing.falseNibbles) {
+    fishing.nibbleIndex += 1;
+    updateFishingCuePhase("nibbling");
+    sound.play("nibble");
+    fishing.timer = setTimeout(() => {
+      if (fishing.phase !== "nibbling") return;
+      updateFishingCuePhase("approaching");
+      fishing.timer = setTimeout(advanceBiteSequence, 1500 + Math.random()*1100);
+    }, 780);
+    return;
+  }
+  updateFishingCuePhase("biting");
+  sound.play("hook");
+  fishing.timer = tutorialActive() && state.tutorialStep === 4
+    ? null
+    : setTimeout(() => failCatch("late"), 2200);
+}
+
+function strikeLine() {
+  if (fishing.phase === "biting") {
+    clearTimeout(fishing.timer);
+    startReeling();
+    return;
+  }
+  if (["approaching", "nibbling"].includes(fishing.phase)) failCatch("early");
 }
 
 function startReeling() {
-  if (fishing.phase !== "hooked") return;
+  if (fishing.phase !== "biting") return;
+  advanceTutorial(4, 5);
   fishing.phase="reeling"; fishing.last=performance.now(); renderFishing();
+  updateTutorial();
   fishing.raf=requestAnimationFrame(reelLoop);
 }
 
@@ -809,25 +1181,44 @@ function reelLoop(now) {
   else fishing.progress -= .012*dt;
   fishing.progress=Math.max(0,Math.min(1,fishing.progress));
   if (fishing.tension>.91) fishing.danger+=dt; else fishing.danger=Math.max(0,fishing.danger-dt*1.8);
-  const needle=$("#tension-needle"), fill=$("#catch-progress-fill"), danger=$("#danger-text");
+  const needle=$("#tension-needle"), fill=$("#catch-progress-fill"), remaining=$("#distance-value"), danger=$("#danger-text");
   if(needle) needle.style.left=`${fishing.tension*100}%`; if(fill) fill.style.width=`${fishing.progress*100}%`;
-  if(danger) danger.textContent=fishing.danger>.1?`魚線繃得太緊了，先放開一下！ ${Math.max(0,config.breakDelay-fishing.danger).toFixed(1)} 秒`:safe?"很好，就維持這個節奏":"讓張力回到白色安全框內";
+  if(remaining) remaining.textContent=`${Math.ceil((1-fishing.progress)*100)}%`;
+  if(danger) {
+    const cue = fishing.danger>.1 || fishing.tension>config.safeMax ? "放線" : fishing.tension<config.safeMin ? "收線" : "";
+    danger.textContent=cue;
+    danger.dataset.state=cue==="放線"?"release":cue==="收線"?"reel":"safe";
+  }
   if (fishing.danger>=config.breakDelay) return failCatch();
   if (fishing.progress>=1) return completeCatch();
   fishing.raf=requestAnimationFrame(reelLoop);
 }
 
-function failCatch() {
-  cancelAnimationFrame(fishing.raf); fishing.held=false; fishing.phase="failed"; sound.play("fail");
-  if (!state.completedTutorial) { state.baitAmounts[state.equippedBait]++; toast("教學期間不消耗這次魚餌"); }
-  saveGame(); renderFishing();
+function failCatch(reason = "line") {
+  clearTimeout(fishing.timer); cancelAnimationFrame(fishing.raf); fishing.held=false; fishing.failureReason=reason; fishing.phase="failed"; sound.play("fail");
+  saveGame(); renderFishing(); updateTutorial();
 }
 
 function completeCatch() {
   cancelAnimationFrame(fishing.raf); fishing.held=false;
-  const caught=generateCatch(fishing.fish,fishing.context,state), result=recordCatch(state,caught,fishing.context?.baitId), milestones=applyMilestones(state);
+  const capture = rollCaptureSuccess(fishing.fish, rodById(state.equippedRod), Math.random);
+  fishing.captureChance = capture.chance;
+  if (!capture.success) {
+    fishing.phase = "escaped";
+    sound.play("escape");
+    saveGame();
+    renderFishing();
+    updateTutorial();
+    return;
+  }
+  const tutorialCatch=tutorialActive()&&state.tutorialStep===5;
+  const caught=generateCatch(fishing.fish,fishing.context,state), result=recordCatch(state,caught,fishing.context?.baitId,{source:tutorialCatch?"tutorial":"manual"}), milestones=applyMilestones(state);
   fishing.caught=caught; fishing.phase="idle"; sound.play(caught.variant==="shimmer"||result.isNew?"new":"success");
-  if (!state.completedTutorial && state.tutorialStep < 2) state.tutorialStep=2;
+  if (tutorialCatch) {
+    state.tutorialCatchUid = caught.uid;
+    selectedJournalFish = fishing.fish.id;
+    setTutorialStep(6, { persist: false });
+  }
   saveGame(); syncWorld(); showCatchModal(fishing.fish,caught,result,milestones); updateTutorial();
   notifyCompletedAchievements(result.completedAchievements);
   notifyTideglow(result.tideglowEvents);
@@ -836,8 +1227,15 @@ function completeCatch() {
   if(result.researchUpdate?.rewards?.length) setTimeout(()=>toast(`研究紀念已收好：${result.researchUpdate.rewards.map(reward=>reward.label).join("、")}`,"gold"),720);
 }
 
-function resetFishing() { clearFishing(); fishing.phase="idle"; renderFishing(); }
-function clearFishing(){ clearTimeout(fishing.timer); cancelAnimationFrame(fishing.raf); fishing.held=false; }
+function resetFishing() {
+  clearFishing();
+  Object.assign(fishing,{phase:"idle",fish:null,caught:null,context:null,tension:.38,progress:0,danger:0,last:0,nibbleIndex:0,falseNibbles:0,failureReason:null,captureChance:null});
+  if (tutorialActive() && state.tutorialStep === 5) setTutorialStep(2, { persist: false });
+  saveGame();
+  renderFishing();
+  updateTutorial();
+}
+function clearFishing(){ clearTimeout(fishing.timer); cancelAnimationFrame(fishing.raf); fishing.timer=null; fishing.raf=null; fishing.held=false; }
 
 function showCatchModal(fish,caught,result,milestones) {
   const isShimmer=caught.variant==="shimmer";
@@ -1045,7 +1443,7 @@ function shopItem(item,type) {
   if(type==="bait") button=`<button class="primary-button" data-action="buy-bait" data-id="${item.id}" ${state.money<item.price?"disabled":""}>補充 ${item.amount} 份</button>`;
   if(type==="furniture") button=owned?`<button class="soft-button" data-action="place-furniture" data-id="${item.id}">放置到船屋</button>`:`<button class="primary-button" data-action="buy-furniture" data-id="${item.id}" ${state.money<item.price?"disabled":""}>購買並放置</button>`;
   const lockReason=item.milestone?`發現 ${item.milestone} 種魚後贈送`:item.unlockDiscoveries?`發現 ${item.unlockDiscoveries} 種魚後解鎖`:"尚未解鎖";
-  return `<article class="card shop-item"><div class="shop-item-icon">${icon}</div><h3>${item.name}</h3><p>${item.description}</p><div class="price-row"><span class="price">${priceText}</span><span class="item-state">${owned?equipped?"裝備中":"已擁有":type==="bait"?`庫存 ${state.baitAmounts[item.id]||0}`:"可購買"}</span></div>${button}${!unlocked&&!owned?`<div class="lock-cover"><div><span>⌑</span><b>${lockReason}</b></div></div>`:""}</article>`;
+  return `<article class="card shop-item" data-shop-type="${type}" data-shop-id="${item.id}"><div class="shop-item-icon">${icon}</div><h3>${item.name}</h3><p>${item.description}</p><div class="price-row"><span class="price">${priceText}</span><span class="item-state">${owned?equipped?"裝備中":"已擁有":type==="bait"?`庫存 ${state.baitAmounts[item.id]||0}`:"可購買"}</span></div>${button}${!unlocked&&!owned?`<div class="lock-cover"><div><span>⌑</span><b>${lockReason}</b></div></div>`:""}</article>`;
 }
 
 function aquariumChoice(caught, action, extra = "") {
@@ -1115,7 +1513,10 @@ function renderHomeChartCard() {
 
 function finishAquariumAction(result,message) {
   if(!result.ok){toast(({locked:"發現 5 種魚後才會解鎖水族箱",full:"水族箱已滿，請選擇替換標本",missing:"找不到這份漁獲","missing-catch":"找不到要放入的漁獲","missing-aquarium":"找不到要替換的標本","invalid-index":"無法移動這個展示位置"})[result.reason]||"水族箱操作未完成");return false;}
-  modalRoot.innerHTML="";sound.play("coin");saveGame();toast(message);render();notifyCompletedAchievements(result.completedAchievements);return true;
+  sound.play("coin");saveGame();toast(message);render();
+  // Keep the aquarium popup open on the船屋 stage; from the catch view just close the sub-modal.
+  if(homeAquariumOpen)showAquariumModal();else modalRoot.innerHTML="";
+  notifyCompletedAchievements(result.completedAchievements);return true;
 }
 
 function showLogbook({categoryId=logbookCategoryId,entryId=selectedLogbookEntryId}={}) {
@@ -1141,7 +1542,7 @@ function showLogbook({categoryId=logbookCategoryId,entryId=selectedLogbookEntryI
 }
 
 function flushJournalNotices() {
-  if(!gameIsActive()||modalRoot.innerHTML||!state.journal?.pendingNoticeEntryIds?.length)return;
+  if(!gameIsActive()||tutorialActive()||modalRoot.innerHTML||!state.journal?.pendingNoticeEntryIds?.length)return;
   const ids=[...state.journal.pendingNoticeEntryIds],entries=ids.map(id=>getJournalEntry(state,id)).filter(Boolean);
   state.journal=acknowledgeJournalNotices(state.journal,ids);saveGame();syncWorld();
   if(entries.length)toast(entries.length===1?`航海日誌新增「${entries[0].title}」`:`航海日誌安靜收進 ${entries.length} 篇新頁`,"gold");
@@ -1157,19 +1558,50 @@ function renderHome() {
     const style=`left:${position.x||0}%;top:${position.y||0}%;width:${position.width||10}%;height:${position.height||10}%`;
     return `<button class="home-slot slot-${slot.id} ${item?"":"is-empty"}" style="${style}" data-action="slot" data-id="${slot.id}" title="${item?item.name:`空的${slot.name}插槽`}">${item?`<span>${item.icon}</span><small>${item.name}</small>`:""}</button>`;
   }).join("");
-  const ownedFurniture=(interior?.ownedFurnitureIds||[]).map(furnitureById).filter(Boolean);
   const autoOwned=state.autoFishing?.owned,autoSession=state.autoFishing?.activeSession;
-  const todayJournal=getJournalEntries(state,"today")[0],journalUnread=getJournalUnreadCount(state);
+  const journalUnread=getJournalUnreadCount(state);
   const autoRack=autoOwned?`<button class="cabin-auto-rack ${autoSession?"is-active":""}" data-action="show-auto-fishing" title="${AUTO_FISHING_EQUIPMENT.name}"><i></i><span>${autoSession?"釣架待命":"自動釣架"}</span></button>`:"";
-  const autoCard=autoOwned?`<div class="card home-card auto-fishing-home-card"><span class="section-label">固定船用設備 · 不占插槽</span><h3>${AUTO_FISHING_EQUIPMENT.name}</h3><p>${autoSession?`已設定在${regionById(autoSession.regionId)?.portName||"目前港口"}的${SPOTS.find(spot=>spot.id===autoSession.spotId)?.name||"熟悉釣點"}；完整關閉遊戲後才會開始守候。`:"釣架已固定在船屋一角，設定後只會守著目前停泊的港口。"}</p><button class="${autoSession?"primary-button":"soft-button"}" data-action="show-auto-fishing">${autoSession?"查看或調整設定":"設定自動釣魚"}</button></div>`:"";
-  content.innerHTML=`${panelHeading(ship.name,`目前船屋 · 航速 ${activeShipSpeed(state).toFixed(2)}×。外面是未知的海，這裡是永遠為你亮著燈的家。`)}
-    ${renderAquariumPanel()}<div class="home-layout"><div class="cabin-view theme-${scene?.theme||"default"} lighting-${interior?.lightingId||"default"}" data-ship="${ship.id}"><div class="cabin-fixed-structure fixed-bed-platform"><span>固定床台</span></div><div class="cabin-fixed-structure fixed-chart-desk"><span>航圖桌</span></div><div class="cabin-fixed-structure fixed-journal-shelf"><span>日誌架</span></div>${autoRack}<div class="cabin-glow"></div><div class="cabin-window"><i class="window-rain"></i></div>${slots}<div class="cabin-identity"><b>${ship.name}</b><small>${lighting}</small></div></div>
-    <aside class="home-side">${renderHomeChartCard()}<div class="card home-card logbook-home-card"><span class="section-label">固定日誌架 · ${journalUnread} 篇未讀</span><h3>${escapeText(todayJournal.title)}</h3><p>今日潮記每天自動換成一篇海上短文；稀有魚相遇與主線章節也收在同一本冊子裡。</p><button class="soft-button" data-action="show-logbook">翻開潮聲日誌</button></div>${autoCard}<div class="card home-card"><span class="section-label">休息一下</span><h3>${TIMES[state.timeIndex].name}的船屋</h3><p>${state.weather==="rain"?"細雨落在窗上，固定床台與室內暖光讓木牆顯得更加溫柔。":"光線從舷窗落進來，船身隨著海面緩緩呼吸。即使沒有添購寢具，也能安心休息。"}</p><button class="primary-button sleep-button" data-action="sleep">睡到下一個時段</button></div><div class="card home-card"><span class="section-label">${ship.name}的家具</span><div class="owned-list">${ownedFurniture.length?ownedFurniture.map(item=>`<button class="owned-chip ${interior.placedFurniture[item.slot]===item.id?"is-placed":""}" data-action="place-furniture" data-id="${item.id}">${item.icon} ${item.name}</button>`).join(""):'<p class="quiet-note">這艘船還沒有可替換家具；固定床台、航圖桌與水族箱仍可使用。</p>'}</div></div><div class="card home-card"><span class="section-label">圖鑑里程碑</span><div class="milestone-list">${MILESTONES.map(m=>`<div class="milestone-row ${state.completedMilestones.includes(m.count)?"is-done":""}"><i></i><span>${m.count} 種 · ${m.reward}</span></div>`).join("")}</div></div></aside></div>`;
+  const capacity=getAquariumCapacity(state),found=discoveredCount(state);
+  const aquariumBadge=capacity?`${state.aquarium.fish.length} / ${capacity}`:`${found} / 5`;
+  const doneMilestones=MILESTONES.filter(m=>state.completedMilestones.includes(m.count)).length;
+  const ownedFurnitureCount=(interior?.ownedFurnitureIds||[]).length;
+  const cabin=`<div class="cabin-view theme-${scene?.theme||"default"} lighting-${interior?.lightingId||"default"}" data-ship="${ship.id}"><div class="cabin-fixed-structure fixed-bed-platform"><span>固定床台</span></div><div class="cabin-fixed-structure fixed-chart-desk"><span>航圖桌</span></div><div class="cabin-fixed-structure fixed-journal-shelf"><span>日誌架</span></div>${autoRack}<div class="cabin-glow"></div><div class="cabin-window"><i class="window-rain"></i></div>${slots}<div class="cabin-identity"><b>${ship.name}</b><small>${lighting}</small></div></div>`;
+  const dock=`<aside class="home-dock">
+    <div class="home-dock-head"><span class="section-label">${escapeText(ship.name)}</span><div class="home-dock-stats"><div><small>時刻</small><b>${TIMES[state.timeIndex].name}</b></div><div><small>航速</small><b>${activeShipSpeed(state).toFixed(2)}×</b></div><div><small>探索</small><b>${found} / ${FISH.length}</b></div></div></div>
+    ${renderHomeChartCard()}
+    <div class="home-dock-actions">
+      <button class="home-dock-button" data-action="show-aquarium"><span aria-hidden="true">◫</span><b>水族箱</b><i>${aquariumBadge}</i></button>
+      <button class="home-dock-button" data-action="show-logbook"><span aria-hidden="true">▤</span><b>潮聲日誌</b>${journalUnread?`<i>${journalUnread} 篇未讀</i>`:""}</button>
+      ${autoOwned?`<button class="home-dock-button ${autoSession?"is-active":""}" data-action="show-auto-fishing"><span aria-hidden="true">⌁</span><b>自動釣魚</b>${autoSession?`<i>待命中</i>`:""}</button>`:""}
+      <button class="home-dock-button" data-action="show-furniture"><span aria-hidden="true">◇</span><b>家具佈置</b>${ownedFurnitureCount?`<i>${ownedFurnitureCount}</i>`:""}</button>
+      <button class="home-dock-button" data-action="show-milestones"><span aria-hidden="true">✦</span><b>圖鑑里程碑</b><i>${doneMilestones} / ${MILESTONES.length}</i></button>
+    </div>
+    <button class="primary-button home-sleep-button" data-action="sleep">睡到下一個時段</button>
+  </aside>`;
+  content.innerHTML=`<div class="home-stage" data-ship="${ship.id}">${cabin}${dock}</div>`;
+}
+
+let homeAquariumOpen=false,homeFurnitureOpen=false;
+function closeHomePopups(){ if(homeAquariumOpen||homeFurnitureOpen)modalRoot.innerHTML=""; homeAquariumOpen=false; homeFurnitureOpen=false; }
+function showAquariumModal(){
+  homeAquariumOpen=true; homeFurnitureOpen=false;
+  modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal home-popup-modal aquarium-popup-modal">${renderAquariumPanel()}<div class="modal-actions"><button class="soft-button" data-action="close-home-popup">關閉</button></div></div></div>`;
+}
+function showFurnitureModal(){
+  homeFurnitureOpen=true; homeAquariumOpen=false;
+  const interior=shipInterior(state),ship=activeShip(state);
+  const ownedFurniture=(interior?.ownedFurnitureIds||[]).map(furnitureById).filter(Boolean);
+  modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal home-popup-modal"><span class="section-label">${escapeText(ship.name)}的家具</span><h2>家具佈置</h2><p class="modal-copy">選一件已擁有的家具放進對應的固定插槽；也可以直接點船艙裡的插槽。</p><div class="owned-list">${ownedFurniture.length?ownedFurniture.map(item=>`<button class="owned-chip ${interior.placedFurniture[item.slot]===item.id?"is-placed":""}" data-action="place-furniture" data-id="${item.id}">${item.icon} ${item.name}</button>`).join(""):'<p class="quiet-note">這艘船還沒有可替換家具；固定床台、航圖桌與水族箱仍可使用。</p>'}</div><div class="modal-actions"><button class="soft-button" data-action="close-home-popup">關閉</button></div></div></div>`;
+}
+function showMilestonesModal(){
+  const found=discoveredCount(state);
+  modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal home-popup-modal"><span class="section-label">圖鑑進度 · ${found} / ${FISH.length}</span><h2>圖鑑里程碑</h2><p class="modal-copy">每累積一定的圖鑑發現數，就會解鎖新的獎勵與水族箱擴建。</p><div class="milestone-list">${MILESTONES.map(m=>`<div class="milestone-row ${state.completedMilestones.includes(m.count)?"is-done":""}"><i></i><span>${m.count} 種 · ${m.reward}</span></div>`).join("")}</div><div class="modal-actions"><button class="soft-button" data-action="close-modal">關閉</button></div></div></div>`;
 }
 
 function placeFurniture(id) {
   const result=placeShipFurniture(state,id); if(!result.ok)return;
   saveGame(); sound.play("coin"); toast(`${result.item.name}已放進${slotName(result.item.slot)}`); render();
+  if(homeFurnitureOpen)showFurnitureModal();
 }
 function slotName(id){return({sleep:"睡眠區",wall:"牆面",table:"桌面",light:"照明區",corner:"角落"})[id]}
 function showSlotModal(slot){
@@ -1182,41 +1614,43 @@ function sleep() {
   const timeResult=advanceTime(state); sound.play("sleep"); saveGame(); syncWorld(); toast(`睡醒時已是${TIMES[state.timeIndex].name}${state.timeIndex===0?`，第 ${state.day} 日`:""}`);
   if(timeResult.autoClaims.length) setTimeout(()=>toast(`${timeResult.autoClaims.length} 項已完成的小目標獎勵已自動收好`,"gold"),240);
   if(state.day!==previousDay){const event=getActiveBayEvent(state);setTimeout(()=>toast(event?`新的海況：${event.name}`:"今天的海灣潮聲平穩",event?"gold":""),360);}
-  if(!state.completedTutorial&&state.tutorialStep>=5){state.completedTutorial=true;state.tutorialStep=6;saveGame();toast("教學完成。接下來，照自己的步調探索海灣吧！","gold");}
+  const completesTutorial=tutorialActive()&&state.tutorialStep===13;
+  if(completesTutorial){
+    setTutorialStep(TUTORIAL_TOTAL_STEPS,{persist:false});
+    saveGame();
+    toast("教學完成。接下來，照自己的步調探索海灣吧！","gold");
+  }
   renderHome(); updateTutorial();
+  if(completesTutorial)setTimeout(flushJournalNotices,0);
 }
 
 function updateTutorial() {
-  if(state.completedTutorial){tutorialEl.classList.add("is-hidden");return;}
-  const messages=[
-    "清晨好。先看看暖燈與海面，準備好後，點一下下方的「去釣魚」。<button class=\"tutorial-action\" data-action=\"tutorial-go-fishing\" type=\"button\">前往去釣魚</button>",
-    "接著按下「拋下魚線」。魚上鉤後，按住收線讓進度前進；張力太高時放開。",
-    "第一條魚已登錄！打開「魚類圖鑑」，看看剛認識的新朋友。",
-    "接著到「今日漁獲」把魚販售，為下一趟航程準備金幣。",
-    "前往「海灣商店」補充任一種魚餌。商品永遠不會限時消失。",
-    "最後回到「我的船屋」，使用床鋪切換到下一個時段。"
-  ];
-  tutorialEl.innerHTML=`<button data-action="dismiss-tutorial" aria-label="暫時隱藏教學">×</button><small>航海教學 · ${Math.min(state.tutorialStep+1,6)} / 6</small><p>${messages[Math.min(state.tutorialStep,5)]}</p>`;
+  const presentation=tutorialPresentation();
+  if(!presentation){tutorialEl.classList.add("is-hidden");clearTutorialFocus();return;}
+  tutorialEl.innerHTML=`<small>航海教學 · ${presentation.step+1} / ${TUTORIAL_TOTAL_STEPS}</small><b>${escapeText(presentation.title)}</b><p>${escapeText(presentation.copy)}</p>`;
   tutorialEl.classList.remove("is-hidden");
+  applyTutorialFocus();
 }
 
 function setView(view) {
   if(view!=="fishing"&&fishing.phase!=="idle"){clearFishing(); fishing.phase="idle"; toast("已替你收好魚線");}
+  closeHomePopups();
   currentView=view;
   let tutorialAdvanced=false;
-  if(!state.completedTutorial){
-    if(view==="fishing"&&state.tutorialStep===0){state.tutorialStep=1;tutorialAdvanced=true;}
-    if(view==="journal"&&state.tutorialStep===2){state.tutorialStep=3;tutorialAdvanced=true;}
-    if(view==="catch"&&state.tutorialStep===2){state.tutorialStep=3;tutorialAdvanced=true;}
+  if(tutorialActive()){
+    if(view==="journal"&&state.tutorialStep===8){state.tutorialStep=9;tutorialAdvanced=true;}
+    if(view==="shop"&&state.tutorialStep===9){state.tutorialStep=10;shopTab="rods";tutorialAdvanced=true;}
+    if(view==="home"&&state.tutorialStep===12){state.tutorialStep=13;tutorialAdvanced=true;}
   }
   if(tutorialAdvanced)saveGame();
   render();updateTutorial();window.scrollTo({top:0,behavior:"smooth"});
 }
 
 function sell(ids) {
-  const result=sellCatches(state,ids); if(!result.sold)return;
+  const tutorialSale=tutorialActive()&&state.tutorialStep===7;
+  const result=sellCatches(state,ids,{source:tutorialSale?"tutorial":"manual"}); if(!result.sold)return;
+  if(tutorialSale){state.tutorialStep=8;state.tutorialCatchUid=null;}
   sound.play("coin");saveGame();toast(`販售 ${result.sold} 份漁獲，獲得 ${result.total} 金幣`);
-  if(!state.completedTutorial&&state.tutorialStep<=3)state.tutorialStep=4;
   render();updateTutorial();
 }
 
@@ -1373,13 +1807,59 @@ function showMainMenuConfirm() {
   saveGame();modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal"><h2>回到主選單？</h2><p class="modal-copy">目前進度已自動儲存。海灣會在這裡等你回來。</p><div class="modal-actions"><button class="soft-button" data-action="close-modal">繼續遊玩</button><button class="primary-button" data-action="to-title">回到主選單</button></div></div></div>`;
 }
 
+function tutorialEventIsAllowed(event) {
+  if (!tutorialActive()) return true;
+  if (tutorialEl.contains(event.target)) return true;
+  if (event.target === tutorialSpotlight && tutorialSpotlight.classList.contains("is-interactive")) return true;
+  const actionTarget = tutorialActionTarget();
+  return Boolean(actionTarget && (event.target === actionTarget || actionTarget.contains(event.target)));
+}
+
+function guardTutorialInteraction(event) {
+  if (tutorialEventIsAllowed(event)) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+}
+
+for (const eventName of ["click", "pointerdown", "change", "submit"]) {
+  document.addEventListener(eventName, guardTutorialInteraction, true);
+}
+
+tutorialSpotlight.addEventListener("click", event => {
+  if (!tutorialActive() || !tutorialSpotlight.classList.contains("is-interactive")) return;
+  event.preventDefault();
+  tutorialActionTarget()?.click();
+});
+
+document.addEventListener("focusin", event => {
+  if (!tutorialActive() || tutorialEl.contains(event.target) || tutorialEventIsAllowed(event)) return;
+  (tutorialActionTarget() || tutorialEl).focus({ preventScroll: true });
+}, true);
+
+document.addEventListener("keydown", event => {
+  if (!tutorialActive()) return;
+  if (event.key === "Tab") {
+    event.preventDefault();
+    (tutorialActionTarget() || tutorialEl).focus({ preventScroll: true });
+    return;
+  }
+  if (event.code === "Space" && state.tutorialStep === 5 && fishing.phase === "reeling") return;
+  if (["Escape", " "].includes(event.key) || event.code === "Space") {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+}, true);
+
 document.addEventListener("click", event => {
   const target=event.target.closest("[data-action]"); if(!target)return;
   const {action,id,direction,incoming,replace,x,y,filter,entry,kind}=target.dataset;
   if(action==="cast")castLine();
+  if(action==="strike")strikeLine();
   if(action==="hook")startReeling();
   if(action==="reset-fishing")resetFishing();
-  if(action==="spot"&&getRegionFishingSpots(state.world?.currentRegionId).some(spot=>spot.id===id)){state.selectedSpot=id;saveGame();renderFishing();syncWorld();}
+  if(action==="show-fishing-setup"){advanceTutorial(0,1);showFishingSetup();updateTutorial();}
+  if(action==="spot"&&getRegionFishingSpots(state.world?.currentRegionId).some(spot=>spot.id===id)){state.selectedSpot=id;saveGame();renderFishing();syncWorld();if($(".fishing-setup-modal"))showFishingSetup();}
+  if(action==="tracker-residents")setView("residents");
   if(action==="preview-observation")showObservationPreview(id);
   if(action==="claim-quest"&&claimQuest(state,id)){sound.play("coin");saveGame();toast("今日目標完成，獎勵已收入錢袋");render();}
   if(action==="talk-resident")showResidentDialogue(id);
@@ -1406,7 +1886,12 @@ document.addEventListener("click", event => {
     if(result.ok){sound.play("coin");saveGame();render();showResidentDialogue(id,result.dialogue);toast(`今日提案完成：${rewardLabel(result.reward)}`,"gold");}
     else toast("需要回到正確居民所在的港口，才能交付今日提案");
   }
-  if(action==="close-catch"){modalRoot.innerHTML="";render();setTimeout(flushJournalNotices,0);}
+  if(action==="close-catch"){
+    const beginTutorialSale=tutorialActive()&&state.tutorialStep===6;
+    modalRoot.innerHTML="";
+    if(beginTutorialSale){state.tutorialStep=7;currentView="catch";saveGame();}
+    render();updateTutorial();setTimeout(flushJournalNotices,0);
+  }
   if(action==="modal-journal"){modalRoot.innerHTML="";selectedJournalFish=id;setView("journal");}
   if(action==="journal-filter"){journalFilter=id;renderJournal();}
   if(action==="select-fish"){selectedJournalFish=id;renderJournal();}
@@ -1448,9 +1933,17 @@ document.addEventListener("click", event => {
   if(action==="aquarium-view")showSpecimenModal(id);
   if(action==="toggle-aquarium-decor"){
     const next=state.aquariumDecoration==="shimmer_specks"?null:"shimmer_specks";
-    if(setAquariumDecoration(state,next)){saveGame();renderHome();toast(next?"水族箱已亮起拾光微粒":"水族箱裝飾已關閉");}
+    if(setAquariumDecoration(state,next)){saveGame();if(homeAquariumOpen)showAquariumModal();else renderHome();toast(next?"水族箱已亮起拾光微粒":"水族箱裝飾已關閉");}
   }
-  if(action==="shop-tab"){shopTab=id;renderShop();}
+  if(action==="show-aquarium")showAquariumModal();
+  if(action==="show-furniture")showFurnitureModal();
+  if(action==="show-milestones")showMilestonesModal();
+  if(action==="close-home-popup"){closeHomePopups();modalRoot.innerHTML="";}
+  if(action==="shop-tab"){
+    shopTab=id;
+    if(id==="baits")advanceTutorial(10,11);
+    renderShop();updateTutorial();
+  }
   if(action==="buy-auto-fishing"){
     const result=buyAutoFishingEquipment(state);
     if(result.ok){sound.play("coin");saveGame();renderShop();toast(`${AUTO_FISHING_EQUIPMENT.name}已永久固定在每艘船上`,"gold");}
@@ -1482,7 +1975,10 @@ document.addEventListener("click", event => {
   }
   if(action==="shop-equip-rod"){state.equippedRod=id;saveGame();toast(`已裝備${rodById(id).name}`);renderShop();syncWorld();}
   if(action==="buy-rod"&&buyRod(state,id)){sound.play("coin");saveGame();toast(`買下並裝備了${rodById(id).name}`);render();}
-  if(action==="buy-bait"&&buyBait(state,id)){sound.play("coin");if(!state.completedTutorial&&state.tutorialStep===4)state.tutorialStep=5;saveGame();toast(`${baitById(id).name}已放入裝備箱`);render();updateTutorial();}
+  if(action==="buy-bait"&&buyBait(state,id)){
+    if(id==="bread"&&tutorialActive()&&state.tutorialStep===11)state.tutorialStep=12;
+    sound.play("coin");saveGame();toast(`${baitById(id).name}已放入裝備箱`);render();updateTutorial();
+  }
   if(action==="buy-furniture"){
     const result=buyShipFurniture(state,id);
     if(result.ok){sound.play("coin");saveGame();toast(`${result.item.name}已放進${activeShip(state).name}`);render();}
@@ -1509,8 +2005,6 @@ document.addEventListener("click", event => {
     if(result.ok){saveGame();syncTravelClock();render();sound.startAmbient();showDockingScene(result);notifyTideglow(result.tideglowEvents);}
     else toast("船目前還沒有抵達可停泊的外海");
   }
-  if(action==="dismiss-tutorial")tutorialEl.classList.add("is-hidden");
-  if(action==="tutorial-go-fishing")setView("fishing");
   if(action==="show-developer-tools")showDeveloperTools();
   if(action==="developer-set-daily"){
     const slot=$("#developer-daily-slot")?.value,templateId=$("#developer-daily-template")?.value;
@@ -1625,8 +2119,13 @@ document.addEventListener("click", event => {
     state.settings.uiScale=id;persistDisplaySettings();showSettings();toast(`介面縮放已調整為「${UI_SCALE_OPTIONS.find(option=>option.id===id)?.label||"標準"}」`);
   }
   if(action==="toggle-sound"){state.settings.sound=!state.settings.sound;persistDisplaySettings();showSettings();syncWorld();if(state.settings.sound){sound.play("coin");sound.startAmbient();}else sound.stopAmbient();}
-  if(action==="close-modal"){modalRoot.innerHTML="";setTimeout(flushJournalNotices,0);}
-  if(action==="to-title"){if(state.world?.travel)travelClockTick({forceSave:true});clearInterval(travelClockTimer);travelClockTimer=null;clearFishing();sound.stopAmbient();modalRoot.innerHTML="";gameShell.classList.add("is-hidden");titleScreen.classList.remove("is-hidden");app.classList.remove("is-developer-mode");$("#developer-tools-button").hidden=true;$("#continue-button").disabled=!hasSave("normal");}
+  if(action==="close-modal"){
+    if(tutorialActive()&&state.tutorialStep===1){state.tutorialStep=2;saveGame();}
+    modalRoot.innerHTML="";updateTutorial();setTimeout(flushJournalNotices,0);
+    // Aquarium sub-modals (add/replace/specimen) return to the open aquarium popup on the船屋 stage.
+    if(homeAquariumOpen)showAquariumModal();
+  }
+  if(action==="to-title"){if(state.world?.travel)travelClockTick({forceSave:true});clearInterval(travelClockTimer);travelClockTimer=null;clearFishing();closeHomePopups();sound.stopAmbient();modalRoot.innerHTML="";gameShell.classList.add("is-hidden");titleScreen.classList.remove("is-hidden");app.classList.remove("is-developer-mode");$("#developer-tools-button").hidden=true;$("#continue-button").disabled=!hasSave("normal");}
 });
 
 document.addEventListener("submit",event=>{
@@ -1639,9 +2138,9 @@ document.addEventListener("submit",event=>{
   toast("開發者模式已啟用：全部內容與測試資源已解鎖","gold");
 });
 
-content.addEventListener("change",event=>{
-  if(event.target.dataset.action==="equip-rod"){state.equippedRod=event.target.value;saveGame();renderFishing();}
-  if(event.target.dataset.action==="equip-bait"){state.equippedBait=event.target.value;saveGame();renderFishing();}
+document.addEventListener("change",event=>{
+  if(event.target.dataset.action==="equip-rod"){state.equippedRod=event.target.value;saveGame();renderFishing();if($(".fishing-setup-modal"))showFishingSetup();}
+  if(event.target.dataset.action==="equip-bait"){state.equippedBait=event.target.value;saveGame();renderFishing();if($(".fishing-setup-modal"))showFishingSetup();}
 });
 
 document.addEventListener("keydown",event=>{
@@ -1658,6 +2157,8 @@ document.addEventListener("keydown",event=>{
 });
 document.addEventListener("keyup",event=>{if(event.code==="Space"){fishing.held=false;$("#reel-button")?.classList.remove("is-held");}});
 window.addEventListener("pointerup",()=>{fishing.held=false;$("#reel-button")?.classList.remove("is-held");});
+window.addEventListener("resize",()=>{if(tutorialActive())scheduleTutorialFocus();});
+document.addEventListener("scroll",()=>{if(tutorialActive())scheduleTutorialFocus();},true);
 document.addEventListener("visibilitychange",()=>{
   if(!state.world?.travel)return;
   if(document.visibilityState==="hidden")travelClockTick({forceSave:true});

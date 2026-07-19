@@ -44,6 +44,9 @@ import {
 } from "./systems/resident-stories.js";
 import { normalizeDisplaySettings } from "./systems/accessibility.js";
 import {
+  TUTORIAL_TOTAL_STEPS, TUTORIAL_VERSION, normalizeTutorialProgress
+} from "./systems/tutorial.js";
+import {
   consumeGameEvent, createGameEventState, enqueueGameEvent, normalizeGameEventState
 } from "./systems/game-events.js";
 import {
@@ -384,8 +387,10 @@ export function createInitialState() {
     unlockedAquariumDecor: [],
     aquariumDecoration: null,
     completedMilestones: [],
+    tutorialVersion: TUTORIAL_VERSION,
     completedTutorial: false,
     tutorialStep: 0,
+    tutorialCatchUid: null,
     dailyBoard: null,
     residentCommissions: null,
     observations: createObservationState(),
@@ -472,7 +477,9 @@ export function createDeveloperState() {
   state.aquarium = { fish: FISH.slice(0, 5).map((fish, index) => specimen(fish, index, "aquarium")) };
   state.completedMilestones = MILESTONES.map(item => item.count);
   state.completedTutorial = true;
-  state.tutorialStep = 6;
+  state.tutorialVersion = TUTORIAL_VERSION;
+  state.tutorialStep = TUTORIAL_TOTAL_STEPS;
+  state.tutorialCatchUid = null;
   const availability = getProgressAvailabilityContext(state);
   state.dailyBoard = createDailyBoard(state.day, availability);
   state.dailyBoard.entries = state.dailyBoard.entries.map(entry => ({ ...entry, progress: entry.goal }));
@@ -522,7 +529,9 @@ function migrateDeveloperUnlocks(state, raw) {
   state.baitAmounts = Object.fromEntries(BAITS.map(bait => [bait.id, Math.max(Number(state.baitAmounts?.[bait.id]) || 0, full.baitAmounts[bait.id])]));
   state.completedMilestones = [...new Set([...(Array.isArray(state.completedMilestones) ? state.completedMilestones : []), ...full.completedMilestones])];
   state.completedTutorial = true;
-  state.tutorialStep = 6;
+  state.tutorialVersion = TUTORIAL_VERSION;
+  state.tutorialStep = TUTORIAL_TOTAL_STEPS;
+  state.tutorialCatchUid = null;
 
   for (const fish of newlyCataloguedFish) state.discovered[fish.id] = full.discovered[fish.id];
   const heldFishIds = new Set([...state.catchInventory, ...state.aquarium.fish].map(caught => caught.fishId));
@@ -591,6 +600,7 @@ export function migrateState(raw) {
   const base = createInitialState();
   if (!raw || typeof raw !== "object") return base;
   const merged = { ...base, ...raw, version: SAVE_VERSION };
+  Object.assign(merged, normalizeTutorialProgress(raw));
   merged.day = Math.max(1, Math.floor(Number(merged.day) || 1));
   merged.timeIndex = Math.min(TIMES.length - 1, Math.max(0, Math.floor(Number(merged.timeIndex) || 0)));
   merged.weather = ["sunny", "rain"].includes(merged.weather) ? merged.weather : base.weather;
@@ -723,6 +733,11 @@ export function migrateState(raw) {
 
 export function isCurrentSaveSchema(raw) {
   return Math.max(0, Math.floor(Number(raw?.version) || 0)) >= SAVE_VERSION
+    && Number(raw?.tutorialVersion) === TUTORIAL_VERSION
+    && Number.isInteger(raw?.tutorialStep)
+    && raw.tutorialStep >= 0
+    && raw.tutorialStep <= TUTORIAL_TOTAL_STEPS
+    && (raw?.tutorialCatchUid === null || typeof raw?.tutorialCatchUid === "string")
     && Number(raw?.dailyBoard?.day) >= 1
     && Array.isArray(raw?.dailyBoard?.entries)
     && raw?.residentCommissions && typeof raw.residentCommissions === "object"
@@ -862,7 +877,7 @@ export function fishWeight(fish, state, spotId = state.selectedSpot, baitId = st
   else if (!habitat.weatherIds.includes(state.weather)) weight *= 0.48;
   if (fish.baits.includes(baitId)) weight *= 2.65;
   if (bait.tags.some(tag => fish.tags.includes(tag) || tag === fish.rarity || tag === spotId)) weight *= 1.45;
-  if (fish.rarity !== "common") weight *= 1 + rod.rareBonus;
+  if (fish.rarity !== "common") weight *= 1 + Math.max(0, Number(rod.appearanceBonus) || 0);
   if (state.discovered[fish.id]?.count >= 4) weight *= 0.86;
   const bayEvent = getActiveBayEvent(state);
   if (bayEvent && isBayEventConditionActive(state, bayEvent) && bayEventSpotIds(bayEvent).includes(spotId) && bayEvent.fishIds.includes(fish.id)) {
@@ -880,6 +895,18 @@ export function chooseFish(state, random = Math.random) {
     if (roll <= 0) return entry.fish;
   }
   return candidates.at(-1)?.fish || FISH[0];
+}
+
+export function getCaptureSuccessRate(fish, rod) {
+  const baseRate = Number(RARITY[fish?.rarity]?.catchRate);
+  const catchBonus = Math.max(0, Number(rod?.catchBonus) || 0);
+  const rate = Math.max(0, Math.min(0.98, (Number.isFinite(baseRate) ? baseRate : 0) + catchBonus));
+  return Math.round(rate * 10000) / 10000;
+}
+
+export function rollCaptureSuccess(fish, rod, random = Math.random) {
+  const chance = getCaptureSuccessRate(fish, rod);
+  return { success: random() < chance, chance };
 }
 
 export function rollVariant(fishId, sizeTier, state, random = Math.random) {
@@ -1031,7 +1058,8 @@ function evaluateResearchWithEvents(state, regionId, source = "manual") {
   return { ...result, tideglowEvents };
 }
 
-export function recordCatch(state, caught, baitId = state.equippedBait) {
+export function recordCatch(state, caught, baitId = state.equippedBait, { source = "manual" } = {}) {
+  const progressSource = source === "tutorial" ? "tutorial" : "manual";
   const fish = FISH.find(item => item.id === caught.fishId);
   const prior = state.discovered[caught.fishId];
   const priorFamiliarity = getFamiliarity(prior?.count || 0);
@@ -1071,7 +1099,7 @@ export function recordCatch(state, caught, baitId = state.equippedBait) {
   if (isFirstShimmer) state.money += SHIMMER_CONFIG.researchReward;
   const progressUpdate = updateProgressEvent(state, {
     type: "catch",
-    source: "manual",
+    source: progressSource,
     fish,
     caught,
     baitId: context.baitId || baitId,
@@ -1083,7 +1111,7 @@ export function recordCatch(state, caught, baitId = state.equippedBait) {
   });
   const discoveryEvent = isNew
     ? emitTideglowEvent(state, "fish.discovered", { fishId: fish.id }, {
-      source: "manual",
+      source: progressSource,
       occurredAt: caught.caughtAt,
       regionId: context.regionId,
       spotId: context.spotId,
@@ -1091,7 +1119,9 @@ export function recordCatch(state, caught, baitId = state.equippedBait) {
       weatherId: context.weather
     })
     : null;
-  const bayEventUpdate = updateBayEventProgress(state, caught);
+  const bayEventUpdate = progressSource === "tutorial"
+    ? { updated: false, event: getActiveBayEvent(state) }
+    : updateBayEventProgress(state, caught);
   const bayEventJournal = bayEventUpdate?.updated ? dispatchGameEvent(state, {
     type: "region.event.progress",
     source: "manual",
@@ -1121,14 +1151,15 @@ export function recordCatch(state, caught, baitId = state.equippedBait) {
   };
 }
 
-export function sellCatches(state, uids) {
+export function sellCatches(state, uids, { source = "manual" } = {}) {
+  const progressSource = source === "tutorial" ? "tutorial" : "manual";
   const uidSet = new Set(uids);
   const sold = state.catchInventory.filter(item => uidSet.has(item.uid));
   const total = sold.reduce((sum, item) => sum + item.price, 0);
   state.catchInventory = state.catchInventory.filter(item => !uidSet.has(item.uid));
   state.money += total;
   state.totalSold += total;
-  updateProgressEvent(state, { type: "sell", source: "manual", amount: total });
+  updateProgressEvent(state, { type: "sell", source: progressSource, amount: total });
   return { sold: sold.length, total };
 }
 
@@ -1226,10 +1257,11 @@ export function claimQuest(state, instanceId) {
 }
 
 export function updateProgressEvent(state, event) {
+  const source = event?.source || "manual";
   const type = event?.type === "catch" ? "fish.caught" : event?.type === "sell" ? "fish.sold" : "observation.recorded";
   const dispatched = dispatchGameEvent(state, {
     type,
-    source: event?.source || "manual",
+    source,
     occurredAt: event?.caught?.caughtAt,
     regionId: event?.regionId,
     spotId: event?.spotId,
@@ -1241,11 +1273,9 @@ export function updateProgressEvent(state, event) {
     },
     payload: { ...event }
   }, { consumerIds: ["progress", "story"] });
-  const researchUpdate = evaluateResearchWithEvents(
-    state,
-    event?.regionId || state.world?.currentRegionId,
-    event?.source || "manual"
-  );
+  const researchUpdate = source === "tutorial"
+    ? { updated: false, completedNodes: [], rewards: [], tideglowEvents: [] }
+    : evaluateResearchWithEvents(state, event?.regionId || state.world?.currentRegionId, source);
   return { dispatched, researchUpdate, ...researchUpdate };
 }
 

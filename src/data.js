@@ -83,9 +83,9 @@ export const TIMES = [
 ];
 
 export const RODS = [
-  { id: "wood", name: "初學者木竿", price: 0, tolerance: 0.3, reelSpeed: 0.095, rareBonus: 0, deep: false, description: "樸實可靠，安全區寬廣，適合在近岸慢慢熟悉海洋。" },
-  { id: "light", name: "輕型海釣竿", price: 520, tolerance: 0.38, reelSpeed: 0.12, rareBonus: 0.18, deep: false, unlockDiscoveries: 4, description: "靈活而穩定，擴大張力安全區並提高少見魚的機會。" },
-  { id: "farcast", name: "強化遠投竿", price: 1480, tolerance: 0.44, reelSpeed: 0.145, rareBonus: 0.42, deep: true, unlockDiscoveries: 10, description: "能抵達海灣深處，對衝刺型魚也有更從容的控制力。" }
+  { id: "wood", name: "初學者木竿", price: 0, tolerance: 0.3, reelSpeed: 0.095, appearanceBonus: 0, catchBonus: 0, deep: false, description: "樸實可靠，安全區寬廣，適合在近岸慢慢熟悉海洋。" },
+  { id: "light", name: "輕型海釣竿", price: 520, tolerance: 0.38, reelSpeed: 0.12, appearanceBonus: 0.18, catchBonus: 0.04, deep: false, unlockDiscoveries: 4, description: "靈活而穩定，提高少見魚出現權重，捕獲成功率增加 4%。" },
+  { id: "farcast", name: "強化遠投竿", price: 1480, tolerance: 0.44, reelSpeed: 0.145, appearanceBonus: 0.42, catchBonus: 0.08, deep: true, unlockDiscoveries: 10, description: "能抵達海灣深處，提高少見與稀有魚權重，捕獲成功率增加 8%。" }
 ];
 
 export const BAITS = [
@@ -273,9 +273,9 @@ export const FISH = [
 ];
 
 export const RARITY = {
-  common: { name: "常見", multiplier: 1, color: "#686f73" },
-  uncommon: { name: "少見", multiplier: 1.8, color: "#477ca5" },
-  rare: { name: "稀有", multiplier: 4, color: "#76529b" }
+  common: { name: "常見", multiplier: 1, catchRate: 0.95, color: "#686f73" },
+  uncommon: { name: "少見", multiplier: 1.8, catchRate: 0.85, color: "#477ca5" },
+  rare: { name: "稀有", multiplier: 4, catchRate: 0.7, color: "#76529b" }
 };
 
 export const BAY_EVENTS = [

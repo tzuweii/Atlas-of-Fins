@@ -37,7 +37,7 @@ export function applyTideglowEvent(rawState, event, {
 } = {}) {
   const state = normalizeTideglowState(rawState, { allowDeveloperAdjustment });
   const source = tideglowSourceByEventType(event?.type);
-  const allowedSource = event?.source === "manual" || (event?.source === "developer" && allowDeveloperSource);
+  const allowedSource = ["manual", "tutorial"].includes(event?.source) || (event?.source === "developer" && allowDeveloperSource);
   const sourceId = tideglowSourceId(source, event?.refs);
   if (!source || !allowedSource || !sourceId) return { state, awarded: false, reason: "ineligible" };
   if (state.ledgerBySourceId[sourceId]) {

@@ -52,6 +52,42 @@ async function waitFor(expression, timeout = 7000) {
 
 const click = selector => evaluate(`document.querySelector(${JSON.stringify(selector)})?.click()`);
 
+async function clickCenter(selector) {
+  const point = await evaluate(`(() => {
+    const rect = document.querySelector(${JSON.stringify(selector)})?.getBoundingClientRect();
+    return rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null;
+  })()`);
+  assert.ok(point, `Physical click target exists: ${selector}`);
+  await command("Input.dispatchMouseEvent", { type: "mouseMoved", x: point.x, y: point.y });
+  await command("Input.dispatchMouseEvent", { type: "mousePressed", x: point.x, y: point.y, button: "left", clickCount: 1 });
+  await command("Input.dispatchMouseEvent", { type: "mouseReleased", x: point.x, y: point.y, button: "left", clickCount: 1 });
+}
+
+async function playTutorialTension(pointerId) {
+  for (let i = 0; i < 180; i++) {
+    const terminal = await evaluate(`document.querySelector('.catch-modal') ? 'caught' : document.querySelector('.fishing-stage.is-escaped') ? 'escaped' : document.querySelector('.fishing-stage.is-failed') ? 'failed' : ''`);
+    if (terminal) {
+      await evaluate(`window.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:${pointerId}}))`);
+      return terminal;
+    }
+    const values = await evaluate(`(() => {
+      const needle = document.querySelector('#tension-needle');
+      const safe = document.querySelector('.safe-zone');
+      return needle && safe ? { tension: parseFloat(needle.style.left), max: parseFloat(safe.style.left) + parseFloat(safe.style.width) } : null;
+    })()`);
+    if (!values) { await wait(80); continue; }
+    if (values.tension < values.max - 8) {
+      await evaluate(`document.querySelector('#reel-button').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:${pointerId}}))`);
+      await wait(170);
+    } else {
+      await evaluate(`window.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:${pointerId}}))`);
+      await wait(230);
+    }
+  }
+  await evaluate(`window.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:${pointerId}}))`);
+  return "timeout";
+}
+
 await command("Runtime.enable");
 await command("Page.enable");
 await command("Page.navigate", { url: "http://127.0.0.1:4173/" });
@@ -64,8 +100,8 @@ await wait(350);
 await waitFor(`document.readyState === "complete"`);
 await evaluate(`localStorage.clear()`);
 assert.equal(await evaluate("document.title"), "Atlas of Fins｜鰭之圖鑑");
-assert.equal(await evaluate("document.querySelector('#app').dataset.uiRevision"), "20260719-rarity-palette");
-assert.equal(await evaluate("document.querySelector('script[type=\"module\"]').src.endsWith('src/game.js?rev=20260719-rarity-palette')"), true);
+assert.equal(await evaluate("document.querySelector('#app').dataset.uiRevision"), "20260719-tutorial-clean-progress");
+assert.equal(await evaluate("document.querySelector('script[type=\"module\"]').src.endsWith('src/game.js?rev=20260719-tutorial-clean-progress')"), true);
 
 await click("#title-settings-button");
 assert.match(await evaluate("document.querySelector('.settings-modal').innerText"), /聲音與顯示[\s\S]*文字大小[\s\S]*介面縮放/);
@@ -86,12 +122,17 @@ await evaluate(`document.querySelector('#developer-password').value = 'atlas-dev
 await waitFor(`!document.querySelector("#game-shell").classList.contains("is-hidden")`);
 assert.equal(await evaluate("document.querySelector('#app').classList.contains('is-developer-mode')"), true);
 assert.match(await evaluate("document.querySelector('.brand-mini small').innerText"), /開發者模式/);
+await click('[data-action="show-fishing-setup"]');
 assert.equal(await evaluate("document.querySelectorAll('[data-action=\"equip-rod\"] option').length"), 3);
 assert.equal(await evaluate("document.querySelectorAll('[data-action=\"equip-bait\"] option').length"), 5);
 assert.equal(await evaluate("document.querySelectorAll('.spot-card:disabled').length"), 0);
+await click('[data-action="close-modal"]');
 assert.equal(await evaluate("document.querySelector('#money-label').innerText.replaceAll(',', '')"), "999999");
 assert.match(await evaluate("document.querySelector('#time-label').innerText"), /夜晚/);
-assert.match(await evaluate("document.querySelector('.bay-event-card[data-bay-event=\"moonlit_tide\"]').innerText"), /月光潮汐[\s\S]*礁石邊緣／海灣深水區[\s\S]*0 \/ 2[\s\S]*目前生效/);
+assert.match(await evaluate("document.querySelector('.tracker-item.is-event').innerText"), /月光潮汐[\s\S]*0 \/ 2/);
+assert.equal(await evaluate("document.querySelectorAll('.tracker-item.is-daily').length"), 3);
+assert.equal(await evaluate("document.querySelectorAll('.tracker-item.is-daily.is-active, .tracker-item.is-daily.is-claimable, .tracker-item.is-daily.is-claimed').length"), 3);
+assert.match(await evaluate("document.querySelector('#task-tracker').innerText"), /每日目標 · (進行中|可領取|已領取)/);
 assert.equal(await evaluate("document.querySelector('#developer-tools-button').hidden"), false);
 await click("#developer-tools-button");
 assert.match(await evaluate("document.querySelector('.developer-modal').innerText"), /v0.5 Slice E 整合控制[\s\S]*每日小目標[\s\S]*居民今日提案[\s\S]*正式航線[\s\S]*琉光群島內容[\s\S]*觀察、研究與澄野[\s\S]*潮光與事件帳本[\s\S]*船別家具與燈光[\s\S]*潮聲日誌[\s\S]*靜潮自動釣架[\s\S]*整合與存檔/);
@@ -107,6 +148,27 @@ assert.equal(await evaluate("Boolean(document.querySelector('[data-action=\"deve
 assert.equal(await evaluate("document.querySelectorAll('#developer-ship option').length"), 6);
 assert.equal(await evaluate("document.querySelectorAll('#developer-ship-lighting option').length"), 3);
 assert.match(await evaluate("document.querySelector('.developer-modal').innerText"), /遠航書房燈光[\s\S]*擁有 8\/8[\s\S]*失效引用 0/);
+await click('[data-action="developer-reset-daily"]');
+await click('[data-action="developer-complete-daily"]');
+await click('[data-action="close-modal"]');
+assert.equal(await evaluate("document.querySelectorAll('.tracker-item.is-daily.is-claimable').length"), 3);
+assert.equal(await evaluate("document.querySelector('.fishing-water-hitbox') === null"), true);
+assert.equal(await evaluate("document.querySelectorAll('[data-action=\"cast\"]').length"), 1);
+const trackerClaimBefore = await evaluate(`(() => {
+  const save = JSON.parse(localStorage.getItem('atlas-of-fins.dev-save'));
+  return { money: save.money, phase: document.querySelector('#game-shell').dataset.fishingPhase, bait: save.baitAmounts[save.equippedBait] };
+})()`);
+await evaluate(`document.querySelector('.fishing-scene-ui').dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 120, clientY: 320 }))`);
+assert.equal(await evaluate("document.querySelector('#game-shell').dataset.fishingPhase"), "idle");
+await click('.tracker-claim');
+const trackerClaimAfter = await evaluate(`(() => {
+  const save = JSON.parse(localStorage.getItem('atlas-of-fins.dev-save'));
+  return { money: save.money, phase: document.querySelector('#game-shell').dataset.fishingPhase, bait: save.baitAmounts[save.equippedBait] };
+})()`);
+assert.ok(trackerClaimAfter.money > trackerClaimBefore.money);
+assert.equal(trackerClaimAfter.phase, "idle");
+assert.equal(trackerClaimAfter.bait, trackerClaimBefore.bait);
+await click('#developer-tools-button');
 assert.equal(await evaluate("document.querySelector('#app').dataset.ship"), "voyager_study");
 assert.equal(await evaluate("getComputedStyle(document.querySelector('.boat-scene'),'::before').content !== 'none'"), true);
 await click('[data-action="show-auto-fishing"]');
@@ -218,23 +280,27 @@ assert.match(await evaluate("document.querySelector('.docking-modal').innerText"
 await click('[data-action="close-modal"]');
 assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.dev-save")).world.currentRegionId`), "luminous_archipelago");
 await click('[data-view="fishing"]');
-assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /琉光群島釣行[\s\S]*風棲淺灘[\s\S]*稜光珊瑚庭[\s\S]*暖流藍渠/);
+assert.equal(await evaluate("Boolean(document.querySelector('.fishing-scene-ui'))"), true);
+await click('[data-action="show-fishing-setup"]');
+assert.match(await evaluate("document.querySelector('.fishing-setup-modal').innerText"), /釣點與裝備[\s\S]*風棲淺灘[\s\S]*稜光珊瑚庭[\s\S]*暖流藍渠/);
 assert.equal(await evaluate("document.querySelectorAll('.spot-card').length"), 3);
 assert.equal(await evaluate("document.querySelectorAll('.observation-preview').length"), 1);
 assert.match(await evaluate("document.querySelector('.observation-preview').innerText"), /特殊觀察點 · 0 \/ 2[\s\S]*不需快速點擊/);
 assert.match(await evaluate("document.querySelector('.research-card').innerText"), /琉光群島研究主路[\s\S]*15 \/ 15[\s\S]*區域完整/);
-assert.match(await evaluate("document.querySelector('.bay-event-card').innerText"), /潮聲平穩[\s\S]*平靜日/);
+assert.equal(await evaluate("document.querySelector('.tracker-item.is-event') === null"), true);
 assert.equal(await evaluate("document.querySelector('#app').dataset.region"), "luminous_archipelago");
 await evaluate(`Math.random = () => 1`);
 await click('[data-action="preview-observation"]');
 assert.match(await evaluate("document.querySelector('.observation-modal').innerText"), /今天，海只留下潮聲[\s\S]*不會永遠躲著/);
 await click('[data-action="close-modal"]');
+await click('[data-action="show-fishing-setup"]');
 await click('[data-action="preview-observation"]');
 assert.match(await evaluate("document.querySelector('.observation-modal').innerText"), /同一片光仍停在礁盤上[\s\S]*沒有漏掉/);
 await click('[data-action="close-modal"]');
 await click("#developer-tools-button");
 await click('[data-action="developer-next-day"]');
 await click('[data-action="close-modal"]');
+await click('[data-action="show-fishing-setup"]');
 await click('[data-action="preview-observation"]');
 assert.match(await evaluate("document.querySelector('.observation-modal').innerText"), /自動記錄 · 正式觀察魚[\s\S]*克氏雙鋸魚[\s\S]*不需要在牠出現時快速點擊/);
 assert.equal(await evaluate(`Boolean(JSON.parse(localStorage.getItem("atlas-of-fins.dev-save")).observations.recordsById.clarks_anemonefish)`), true);
@@ -255,6 +321,9 @@ assert.equal(await evaluate("document.documentElement.scrollWidth <= window.inne
 await command("Emulation.clearDeviceMetricsOverride");
 await click('[data-action="close-modal"]');
 assert.match(await evaluate("document.querySelector('[data-resident=\"chengye\"]').innerText"), /海域主線 · 任務進行中[\s\S]*替漂流觀測器補上淺灘資料[\s\S]*0 \/ 2[\s\S]*今日提案 · 選填/);
+await click('[data-view="fishing"]');
+assert.equal(await evaluate("document.querySelectorAll('.tracker-item.is-story').length"), 1);
+assert.equal(await evaluate("document.querySelectorAll('.tracker-item.is-daily').length"), 3);
 await click('[data-view="journal"]');
 assert.equal(await evaluate("document.querySelectorAll('.fish-region-filters .filter-chip').length"), 3);
 assert.equal(await evaluate("Boolean(document.querySelector('[data-action=\"journal-filter\"][data-id=\"common\"], [data-action=\"journal-filter\"][data-id=\"uncommon\"], [data-action=\"journal-filter\"][data-id=\"rare\"]'))"), false);
@@ -339,14 +408,279 @@ assert.ok(upgradedDeveloperSave.unlockedTitles.includes("海灣博物學家"));
 
 await click("#new-game-button");
 await waitFor(`!document.querySelector("#game-shell").classList.contains("is-hidden")`);
-assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /去釣魚/);
-assert.equal(await evaluate("document.querySelectorAll('.spot-card').length"), 3);
-assert.match(await evaluate("document.querySelector('.bay-event-card[data-bay-event=\"silver_tide\"]').innerText"), /銀潮靠岸[\s\S]*沙丁魚、鯷魚[\s\S]*0 \/ 3/);
-assert.match(await evaluate("document.querySelector('#scene-caption').innerText"), /銀潮靠岸/);
-assert.match(await evaluate("document.querySelector('#tutorial').innerText"), /航海教學 · 1 \/ 6[\s\S]*去釣魚/);
-assert.equal(await evaluate("Boolean(document.querySelector('[data-action=\\\"tutorial-go-fishing\\\"]'))"), true);
-assert.equal(await evaluate("document.querySelectorAll('.main-nav [data-view]').length"), 7);
+assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /拋竿/);
+assert.match(await evaluate("document.querySelector('#tutorial').innerText"), /航海教學 · 1 \/ 14[\s\S]*先看釣具/);
+assert.equal(await evaluate("document.querySelector('#app').classList.contains('is-tutorial-active')"), true);
+await waitFor(`!document.querySelector('#tutorial-spotlight').classList.contains('is-hidden')`);
+assert.equal(await evaluate("document.querySelector('#tutorial-spotlight').classList.contains('is-hidden')"), false);
+assert.equal(await evaluate("document.querySelector('[data-action=\"show-fishing-setup\"]').classList.contains('is-tutorial-target')"), true);
+assert.equal(await evaluate("document.querySelector('[data-action=\"dismiss-tutorial\"]') === null"), true);
 await click('[data-view="chart"]');
+assert.equal(await evaluate("document.querySelector('.nav-button.is-active').dataset.view"), "fishing");
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).tutorialStep`), 0);
+await click('[data-action="show-fishing-setup"]');
+assert.equal(await evaluate("document.querySelectorAll('.spot-card').length"), 3);
+assert.match(await evaluate("document.querySelector('#tutorial').innerText"), /航海教學 · 2 \/ 14[\s\S]*認識釣具台[\s\S]*實際使用的甲板釣具台/);
+assert.equal(await evaluate("document.querySelector('.tutorial-setup-guide') === null"), true);
+assert.equal(await evaluate("document.querySelectorAll('.fishing-setup-modal .loadout select').length"), 2);
+assert.equal(await evaluate("document.querySelector('.fishing-setup-modal [data-action=\"close-modal\"]').classList.contains('is-tutorial-target')"), true);
+await command("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+await wait(120);
+assert.deepEqual(await evaluate(`(() => {
+  const modal = document.querySelector('.fishing-setup-modal').getBoundingClientRect();
+  return {
+    documentFits: document.documentElement.scrollWidth <= window.innerWidth,
+    modalFits: modal.left >= 0 && modal.right <= window.innerWidth,
+    actualSetupVisible: getComputedStyle(document.querySelector('.fishing-setup-modal .spot-grid')).visibility === 'visible'
+  };
+})()`), { documentFits: true, modalFits: true, actualSetupVisible: true });
+await command("Emulation.clearDeviceMetricsOverride");
+const selectedSpotBeforeBlockedSetup = await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).selectedSpot`);
+await click('[data-action="spot"][data-id="reef"]');
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).selectedSpot`), selectedSpotBeforeBlockedSetup);
+await click('[data-action="close-modal"]');
+assert.equal(await evaluate("Boolean(document.querySelector('.fishing-setup-modal'))"), false);
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).tutorialStep`), 2);
+assert.match(await evaluate("document.querySelector('#tutorial').innerText"), /航海教學 · 3 \/ 14[\s\S]*拋下第一竿/);
+assert.match(await evaluate("document.querySelector('.tracker-item.is-event').innerText"), /銀潮靠岸[\s\S]*0 \/ 3/);
+assert.equal(await evaluate("document.querySelectorAll('.tracker-item.is-daily').length"), 3);
+assert.equal(await evaluate("document.querySelectorAll('.tracker-item.is-daily.is-active').length"), 3);
+assert.equal(await evaluate("document.querySelectorAll('.tracker-item.is-daily .tracker-progress').length"), 3);
+assert.match(await evaluate("document.querySelector('#task-tracker').innerText"), /每日目標 · 進行中/);
+assert.match(await evaluate("document.querySelector('#scene-caption').innerText"), /銀潮靠岸/);
+assert.equal(await evaluate("document.querySelectorAll('.main-nav [data-view]').length"), 7);
+await command("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+await wait(120);
+const narrowFishingScene = await evaluate(`(() => {
+  const shell = document.querySelector('#game-shell').getBoundingClientRect();
+  const nav = document.querySelector('.main-nav');
+  const tracker = document.querySelector('#task-tracker').getBoundingClientRect();
+  const boat = document.querySelector('.boat-scene').getBoundingClientRect();
+  return {
+    documentWidthFits: document.documentElement.scrollWidth <= window.innerWidth,
+    documentHeightFits: document.documentElement.scrollHeight <= window.innerHeight,
+    shellFits: shell.left >= 0 && shell.right <= window.innerWidth && shell.top >= 0 && shell.bottom <= window.innerHeight,
+    navFits: nav.getBoundingClientRect().left >= 0 && nav.getBoundingClientRect().right <= window.innerWidth && nav.scrollWidth <= nav.clientWidth,
+    trackerFits: tracker.left >= 0 && tracker.right <= window.innerWidth && tracker.bottom <= window.innerHeight,
+    boatIsCenterLeft: (boat.left + boat.width / 2) / window.innerWidth >= .32 && (boat.left + boat.width / 2) / window.innerWidth < .5,
+    boatIsVerticallyCentered: (boat.top + boat.height / 2) / window.innerHeight >= .38 && (boat.top + boat.height / 2) / window.innerHeight <= .62,
+    fishingTopSeamRemoved: getComputedStyle(document.querySelector('.topbar')).borderBottomWidth === '0px',
+    tutorialFits: document.querySelector('#tutorial').getBoundingClientRect().left >= 0 && document.querySelector('#tutorial').getBoundingClientRect().right <= window.innerWidth
+  };
+})()`);
+assert.deepEqual(narrowFishingScene, { documentWidthFits: true, documentHeightFits: true, shellFits: true, navFits: true, trackerFits: true, boatIsCenterLeft: true, boatIsVerticallyCentered: true, fishingTopSeamRemoved: true, tutorialFits: true });
+await command("Emulation.clearDeviceMetricsOverride");
+
+await evaluate(`Math.random = () => 0`);
+const tutorialObjectiveProgressBefore = await evaluate(`(() => {
+  const save = JSON.parse(localStorage.getItem('atlas-of-fins.save'));
+  return {
+    daily: save.dailyBoard.entries.map(entry => entry.progress),
+    bayEvent: save.bayEvent?.progress ?? null,
+    resident: save.residentCommissions.active?.progress ?? null,
+    stories: Object.fromEntries(Object.entries(save.residentStories).map(([id, entry]) => [id, entry.objectiveProgress ?? null]))
+  };
+})()`);
+const tutorialBaitBeforeCast = await evaluate(`(() => { const save=JSON.parse(localStorage.getItem('atlas-of-fins.save')); return save.baitAmounts[save.equippedBait]; })()`);
+await click('[data-action="cast"]');
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).tutorialStep`), 3);
+assert.match(await evaluate("document.querySelector('#tutorial').innerText"), /航海教學 · 4 \/ 14[\s\S]*等候魚訊/);
+assert.equal(await evaluate("document.querySelector('#tutorial').classList.contains('is-hidden')"), false);
+assert.equal(await evaluate("document.querySelector('#tutorial-spotlight').classList.contains('is-hidden')"), false);
+assert.equal(await evaluate(`(() => { const save=JSON.parse(localStorage.getItem('atlas-of-fins.save')); return save.baitAmounts[save.equippedBait]; })()`), tutorialBaitBeforeCast);
+await click('[data-view="chart"]');
+assert.equal(await evaluate("document.querySelector('.nav-button.is-active').dataset.view"), "fishing");
+await waitFor(`document.querySelector('#game-shell').dataset.fishingPhase === 'biting'`, 16000);
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).tutorialStep`), 4);
+assert.match(await evaluate("document.querySelector('#tutorial').innerText"), /航海教學 · 5 \/ 14[\s\S]*教學不會倒數/);
+await wait(3000);
+assert.equal(await evaluate("document.querySelector('#game-shell').dataset.fishingPhase"), "biting");
+assert.equal(await evaluate("document.querySelector('.fishing-stage.is-failed') === null"), true);
+await click('[data-action="strike"]');
+await waitFor(`Boolean(document.querySelector('#reel-button'))`);
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).tutorialStep`), 5);
+assert.match(await evaluate("document.querySelector('#tutorial').innerText"), /航海教學 · 6 \/ 14[\s\S]*控制張力/);
+assert.equal(await evaluate("document.querySelector('#reel-button').classList.contains('is-tutorial-target')"), true);
+await evaluate(`document.querySelector('#reel-button').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:10}))`);
+await waitFor(`Boolean(document.querySelector('.fishing-stage.is-failed'))`, 7000);
+await evaluate(`window.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:10}))`);
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).tutorialStep`), 5);
+assert.match(await evaluate("document.querySelector('#tutorial').innerText"), /再試一次[\s\S]*再拋一竿/);
+assert.equal(await evaluate("document.querySelector('[data-action=\"reset-fishing\"]').classList.contains('is-tutorial-target')"), true);
+assert.equal(await evaluate(`(() => { const save=JSON.parse(localStorage.getItem('atlas-of-fins.save')); return save.baitAmounts[save.equippedBait]; })()`), tutorialBaitBeforeCast);
+await click('[data-action="reset-fishing"]');
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).tutorialStep`), 2);
+await click('[data-action="cast"]');
+assert.equal(await evaluate(`(() => { const save=JSON.parse(localStorage.getItem('atlas-of-fins.save')); return save.baitAmounts[save.equippedBait]; })()`), tutorialBaitBeforeCast);
+await waitFor(`document.querySelector('#game-shell').dataset.fishingPhase === 'biting'`, 16000);
+await click('[data-action="strike"]');
+await waitFor(`Boolean(document.querySelector('#reel-button'))`);
+await evaluate(`Math.random = () => 1`);
+assert.equal(await playTutorialTension(12), "escaped", "capture escape stays inside the same tutorial lesson");
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).tutorialStep`), 5);
+assert.equal(await evaluate("document.querySelector('[data-action=\"reset-fishing\"]').classList.contains('is-tutorial-target')"), true);
+assert.equal(await evaluate(`(() => { const save=JSON.parse(localStorage.getItem('atlas-of-fins.save')); return save.baitAmounts[save.equippedBait]; })()`), tutorialBaitBeforeCast);
+await click('[data-action="reset-fishing"]');
+await evaluate(`Math.random = () => 0`);
+await click('[data-action="cast"]');
+await waitFor(`document.querySelector('#game-shell').dataset.fishingPhase === 'biting'`, 16000);
+await click('[data-action="strike"]');
+await waitFor(`Boolean(document.querySelector('#reel-button'))`);
+assert.equal(await playTutorialTension(13), "caught", "the forced tutorial can finish after repeated retries");
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).tutorialStep`), 6);
+assert.equal(await evaluate(`(() => { const save=JSON.parse(localStorage.getItem('atlas-of-fins.save')); return save.baitAmounts[save.equippedBait]; })()`), tutorialBaitBeforeCast);
+assert.deepEqual(await evaluate(`(() => {
+  const save = JSON.parse(localStorage.getItem('atlas-of-fins.save'));
+  return {
+    daily: save.dailyBoard.entries.map(entry => entry.progress),
+    bayEvent: save.bayEvent?.progress ?? null,
+    resident: save.residentCommissions.active?.progress ?? null,
+    stories: Object.fromEntries(Object.entries(save.residentStories).map(([id, entry]) => [id, entry.objectiveProgress ?? null]))
+  };
+})()`), tutorialObjectiveProgressBefore);
+const tutorialCaughtFishName = await evaluate("document.querySelector('.catch-modal h2').innerText");
+assert.match(await evaluate("document.querySelector('#tutorial').innerText"), /航海教學 · 7 \/ 14[\s\S]*收好第一尾魚[\s\S]*收進漁獲箱/);
+assert.equal(await evaluate("document.querySelector('#tutorial').classList.contains('is-hidden')"), false);
+assert.equal(await evaluate("document.querySelector('#tutorial-spotlight').classList.contains('is-hidden')"), false);
+assert.equal(await evaluate("document.querySelector('.tutorial-page-intro') === null"), true);
+assert.equal(await evaluate("getComputedStyle(document.querySelector('.catch-hero')).visibility"), "visible");
+assert.equal(await evaluate("document.querySelector('[data-action=\"close-catch\"]').classList.contains('is-tutorial-target')"), true);
+await click('[data-action="modal-journal"]');
+assert.equal(await evaluate("Boolean(document.querySelector('.catch-modal'))"), true);
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).tutorialStep`), 6);
+await click('[data-action="close-catch"]');
+assert.equal(await evaluate("Boolean(document.querySelector('.catch-modal'))"), false);
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).tutorialStep`), 7);
+assert.equal(await evaluate("document.querySelector('.nav-button.is-active').dataset.view"), "catch");
+assert.match(await evaluate("document.querySelector('#tutorial').innerText"), /航海教學 · 8 \/ 14[\s\S]*販售第一尾魚[\s\S]*販售/);
+assert.equal(await evaluate("document.querySelector('[data-action=\"sell-one\"]').classList.contains('is-tutorial-target')"), true);
+assert.equal(await evaluate("document.querySelector('#tutorial-spotlight').classList.contains('is-hidden')"), false);
+assert.match(await evaluate("document.querySelector('.catch-row').innerText"), new RegExp(tutorialCaughtFishName));
+await command("Page.reload");
+await wait(200);
+await waitFor(`document.readyState === "complete"`);
+await click("#continue-button");
+await waitFor(`!document.querySelector("#game-shell").classList.contains("is-hidden")`);
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).tutorialStep`), 7);
+assert.equal(await evaluate("document.querySelector('.nav-button.is-active').dataset.view"), "catch");
+assert.equal(await evaluate("document.querySelector('[data-action=\"sell-one\"]').classList.contains('is-tutorial-target')"), true);
+await click('[data-action="sell-one"]');
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).tutorialStep`), 8);
+assert.equal(await evaluate("document.querySelector('.catch-row') === null"), true);
+assert.deepEqual(await evaluate(`(() => {
+  const save = JSON.parse(localStorage.getItem('atlas-of-fins.save'));
+  return {
+    progress: {
+      daily: save.dailyBoard.entries.map(entry => entry.progress),
+      bayEvent: save.bayEvent?.progress ?? null,
+      resident: save.residentCommissions.active?.progress ?? null,
+      stories: Object.fromEntries(Object.entries(save.residentStories).map(([id, entry]) => [id, entry.objectiveProgress ?? null]))
+    },
+    keptCollection: Object.keys(save.discovered).length === 1 && save.totalCaught === 1,
+    keptEconomy: save.totalSold > 0 && save.money > 120
+  };
+})()`), { progress: tutorialObjectiveProgressBefore, keptCollection: true, keptEconomy: true });
+assert.match(await evaluate("document.querySelector('#tutorial').innerText"), /航海教學 · 9 \/ 14[\s\S]*前往魚類圖鑑[\s\S]*永久保留/);
+assert.equal(await evaluate("document.querySelector('[data-view=\"journal\"]').classList.contains('is-tutorial-target')"), true);
+assert.equal(await evaluate("document.querySelector('#tutorial-spotlight').classList.contains('is-hidden')"), false);
+await command("Page.reload");
+await wait(200);
+await waitFor(`document.readyState === "complete"`);
+await click("#continue-button");
+await waitFor(`!document.querySelector("#game-shell").classList.contains("is-hidden")`);
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).tutorialStep`), 8);
+assert.equal(await evaluate("document.querySelector('.nav-button.is-active').dataset.view"), "catch");
+assert.equal(await evaluate("document.querySelector('[data-view=\"journal\"]').classList.contains('is-tutorial-target')"), true);
+assert.deepEqual(await evaluate(`(() => {
+  const spotlight = document.querySelector('#tutorial-spotlight');
+  const rect = spotlight.getBoundingClientRect();
+  const topElement = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+  return {
+    interactive: spotlight.classList.contains('is-interactive'),
+    pointerEvents: getComputedStyle(spotlight).pointerEvents,
+    receivesPointer: topElement === spotlight
+  };
+})()`), { interactive: true, pointerEvents: "auto", receivesPointer: true });
+await clickCenter('#tutorial-spotlight');
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).tutorialStep`), 9);
+assert.equal(await evaluate("document.querySelector('.nav-button.is-active').dataset.view"), "journal");
+assert.match(await evaluate("document.querySelector('#tutorial').innerText"), /航海教學 · 10 \/ 14[\s\S]*魚類圖鑑[\s\S]*仍保留剛才售出的魚/);
+assert.match(await evaluate("document.querySelector('.fish-detail').innerText"), new RegExp(`${tutorialCaughtFishName}[\\s\\S]*捕獲次數`));
+assert.equal(await evaluate("document.querySelector('[data-view=\"shop\"]').classList.contains('is-tutorial-target')"), true);
+assert.deepEqual(await evaluate(`(() => {
+  const panel = document.querySelector('#content-panel').getBoundingClientRect();
+  const nav = document.querySelector('.main-nav').getBoundingClientRect();
+  const outsideNavX = Math.max(1, nav.left / 2);
+  return {
+    panelReachesViewportBottom: Math.abs(panel.bottom - window.innerHeight) <= 1,
+    sceneHidden: getComputedStyle(document.querySelector('#world-scene')).visibility === 'hidden',
+    sceneHiddenFromAccessibility: document.querySelector('#world-scene').getAttribute('aria-hidden') === 'true',
+    bottomLeftCoveredByPage: document.querySelector('#content-panel').contains(document.elementFromPoint(outsideNavX, window.innerHeight - 20)),
+    tutorialNavIsOpaque: getComputedStyle(document.querySelector('.main-nav')).backgroundColor === 'rgb(17, 50, 62)'
+  };
+})()`), { panelReachesViewportBottom: true, sceneHidden: true, sceneHiddenFromAccessibility: true, bottomLeftCoveredByPage: true, tutorialNavIsOpaque: true });
+await command("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+await wait(120);
+assert.deepEqual(await evaluate(`(() => {
+  const card = document.querySelector('#tutorial').getBoundingClientRect();
+  return {
+    documentFits: document.documentElement.scrollWidth <= window.innerWidth,
+    tutorialFits: card.left >= 0 && card.right <= window.innerWidth && card.top >= 0 && card.bottom <= window.innerHeight,
+    spotlightVisible: !document.querySelector('#tutorial-spotlight').classList.contains('is-hidden'),
+    pageVisible: getComputedStyle(document.querySelector('.journal-layout')).visibility === 'visible'
+  };
+})()`), { documentFits: true, tutorialFits: true, spotlightVisible: true, pageVisible: true });
+await command("Emulation.clearDeviceMetricsOverride");
+await wait(120);
+// The atlas step spotlights the fish record card, so advancing uses the glowing 海灣商店 nav button directly.
+await click('[data-view="shop"]');
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).tutorialStep`), 10);
+assert.match(await evaluate("document.querySelector('#tutorial').innerText"), /航海教學 · 11 \/ 14[\s\S]*海灣商店[\s\S]*不需要擔心限時商品/);
+assert.equal(await evaluate("document.querySelector('[data-action=\"shop-tab\"][data-id=\"baits\"]').classList.contains('is-tutorial-target')"), true);
+await click('[data-action="shop-tab"][data-id="baits"]');
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).tutorialStep`), 11);
+assert.match(await evaluate("document.querySelector('#tutorial').innerText"), /航海教學 · 12 \/ 14[\s\S]*魚餌[\s\S]*不改變張力或最後的捕獲成功率/);
+assert.equal(await evaluate("document.querySelector('[data-action=\"buy-bait\"][data-id=\"bread\"]').classList.contains('is-tutorial-target')"), true);
+await wait(240);
+assert.deepEqual(await evaluate(`(() => {
+  const card = document.querySelector('.shop-item[data-shop-type="bait"][data-shop-id="bread"]');
+  const button = card.querySelector('[data-action="buy-bait"]');
+  const spotlight = document.querySelector('#tutorial-spotlight');
+  const cardRect = card.getBoundingClientRect();
+  const buttonRect = button.getBoundingClientRect();
+  const spotlightRect = spotlight.getBoundingClientRect();
+  return {
+    cardIsTarget: card.classList.contains('is-tutorial-target'),
+    buttonIsTarget: button.classList.contains('is-tutorial-target'),
+    spotlightCoversWholeCard: spotlightRect.left <= cardRect.left && spotlightRect.top <= cardRect.top
+      && spotlightRect.right >= cardRect.right && spotlightRect.bottom >= cardRect.bottom,
+    spotlightIsLargerThanButton: spotlightRect.width > buttonRect.width && spotlightRect.height > buttonRect.height,
+    cardIsPresentationOnly: !spotlight.classList.contains('is-interactive')
+  };
+})()`), { cardIsTarget: true, buttonIsTarget: true, spotlightCoversWholeCard: true, spotlightIsLargerThanButton: true, cardIsPresentationOnly: true });
+await click('[data-action="buy-bait"][data-id="bread"]');
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).tutorialStep`), 12);
+assert.match(await evaluate("document.querySelector('#tutorial').innerText"), /航海教學 · 13 \/ 14[\s\S]*補給完成[\s\S]*直接加入庫存/);
+assert.equal(await evaluate("document.querySelector('[data-view=\"home\"]').classList.contains('is-tutorial-target')"), true);
+await click('[data-view="home"]');
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).tutorialStep`), 13);
+assert.match(await evaluate("document.querySelector('#tutorial').innerText"), /航海教學 · 14 \/ 14[\s\S]*我的船屋[\s\S]*佈置收藏、翻閱日誌/);
+assert.equal(await evaluate("document.querySelector('[data-action=\"sleep\"]').classList.contains('is-tutorial-target')"), true);
+assert.equal(await evaluate("document.querySelector('#tutorial-spotlight').classList.contains('is-hidden')"), false);
+await click('[data-action="sleep"]');
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).completedTutorial`), true);
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).tutorialStep`), 14);
+assert.equal(await evaluate("document.querySelector('#tutorial').classList.contains('is-hidden')"), true);
+assert.equal(await evaluate("document.querySelector('#app').classList.contains('is-tutorial-active')"), false);
+assert.deepEqual(await evaluate(`(() => ({
+  lockedTargets: document.querySelectorAll('.is-tutorial-locked').length,
+  spotlightInteractive: document.querySelector('#tutorial-spotlight').classList.contains('is-interactive'),
+  spotlightHidden: document.querySelector('#tutorial-spotlight').classList.contains('is-hidden'),
+  chartPointerEvents: getComputedStyle(document.querySelector('[data-view="chart"]')).pointerEvents
+}))()`), { lockedTargets: 0, spotlightInteractive: false, spotlightHidden: true, chartPointerEvents: "auto" });
+
+await clickCenter('[data-view="chart"]');
+assert.equal(await evaluate("document.querySelector('.nav-button.is-active').dataset.view"), "chart");
 const chartText = await evaluate("document.querySelector('#content-panel').innerText");
 assert.match(chartText, /古海圖/);
 assert.match(chartText, /眠潮灣[\s\S]*船隻目前停泊/);
@@ -404,14 +738,68 @@ assert.match(await evaluate("document.querySelector('[data-resident=\lighthouse_
 await click('[data-resident="lighthouse_keeper"] [data-action="accept-commission"]');
 assert.match(await evaluate("document.querySelector('[data-resident=\lighthouse_keeper\]').innerText"), /今日提案 · 進行中[\s\S]*不影響主線[\s\S]*0 \/ 2[\s\S]*放下今日提案/);
 await click('[data-view="fishing"]');
-assert.match(await evaluate("document.querySelector('#tutorial').innerText"), /航海教學 · 2 \/ 6[\s\S]*拋下魚線/);
-assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).tutorialStep`), 1);
+assert.equal(await evaluate("document.querySelector('#tutorial').classList.contains('is-hidden')"), true);
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).tutorialStep`), 14);
 
 await evaluate(`Math.random = () => 0`);
+assert.equal(await evaluate("document.querySelector('.fishing-water-hitbox') === null"), true);
+assert.equal(await evaluate("document.querySelectorAll('[data-action=\"cast\"]').length"), 1);
+const baitBeforeSeaClick = await evaluate(`(() => { const save=JSON.parse(localStorage.getItem('atlas-of-fins.save')); return save.baitAmounts[save.equippedBait]; })()`);
+await evaluate(`document.querySelector('.fishing-scene-ui').dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 150, clientY: 360 }))`);
+assert.equal(await evaluate("document.querySelector('#game-shell').dataset.fishingPhase"), "idle");
+assert.equal(await evaluate(`(() => { const save=JSON.parse(localStorage.getItem('atlas-of-fins.save')); return save.baitAmounts[save.equippedBait]; })()`), baitBeforeSeaClick);
 await click('[data-action="cast"]');
-await waitFor(`Boolean(document.querySelector('[data-action="hook"]'))`, 6000);
-await click('[data-action="hook"]');
+assert.equal(await evaluate("document.querySelectorAll('[data-action=\"strike\"]').length"), 1);
+const phaseBeforeFishClick = await evaluate("document.querySelector('#game-shell').dataset.fishingPhase");
+await evaluate(`document.querySelector('.fish-shadow').dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
+assert.equal(await evaluate("document.querySelector('#game-shell').dataset.fishingPhase"), phaseBeforeFishClick);
+assert.equal(await evaluate("document.querySelector('.fishing-result-fail') === null"), true);
+await click('[data-action="strike"]');
+assert.match(await evaluate("document.querySelector('.fishing-result-fail').innerText"), /起竿太早了[\s\S]*只是試探咬餌/);
+await click('[data-action="reset-fishing"]');
+const deliberateWaitStarted = Date.now();
+await click('[data-action="cast"]');
+assert.equal(await evaluate("document.querySelector('.bite-callout') === null"), true);
+assert.match(await evaluate("getComputedStyle(document.querySelector('.fish-shadow')).animationName"), /fishInvestigate/);
+await evaluate(`document.querySelector('.fish-shadow').dataset.continuity = 'kept'`);
+await wait(3400);
+assert.equal(await evaluate("document.querySelector('.fish-shadow')?.dataset.continuity"), "kept");
+await waitFor(`Boolean(document.querySelector('.fishing-stage.is-biting'))`, 16000);
+assert.ok(Date.now() - deliberateWaitStarted >= 4500, "the fish shadow lingers before the true bite");
+assert.equal(await evaluate("getComputedStyle(document.querySelector('.bite-alert')).display"), "grid");
+assert.equal(await evaluate("getComputedStyle(document.querySelector('.fishing-context-action')).animationName"), "none");
+assert.match(await evaluate("document.querySelector('.bite-alert').textContent"), /真正吞餌/);
+await click('[data-action="strike"]');
 await waitFor(`Boolean(document.querySelector('#reel-button'))`);
+await evaluate(`window.__catchRolls = [0, .4, .4, 0, 0, 0]; Math.random = () => window.__catchRolls.length ? window.__catchRolls.shift() : 0`);
+assert.match(await evaluate("document.querySelector('.reel-ui').innerText"), /張力[\s\S]*距離[\s\S]*100%[\s\S]*收線/);
+assert.doesNotMatch(await evaluate("document.querySelector('.reel-ui').innerText"), /穩住魚線|按住收線|完成後進行捕獲判定|平穩型|衝刺型|耐力型|擺動型|稀有型/);
+assert.match(await evaluate("document.querySelector('.fight-behavior-cue').innerText"), /魚勢[\s\S]*(平穩型|衝刺型|耐力型|擺動型|稀有型)/);
+await wait(1800);
+const persistentBehaviorCue = await evaluate(`(() => {
+  const cue = document.querySelector('.fight-behavior-cue');
+  const style = getComputedStyle(cue);
+  return { exists: Boolean(cue), opacity: Number(style.opacity), animationName: style.animationName };
+})()`);
+assert.equal(persistentBehaviorCue.exists, true);
+assert.ok(persistentBehaviorCue.opacity >= .78 && persistentBehaviorCue.opacity <= .9);
+assert.equal(persistentBehaviorCue.animationName, "none");
+assert.equal(await evaluate("document.querySelector('#task-tracker').hidden"), true);
+const compactFightLayout = await evaluate(`(() => {
+  const stage = document.querySelector('.fishing-stage.is-reeling').getBoundingClientRect();
+  const hud = document.querySelector('.reel-ui').getBoundingClientRect();
+  const fish = document.querySelector('.struggle-fish-cue').getBoundingClientRect();
+  const behaviorCue = document.querySelector('.fight-behavior-cue').getBoundingClientRect();
+  return {
+    hudCompact: hud.width <= 400 && hud.height <= 110,
+    hudAtBottom: hud.bottom > stage.top + stage.height * .75,
+    seaRemainsVisible: hud.height < stage.height * .25,
+    fishStaysByBait: fish.left + fish.width / 2 > stage.left + stage.width * .55,
+    behaviorCueCompact: behaviorCue.width <= 160 && behaviorCue.height <= 70,
+    behaviorCueClearsHud: behaviorCue.bottom < hud.top
+  };
+})()`);
+assert.deepEqual(compactFightLayout, { hudCompact: true, hudAtBottom: true, seaRemainsVisible: true, fishStaysByBait: true, behaviorCueCompact: true, behaviorCueClearsHud: true });
 
 let caught = false;
 let lastReelState = null;
@@ -457,7 +845,7 @@ await click('[data-action="close-modal"]');
 await click('[data-view="journal"]');
 assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /探索進度[\s\S]*1 \/ 41/);
 assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /初次相遇[\s\S]*初次：/);
-assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /閃光紀錄 1 次/);
+assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /閃光紀錄 2 次/);
 const firstCaughtFishId = await evaluate(`Object.keys(JSON.parse(localStorage.getItem("atlas-of-fins.save")).discovered)[0]`);
 await evaluate(`document.querySelector('[data-action="select-fish"][data-id="${firstCaughtFishId}"]').click()`);
 assert.match(await evaluate("document.querySelector('.fish-detail').innerText"), /初遇短句/);
@@ -504,6 +892,8 @@ await click('[data-action="move-aquarium"]');
 assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /漁獲箱還空著/);
 
 await click('[data-view="home"]');
+// The aquarium now lives in a popup opened from the船屋 dock rather than inline on the page.
+await click('[data-action="show-aquarium"]');
 assert.match(await evaluate("document.querySelector('.aquarium-heading').innerText"), /1 \/ 3/);
 assert.equal(await evaluate("document.querySelectorAll('.aquarium-slot.has-fish').length"), 1);
 assert.equal(await evaluate("document.querySelector('.aquarium-tank').classList.contains('has-shimmer-specks')"), true);
@@ -537,7 +927,7 @@ await click('[data-action="open-chart"]');
 assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /古海圖[\s\S]*目前船位/);
 await click('[data-view="home"]');
 await click('[data-action="sleep"]');
-assert.match(await evaluate("document.querySelector('#time-label').innerText"), /白天/);
+assert.match(await evaluate("document.querySelector('#time-label').innerText"), /黃昏/);
 
 const saved = await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save"))`);
 const savedCatchRecord = Object.values(saved.discovered)[0];
@@ -558,10 +948,10 @@ assert.ok(saved.totalCaught >= 1);
 assert.ok(saved.totalSold > 0);
 assert.equal(saved.completedTutorial, true);
 assert.equal(savedCatchRecord.spots.length, 1);
-assert.equal(savedCatchRecord.times.length, 1);
+assert.equal(savedCatchRecord.times.length, 2);
 assert.equal(savedCatchRecord.weathers.length, 1);
 assert.equal(savedCatchRecord.caughtShimmer, true);
-assert.equal(savedCatchRecord.shimmerCount, 1);
+assert.equal(savedCatchRecord.shimmerCount, 2);
 assert.equal(savedCatchRecord.shimmerPity, 0);
 assert.equal(saved.aquarium.fish.length, 0);
 assert.equal(saved.achievements.first_catch.claimed, true);
@@ -603,7 +993,7 @@ assert.equal(firstTravel.currentRegionId, "sleeping_tide_bay");
 assert.deepEqual(firstTravel.visitedRegionIds, ["sleeping_tide_bay"]);
 assert.equal(firstTravel.travel.durationMs, 360000);
 assert.equal(firstTravel.docking.status, "traveling");
-assert.match(await evaluate("document.querySelector('#scene-caption').innerText"), /航向琉光群島[\s\S]*第 1 \/ 3 段/);
+assert.match(await evaluate("document.querySelector('#scene-caption').textContent"), /航向琉光群島[\s\S]*第 1 \/ 3 段/);
 
 await click("#menu-button");
 await click('[data-action="to-title"]');
@@ -623,13 +1013,15 @@ assert.match(await evaluate("document.querySelector('.docking-modal').innerText"
 await click('[data-action="close-modal"]');
 assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).world.currentRegionId`), "luminous_archipelago");
 await click('[data-view="fishing"]');
+await click('[data-action="show-fishing-setup"]');
 assert.equal(await evaluate("document.querySelectorAll('.spot-card').length"), 3);
 assert.equal(await evaluate("Boolean(document.querySelector('[data-action=\"cast\"]'))"), true);
 assert.equal(await evaluate("document.querySelectorAll('.observation-preview').length"), 1);
-assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /琉光群島釣行[\s\S]*風棲淺灘[\s\S]*稜光珊瑚庭[\s\S]*暖流藍渠/);
+assert.match(await evaluate("document.querySelector('.fishing-setup-modal').innerText"), /釣點與裝備[\s\S]*風棲淺灘[\s\S]*稜光珊瑚庭[\s\S]*暖流藍渠/);
 assert.match(await evaluate("document.querySelector('.observation-preview').innerText"), /特殊觀察點 · 0 \/ 2[\s\S]*不需快速點擊/);
 assert.match(await evaluate("document.querySelector('.research-card').innerText"), /琉光群島研究主路[\s\S]*0 \/ 15[\s\S]*風在港口停了一會兒/);
 assert.equal(await evaluate("document.querySelector('#app').dataset.region"), "luminous_archipelago");
+await click('[data-action="close-modal"]');
 
 await click('[data-view="residents"]');
 assert.equal(await evaluate("document.querySelectorAll('.resident-card').length"), 1);
@@ -644,10 +1036,12 @@ await click('[data-action="select-fish"][data-id="parrotfish"]');
 assert.match(await evaluate("document.querySelector('.fish-detail').innerText"), /鸚哥魚[\s\S]*眠潮灣印章[\s\S]*琉光群島尚未記錄/);
 assert.equal(await evaluate("document.querySelector('[data-region-stamp=\"luminous_archipelago\"]').classList.contains('is-earned')"), false);
 await click('[data-view="fishing"]');
+await click('[data-action="show-fishing-setup"]');
 await click('[data-action="spot"][data-id="prism_coral_garden"]');
+await click('[data-action="close-modal"]');
 await click('[data-action="cast"]');
-await waitFor(`Boolean(document.querySelector('[data-action="hook"]'))`, 6000);
-await click('[data-action="hook"]');
+await waitFor(`Boolean(document.querySelector('.fishing-stage.is-biting'))`, 16000);
+await click('[data-action="strike"]');
 await waitFor(`Boolean(document.querySelector('#reel-button'))`);
 let luminousCaught = false;
 for (let i = 0; i < 180; i++) {
@@ -705,7 +1099,7 @@ await waitFor(`!document.querySelector("#title-screen").classList.contains("is-h
 await evaluate(`(() => { const save = JSON.parse(localStorage.getItem("atlas-of-fins.save")); save.day = 2; save.timeIndex = 0; save.bayEvent = null; save.regionEvents.sleeping_tide_bay = null; save.regionEvents.luminous_archipelago = null; localStorage.setItem("atlas-of-fins.save", JSON.stringify(save)); })()`);
 await click("#continue-button");
 await waitFor(`!document.querySelector("#game-shell").classList.contains("is-hidden")`);
-assert.match(await evaluate("document.querySelector('.bay-event-card[data-bay-event=\"quiet\"]').innerText"), /潮聲平穩[\s\S]*平靜日/);
+assert.equal(await evaluate("document.querySelector('.tracker-item.is-event') === null"), true);
 await click("#save-button");
 assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).bayEvent`), null);
 
@@ -715,15 +1109,13 @@ await waitFor(`!document.querySelector("#title-screen").classList.contains("is-h
 await evaluate(`(() => { const save = JSON.parse(localStorage.getItem("atlas-of-fins.save")); save.day = 3; save.timeIndex = 0; save.bayEvent = null; localStorage.setItem("atlas-of-fins.save", JSON.stringify(save)); })()`);
 await click("#continue-button");
 await waitFor(`!document.querySelector("#game-shell").classList.contains("is-hidden")`);
-assert.match(await evaluate("document.querySelector('.bay-event-card[data-bay-event=\"moonlit_tide\"]').innerText"), /月光潮汐[\s\S]*月色尚未升起[\s\S]*夜晚生效/);
-assert.equal(await evaluate("document.querySelector('.bay-event-card[data-bay-event=\"moonlit_tide\"]').classList.contains('is-inactive')"), true);
+assert.match(await evaluate("document.querySelector('.tracker-item.is-event').innerText"), /等待條件[\s\S]*月光潮汐/);
 await click('[data-view="home"]');
 await click('[data-action="sleep"]');
 await click('[data-action="sleep"]');
 await click('[data-action="sleep"]');
 await click('[data-view="fishing"]');
-assert.match(await evaluate("document.querySelector('.bay-event-card[data-bay-event=\"moonlit_tide\"]').innerText"), /月光潮汐[\s\S]*目前生效/);
-assert.equal(await evaluate("document.querySelector('.bay-event-card[data-bay-event=\"moonlit_tide\"]').classList.contains('is-inactive')"), false);
+assert.match(await evaluate("document.querySelector('.tracker-item.is-event').innerText"), /生效中[\s\S]*月光潮汐/);
 assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).timeIndex`), 3);
 
 await click("#menu-button");
@@ -734,7 +1126,7 @@ await click("#continue-button");
 await waitFor(`!document.querySelector("#game-shell").classList.contains("is-hidden")`);
 assert.match(await evaluate("document.querySelector('#weather-label').innerText"), /細雨/);
 assert.equal(await evaluate("document.querySelector('#app').dataset.weather"), "rain");
-assert.match(await evaluate("document.querySelector('.bay-event-card[data-bay-event=\"rain_drift\"]').innerText"), /雨後漂流[\s\S]*全天 · 細雨[\s\S]*礁石邊緣[\s\S]*0 \/ 2[\s\S]*目前生效/);
+assert.match(await evaluate("document.querySelector('.tracker-item.is-event').innerText"), /生效中[\s\S]*雨後漂流[\s\S]*0 \/ 2/);
 await click("#save-button");
 assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).bayEvent.eventId`), "rain_drift");
 assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).weather`), "rain");
@@ -829,7 +1221,9 @@ assert.equal(await evaluate("JSON.parse(localStorage.getItem('atlas-of-fins.save
 await click('[data-view="home"]');
 assert.equal(await evaluate("document.querySelector('.cabin-view').dataset.ship"), "tidewhisper_residence");
 assert.equal(await evaluate("document.querySelector('.cabin-view').classList.contains('theme-round-window-nest')"), true);
+await click('[data-action="show-aquarium"]');
 assert.equal(await evaluate("document.querySelector('.aquarium-panel').classList.contains('aquarium-frame-seafoam-ceramic')"), true);
+await click('[data-action="close-home-popup"]');
 assert.match(await evaluate("document.querySelector('.cabin-view').innerText"), /固定床台[\s\S]*航圖桌[\s\S]*潮聲居所/);
 await click('[data-action="show-logbook"]');
 assert.equal(await evaluate("document.querySelector('[data-id=\"journal:ship:tidewhisper_residence\"]') === null"), true);

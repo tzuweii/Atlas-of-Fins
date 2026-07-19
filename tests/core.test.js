@@ -4,10 +4,14 @@ import { ACHIEVEMENTS, BAITS, BAY_EVENTS, FISH, FURNITURE, LUMINOUS_ARCHIPELAGO_
 import {
   SAVE_VERSION, SHIMMER_CONFIG, advanceTime, applyMilestones, buyBait, buyRod, chooseFish, claimAchievement,
   createBayEventState, createDeveloperState, createInitialState, equipTitle, evaluateAchievements, fishWeight, generateCatch, getAchievementProgress,
+  getCaptureSuccessRate,
   getActiveBayEvent, getAquariumCapacity, getFamiliarity, getScheduledBayEvent, getUnclaimedAchievementCount, migrateState, moveCatchToAquarium,
-  recordCatch, removeFishFromAquarium, replaceAquariumFish, rollVariant, sellCatches,
+  recordCatch, removeFishFromAquarium, replaceAquariumFish, rollCaptureSuccess, rollVariant, sellCatches,
   setAquariumDecoration, swapAquariumFish, updateBayEventProgress
 } from "../src/core.js";
+import {
+  TUTORIAL_TOTAL_STEPS, TUTORIAL_VERSION, normalizeTutorialProgress, tutorialIsActive
+} from "../src/systems/tutorial.js";
 
 const NEW_FISH_IDS = [
   "horse_mackerel", "threadfin_bream", "goatfish", "threeline_grunt", "yellow_boxfish",
@@ -52,6 +56,8 @@ test("developer state unlocks all content without using the normal progression",
   const state = createDeveloperState();
   assert.equal(state.developerMode, true);
   assert.equal(state.completedTutorial, true);
+  assert.equal(state.tutorialVersion, TUTORIAL_VERSION);
+  assert.equal(state.tutorialStep, TUTORIAL_TOTAL_STEPS);
   assert.equal(state.money, 999999);
   assert.deepEqual(state.ownedRods, RODS.map(item => item.id));
   assert.deepEqual(state.ownedFurniture, FURNITURE.map(item => item.id));
@@ -61,6 +67,95 @@ test("developer state unlocks all content without using the normal progression",
   assert.equal(getAquariumCapacity(state), 15);
   assert.equal(state.catchInventory.length + state.aquarium.fish.length, FISH.length);
   assert.equal(Object.keys(state.achievements).length, ACHIEVEMENTS.length);
+});
+
+test("forced first-journey tutorial normalizes legacy saves without restarting completed players", () => {
+  const initial = createInitialState();
+  assert.equal(tutorialIsActive(initial), true);
+  assert.deepEqual(normalizeTutorialProgress({ completedTutorial: false, tutorialStep: 1 }), {
+    tutorialVersion: TUTORIAL_VERSION,
+    completedTutorial: false,
+    tutorialStep: 2,
+    tutorialCatchUid: null
+  });
+  assert.deepEqual(normalizeTutorialProgress({ completedTutorial: false, tutorialStep: 4 }), {
+    tutorialVersion: TUTORIAL_VERSION,
+    completedTutorial: false,
+    tutorialStep: 8,
+    tutorialCatchUid: null
+  });
+  assert.equal(normalizeTutorialProgress({ tutorialVersion: 2, completedTutorial: false, tutorialStep: 1 }).tutorialStep, 1);
+  assert.equal(normalizeTutorialProgress({ tutorialVersion: 2, completedTutorial: false, tutorialStep: 5 }).tutorialStep, 5);
+  assert.equal(normalizeTutorialProgress({ tutorialVersion: 3, completedTutorial: false, tutorialStep: 2 }).tutorialStep, 1);
+  assert.equal(normalizeTutorialProgress({ tutorialVersion: 3, completedTutorial: false, tutorialStep: 8 }).tutorialStep, 7);
+  assert.equal(normalizeTutorialProgress({ tutorialVersion: 4, completedTutorial: false, tutorialStep: 8 }).tutorialStep, 7);
+  assert.equal(normalizeTutorialProgress({ tutorialVersion: 4, completedTutorial: false, tutorialStep: 9 }).tutorialStep, 8);
+  const migratedV4Tutorial = migrateState({
+    version: SAVE_VERSION,
+    tutorialVersion: 4,
+    completedTutorial: false,
+    tutorialStep: 8,
+    tutorialCatchUid: "first-catch"
+  });
+  assert.equal(migratedV4Tutorial.tutorialVersion, TUTORIAL_VERSION);
+  assert.equal(migratedV4Tutorial.tutorialStep, 7);
+  assert.equal(migratedV4Tutorial.tutorialCatchUid, "first-catch");
+  const completed = normalizeTutorialProgress({ completedTutorial: true, tutorialStep: 2, tutorialCatchUid: "legacy" });
+  assert.equal(completed.completedTutorial, true);
+  assert.equal(completed.tutorialStep, TUTORIAL_TOTAL_STEPS);
+  assert.equal(completed.tutorialCatchUid, null);
+  assert.equal(tutorialIsActive(completed), false);
+});
+
+test("tutorial catch and sale preserve collection and coins without advancing task objectives", () => {
+  const state = createInitialState();
+  state.dailyBoard = {
+    day: 1,
+    entries: [
+      { instanceId: "tutorial-catch", progress: 0, goal: 3, claimed: false, condition: { eventType: "catch" } },
+      { instanceId: "tutorial-sale", progress: 0, goal: 100, claimed: false, condition: { eventType: "sell", metric: "amount" } }
+    ]
+  };
+  state.residentCommissions = {
+    ...state.residentCommissions,
+    active: { instanceId: "tutorial-resident", progress: 0, goal: 2, condition: { eventType: "catch" } }
+  };
+  const fish = FISH.find(item => item.id === "sardine");
+  const caught = generateCatch(fish, {
+    regionId: SLEEPING_TIDE_BAY_ID,
+    spotId: "shore",
+    timeId: "dawn",
+    weather: "sunny",
+    baitId: "bread",
+    rodId: "wood",
+    day: 1
+  }, () => .5);
+  const moneyBeforeCatch = state.money;
+
+  const result = recordCatch(state, caught, "bread", { source: "tutorial" });
+
+  assert.equal(result.journalEvents[0].event.source, "tutorial");
+  assert.equal(result.bayEventUpdate.updated, false);
+  assert.equal(result.researchUpdate.updated, false);
+  assert.equal(state.bayEvent.progress, 0);
+  assert.deepEqual(state.dailyBoard.entries.map(entry => entry.progress), [0, 0]);
+  assert.equal(state.residentCommissions.active.progress, 0);
+  assert.equal(state.discovered.sardine.count, 1);
+  assert.equal(state.totalCaught, 1);
+  assert.equal(state.catchInventory.length, 1);
+  assert.ok(state.money > moneyBeforeCatch);
+  assert.equal(state.tideglow.total, 1, "the real first discovery still grants its permanent collection reward");
+
+  const moneyBeforeSale = state.money;
+  const sale = sellCatches(state, [caught.uid], { source: "tutorial" });
+
+  assert.equal(sale.sold, 1);
+  assert.ok(sale.total > 0);
+  assert.equal(state.money, moneyBeforeSale + sale.total);
+  assert.equal(state.totalSold, sale.total);
+  assert.deepEqual(state.dailyBoard.entries.map(entry => entry.progress), [0, 0]);
+  assert.equal(state.residentCommissions.active.progress, 0);
+  assert.equal(state.gameEvents.recent.at(-1).source, "tutorial");
 });
 
 test("existing developer saves backfill newly catalogued fish and collection rewards", () => {
@@ -290,6 +385,32 @@ test("fish pool respects fishing spot", () => {
     assert.equal(fishWeight(fish, state) > 0, fish.spots.includes("shore"));
   }
   assert.ok(chooseFish(state, () => .5).spots.includes("shore"));
+});
+
+test("manual fishing separates appearance weight from one independent capture roll", () => {
+  const common = FISH.find(fish => fish.rarity === "common");
+  const uncommon = FISH.find(fish => fish.rarity === "uncommon");
+  const rare = FISH.find(fish => fish.rarity === "rare");
+  const wood = RODS.find(rod => rod.id === "wood");
+  const light = RODS.find(rod => rod.id === "light");
+  const farcast = RODS.find(rod => rod.id === "farcast");
+
+  assert.equal(getCaptureSuccessRate(common, wood), 0.95);
+  assert.equal(getCaptureSuccessRate(uncommon, light), 0.89);
+  assert.equal(getCaptureSuccessRate(rare, farcast), 0.78);
+  assert.equal(getCaptureSuccessRate(common, farcast), 0.98, "every fish keeps a possible independent escape outcome");
+  assert.deepEqual(rollCaptureSuccess(rare, farcast, () => 0.779), { success: true, chance: 0.78 });
+  assert.deepEqual(rollCaptureSuccess(rare, farcast, () => 0.78), { success: false, chance: 0.78 });
+
+  const state = createInitialState();
+  const rareFish = FISH.find(fish => fish.rarity === "rare" && fish.spots.includes("deep"));
+  state.selectedSpot = "deep";
+  state.equippedBait = rareFish.baits[0];
+  state.equippedRod = "wood";
+  const woodWeight = fishWeight(rareFish, state);
+  state.equippedRod = "farcast";
+  assert.equal(fishWeight(rareFish, state), woodWeight * (1 + farcast.appearanceBonus));
+  assert.equal("catchBonus" in BAITS[0], false, "bait never changes capture success");
 });
 
 test("catch price uses size and rarity and records discoveries", () => {

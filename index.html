@@ -6,11 +6,11 @@
   <meta name="theme-color" content="#102d3d">
   <meta name="description" content="Atlas of Fins — 在眠潮灣釣魚、完成圖鑑，打造溫暖的海上小屋。">
   <title>Atlas of Fins｜鰭之圖鑑</title>
-  <link rel="stylesheet" href="styles.css?rev=20260719-rarity-palette">
+  <link rel="stylesheet" href="styles.css?rev=20260719-tutorial-clean-progress">
 </head>
 <body>
   <noscript>請啟用 JavaScript 來遊玩 Atlas of Fins。</noscript>
-  <div id="app" class="app" data-time="dawn" data-weather="sunny" data-ui-revision="20260719-rarity-palette">
+  <div id="app" class="app" data-time="dawn" data-weather="sunny" data-ui-revision="20260719-tutorial-clean-progress">
     <section id="title-screen" class="title-screen" aria-label="主選單">
       <div class="title-sky">
         <span class="title-cloud cloud-a"></span>
@@ -71,6 +71,7 @@
           <div class="boat-reflection"></div>
         </div>
         <div id="scene-caption" class="scene-caption"><span>近岸淺水區</span><small>海風輕輕掠過船舷</small></div>
+        <aside id="task-tracker" class="task-tracker" aria-live="polite" aria-label="航程追蹤" hidden></aside>
       </section>
 
       <section id="content-panel" class="content-panel" aria-live="polite"></section>
@@ -88,8 +89,9 @@
 
     <div id="modal-root"></div>
     <div id="toast-root" class="toast-root" aria-live="assertive"></div>
-    <div id="tutorial" class="tutorial is-hidden" aria-live="polite"></div>
+    <div id="tutorial-spotlight" class="tutorial-spotlight is-hidden" aria-hidden="true"></div>
+    <div id="tutorial" class="tutorial is-hidden" role="dialog" aria-modal="true" aria-live="polite" tabindex="-1"></div>
   </div>
-  <script type="module" src="src/game.js?rev=20260719-rarity-palette"></script>
+  <script type="module" src="src/game.js?rev=20260719-tutorial-clean-progress"></script>
 </body>
 </html>
