@@ -205,7 +205,7 @@ assert.equal(await evaluate("document.querySelectorAll('.logbook-tree-group').le
 assert.equal(await evaluate("document.querySelectorAll('.logbook-tree-group.is-expanded').length"), 1);
 assert.equal(await evaluate("document.querySelector('.logbook-layout').firstElementChild.classList.contains('logbook-sidebar')"), true);
 await click('[data-action="logbook-category"][data-id="rare_fish"]');
-assert.equal(await evaluate("document.querySelectorAll('[data-action=\"select-logbook-entry\"]').length"), 7);
+assert.equal(await evaluate("document.querySelectorAll('[data-action=\"select-logbook-entry\"]').length"), 9);
 assert.equal(await evaluate("document.querySelector('.logbook-tree-group.is-expanded [data-action=\"logbook-category\"]').dataset.id"), "rare_fish");
 assert.equal(exceptions.length, 0, `Journal category click has no browser exception: ${exceptions.join(", ")}`);
 await click('[data-action="logbook-category"][data-id="mist_cape_cold_current"]');
@@ -286,7 +286,7 @@ assert.match(await evaluate("document.querySelector('.fishing-setup-modal').inne
 assert.equal(await evaluate("document.querySelectorAll('.spot-card').length"), 3);
 assert.equal(await evaluate("document.querySelectorAll('.observation-preview').length"), 1);
 assert.match(await evaluate("document.querySelector('.observation-preview').innerText"), /特殊觀察點 · 0 \/ 2[\s\S]*不需快速點擊/);
-assert.match(await evaluate("document.querySelector('.research-card').innerText"), /琉光群島研究主路[\s\S]*15 \/ 15[\s\S]*區域完整/);
+assert.match(await evaluate("document.querySelector('.research-card').innerText"), /琉光群島研究主路[\s\S]*33 \/ 33[\s\S]*區域完整/);
 assert.equal(await evaluate("document.querySelector('.tracker-item.is-event') === null"), true);
 assert.equal(await evaluate("document.querySelector('#app').dataset.region"), "luminous_archipelago");
 await evaluate(`Math.random = () => 1`);
@@ -328,8 +328,8 @@ await click('[data-view="journal"]');
 assert.equal(await evaluate("document.querySelectorAll('.fish-region-filters .filter-chip').length"), 3);
 assert.equal(await evaluate("Boolean(document.querySelector('[data-action=\"journal-filter\"][data-id=\"common\"], [data-action=\"journal-filter\"][data-id=\"uncommon\"], [data-action=\"journal-filter\"][data-id=\"rare\"]'))"), false);
 await click('[data-action="journal-filter"][data-id="luminous_archipelago"]');
-assert.equal(await evaluate("document.querySelectorAll('.fish-card').length"), 15);
-assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /琉光群島魚類圖鑑[\s\S]*跨海域魚也會出現在這一頁/);
+assert.equal(await evaluate("document.querySelectorAll('.fish-card').length"), 33);
+assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /琉光群島魚類圖鑑[\s\S]*每種魚只會出現在一片海域/);
 await click('[data-action="select-fish"][data-id="bluegreen_chromis"]');
 assert.match(await evaluate("document.querySelector('.fish-detail').innerText"), /藍綠光鰓魚[\s\S]*琉光群島印章[\s\S]*FishBase 物種摘要/);
 await click('[data-view="chart"]');
@@ -343,8 +343,8 @@ assert.deepEqual(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.
 await click('[data-action="close-modal"]');
 await click('[data-view="journal"]');
 await click('[data-action="journal-filter"][data-id="all"]');
-assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /探索進度[\s\S]*41 \/ 41/);
-assert.equal(await evaluate("document.querySelectorAll('.fish-card').length"), 41);
+assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /探索進度[\s\S]*63 \/ 63/);
+assert.equal(await evaluate("document.querySelectorAll('.fish-card').length"), 63);
 assert.equal(await evaluate("document.querySelectorAll('.fish-card.is-unknown').length"), 0);
 const rarityPalette = await evaluate(`(() => ({
   common: getComputedStyle(document.querySelector('.fish-card.rarity-common')).backgroundImage,
@@ -375,7 +375,7 @@ await waitFor(`!document.querySelector("#title-screen").classList.contains("is-h
 assert.equal(await evaluate("document.querySelector('#continue-button').disabled"), true);
 
 const legacyDeveloperSpecies = await evaluate(`(() => {
-  const addedFishIds = ["horse_mackerel", "threadfin_bream", "goatfish", "threeline_grunt", "yellow_boxfish", "needlefish", "red_seabream", "malabar_grouper", "mirror_butterflyfish", "greater_amberjack", "bluegreen_chromis", "pennant_coralfish", "orangespine_unicornfish", "moorish_idol", "yellowtail_fusilier", "bigeye_scad", "longface_emperor", "peacock_grouper", "yellowstripe_goatfish", "bluespotted_cornetfish", "giant_trevally"];
+  const addedFishIds = ["horse_mackerel", "threadfin_bream", "goatfish", "threeline_grunt", "yellow_boxfish", "needlefish", "red_seabream", "malabar_grouper", "mirror_butterflyfish", "greater_amberjack", "bluegreen_chromis", "pennant_coralfish", "orangespine_unicornfish", "moorish_idol", "yellowtail_fusilier", "bigeye_scad", "longface_emperor", "peacock_grouper", "yellowstripe_goatfish", "bluespotted_cornetfish", "giant_trevally", "convict_surgeonfish", "blacktip_fusilier", "goldband_fusilier", "bluestripe_snapper", "thumbprint_emperor", "blackbarred_halfbeak", "threadfin_butterflyfish", "yellowfin_goatfish", "redtooth_triggerfish", "pinecone_soldierfish", "goldlined_rabbitfish", "palette_surgeonfish", "ornate_butterflyfish", "regal_angelfish", "clown_triggerfish", "longfin_batfish", "harlequin_sweetlips", "giant_moray", "bluespine_unicornfish", "chinese_trumpetfish", "dogtooth_tuna", "scrawled_filefish"];
   const save = JSON.parse(localStorage.getItem("atlas-of-fins.dev-save"));
   for (const fishId of addedFishIds) delete save.discovered[fishId];
   save.catchInventory = save.catchInventory.filter(caught => !addedFishIds.includes(caught.fishId));
@@ -393,13 +393,13 @@ await click("#developer-mode-button");
 await evaluate(`document.querySelector('#developer-password').value = 'atlas-dev'; document.querySelector('#developer-login-form').requestSubmit()`);
 await waitFor(`!document.querySelector("#game-shell").classList.contains("is-hidden")`);
 await click('[data-view="journal"]');
-assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /探索進度[\s\S]*41 \/ 41/);
+assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /探索進度[\s\S]*63 \/ 63/);
 assert.equal(await evaluate("document.querySelector('[data-id=\"greater_amberjack\"] b').innerText"), "紅甘");
 await click("#menu-button");
 await click('[data-action="to-title"]');
 await waitFor(`!document.querySelector("#title-screen").classList.contains("is-hidden")`);
 const upgradedDeveloperSave = await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.dev-save"))`);
-assert.equal(Object.keys(upgradedDeveloperSave.discovered).length, 41);
+assert.equal(Object.keys(upgradedDeveloperSave.discovered).length, 63);
 assert.ok(upgradedDeveloperSave.catchInventory.some(caught => caught.fishId === "greater_amberjack"));
 assert.ok(upgradedDeveloperSave.catchInventory.some(caught => caught.fishId === "giant_trevally"));
 assert.ok(upgradedDeveloperSave.completedMilestones.includes(30));
@@ -843,7 +843,7 @@ await click('[data-resident="lighthouse_keeper"] [data-action="talk-resident"]')
 assert.match(await evaluate("document.querySelector('.modal').innerText"), /燈塔守望者[\s\S]*記著回來的方向/);
 await click('[data-action="close-modal"]');
 await click('[data-view="journal"]');
-assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /探索進度[\s\S]*1 \/ 41/);
+assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /探索進度[\s\S]*1 \/ 63/);
 assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /初次相遇[\s\S]*初次：/);
 assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /閃光紀錄 2 次/);
 const firstCaughtFishId = await evaluate(`Object.keys(JSON.parse(localStorage.getItem("atlas-of-fins.save")).discovered)[0]`);
@@ -1019,7 +1019,7 @@ assert.equal(await evaluate("Boolean(document.querySelector('[data-action=\"cast
 assert.equal(await evaluate("document.querySelectorAll('.observation-preview').length"), 1);
 assert.match(await evaluate("document.querySelector('.fishing-setup-modal').innerText"), /釣點與裝備[\s\S]*風棲淺灘[\s\S]*稜光珊瑚庭[\s\S]*暖流藍渠/);
 assert.match(await evaluate("document.querySelector('.observation-preview').innerText"), /特殊觀察點 · 0 \/ 2[\s\S]*不需快速點擊/);
-assert.match(await evaluate("document.querySelector('.research-card').innerText"), /琉光群島研究主路[\s\S]*0 \/ 15[\s\S]*風在港口停了一會兒/);
+assert.match(await evaluate("document.querySelector('.research-card').innerText"), /琉光群島研究主路[\s\S]*0 \/ 33[\s\S]*風在港口停了一會兒/);
 assert.equal(await evaluate("document.querySelector('#app').dataset.region"), "luminous_archipelago");
 await click('[data-action="close-modal"]');
 
@@ -1032,9 +1032,8 @@ await click('[data-action="close-modal"]');
 
 await click('[data-view="journal"]');
 await click('[data-action="journal-filter"][data-id="luminous_archipelago"]');
-await click('[data-action="select-fish"][data-id="parrotfish"]');
-assert.match(await evaluate("document.querySelector('.fish-detail').innerText"), /鸚哥魚[\s\S]*眠潮灣印章[\s\S]*琉光群島尚未記錄/);
-assert.equal(await evaluate("document.querySelector('[data-region-stamp=\"luminous_archipelago\"]').classList.contains('is-earned')"), false);
+assert.equal(await evaluate("document.querySelectorAll('.fish-card').length"), 33);
+assert.equal(await evaluate("document.querySelector('[data-action=\"select-fish\"][data-id=\"parrotfish\"]') === null"), true);
 await click('[data-view="fishing"]');
 await click('[data-action="show-fishing-setup"]');
 await click('[data-action="spot"][data-id="prism_coral_garden"]');
@@ -1062,12 +1061,12 @@ for (let i = 0; i < 180; i++) {
   }
 }
 await evaluate(`window.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:2}))`);
-assert.equal(luminousCaught, true, `cross-region fish can be caught locally: ${exceptions.join(", ")}`);
-assert.match(await evaluate("document.querySelector('.catch-modal').innerText"), /鸚哥魚[\s\S]*琉光群島印章/);
+assert.equal(luminousCaught, true, `exclusive Luminous fish can be caught locally: ${exceptions.join(", ")}`);
+assert.match(await evaluate("document.querySelector('.catch-modal').innerText"), /藍綠光鰓魚[\s\S]*琉光群島印章/);
 await click('[data-action="close-catch"]');
 await click('[data-view="journal"]');
 await click('[data-action="journal-filter"][data-id="luminous_archipelago"]');
-await click('[data-action="select-fish"][data-id="parrotfish"]');
+await click('[data-action="select-fish"][data-id="bluegreen_chromis"]');
 assert.equal(await evaluate("document.querySelector('[data-region-stamp=\"luminous_archipelago\"]').classList.contains('is-earned')"), true);
 
 await click('[data-view="chart"]');
@@ -1248,7 +1247,7 @@ if (process.env.SCREENSHOT) {
 console.log(JSON.stringify({
   title: "ok",
   fishing: "caught",
-  journal: `${Object.keys(saved.discovered).length}/41`,
+  journal: `${Object.keys(saved.discovered).length}/63`,
   sold: saved.totalSold,
   time: saved.timeIndex,
   tutorial: saved.completedTutorial,

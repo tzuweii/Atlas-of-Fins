@@ -79,10 +79,10 @@ test("a conservative normal-play economy reaches 20/50 Tideglow and all Slice E 
 
   const luminousFish = FISH.filter(fish => fish.habitats.some(habitat => habitat.regionId === LUMINOUS_ARCHIPELAGO_ID));
   luminousFish.forEach((fish, index) => catchAndSell(state, fish, LUMINOUS_ARCHIPELAGO_ID, index + 30));
-  assert.equal(state.tideglow.total, 54);
-  assert.equal(state.money, 15_172);
+  assert.equal(state.tideglow.total, 78);
+  assert.equal(state.money, 22_429);
   assert.equal(buyShip(state, "voyager_study", iso(200_000)).ok, true);
-  assert.equal(state.money, 10_972);
+  assert.equal(state.money, 18_229);
   assert.deepEqual(state.ships.ownedShipIds, ["drifting_home", "tidewhisper_residence", "voyager_study"]);
   assert.equal(state.autoFishing.owned, true);
   assert.equal(Object.keys(state.achievements).some(id => state.achievements[id]?.claimed), false);
@@ -98,7 +98,7 @@ test("ship furniture keeps fixed +15/+30 percent prices and the complete catalog
   }
   const catalogTotal = SHIP_FURNITURE.reduce((sum, item) => sum + item.price, 0);
   assert.equal(catalogTotal, 7_970);
-  assert.ok(10_972 >= catalogTotal);
+  assert.ok(18_229 >= catalogTotal);
 });
 
 test("the starter ship can complete every implemented route while later ships only shorten time gently", () => {

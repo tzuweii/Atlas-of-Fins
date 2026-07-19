@@ -154,7 +154,9 @@ export const RARE_FISH_JOURNAL_ENTRIES = Object.freeze([
   { fishId: "mirror_butterflyfish", title: "珊瑚間的小小鏡面", body: ["鏡斑蝴蝶魚在礁影間轉身，金黃身側與墨色圓斑一明一暗。牠沒有映出船的模樣，只把珊瑚庭的光折回水裡。"], closing: "海中的鏡子不保存影像，只把光送回原處。" },
   { fishId: "greater_amberjack", title: "晨光下的琥珀線", body: ["紅甘從深水礁坡靠近，厚實銀身中央穿過一條安靜的琥珀色。牠的力量沒有急著爆發，而是持續牽引，像整片深水都在緩慢移動。"], closing: "真正強健的旅者，很少需要向浪證明自己。" },
   { fishId: "bluespotted_cornetfish", title: "暖流裡的一支長笛", body: ["藍斑煙管魚細長得近乎一條水中的線，尾端絲狀延伸順著暖流擺動。牠靠近時沒有驚動魚群，像一段尚未吹響的旋律穿過藍渠。"], closing: "水流替牠保留了聲音之前的安靜。" },
-  { fishId: "giant_trevally", title: "浪忽然向前一步", body: ["浪人鰺從暖流深處穩穩逼近，短促加速讓船邊的水同時改變方向。牠獨自穿過礁坡與水道，身後沒有隊伍，只有逐漸平復的波紋。"], closing: "有些身影不留下路標，海水本身就是牠的足跡。" }
+  { fishId: "giant_trevally", title: "浪忽然向前一步", body: ["浪人鰺從暖流深處穩穩逼近，短促加速讓船邊的水同時改變方向。牠獨自穿過礁坡與水道，身後沒有隊伍，只有逐漸平復的波紋。"], closing: "有些身影不留下路標，海水本身就是牠的足跡。" },
+  { fishId: "dogtooth_tuna", title: "藍渠深處的銀色力量", body: ["裸狐鰹從暖流深處抬升時，厚實身形幾乎沒有多餘擺動。牠只在轉向的一瞬間拉出一道沉重弧線，讓魚線、船身與整片藍渠一起記住那股力量。"], closing: "真正迅速的身影，總把大部分速度留在看不見的水裡。" },
+  { fishId: "scrawled_filefish", title: "雨水寫過的魚身", body: ["長尾革單棘魨穿過珊瑚庭外的雨幕，青灰魚身浮出一行行藍色曲線。那些紋路不像地圖指向某處，更像海在牠身上留下還沒說完的筆記。"], closing: "雨停之後，潮水仍把那一頁緩慢帶向外海。" }
 ].map((entry, order) => ({
   ...entry,
   id: `journal:fish:${entry.fishId}`,

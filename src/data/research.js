@@ -72,7 +72,7 @@ export const REGION_RESEARCH = {
     description: "這一頁會隨釣魚、換時段與安靜觀察自然亮起，不需選擇研究專案。",
     nodeIds: RESEARCH_NODES.map(node => node.id),
     mainSpeciesGoal: 12,
-    fullSpeciesGoal: 15,
+    fullSpeciesGoal: 33,
     mainReward: {
       id: "luminous_research_book",
       type: "research-keepsake",

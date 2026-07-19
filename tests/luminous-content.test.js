@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  FISH, FISH_ASSET_PURPOSES, LUMINOUS_ARCHIPELAGO_ID, RODS, SLEEPING_TIDE_BAY_ID,
+  FISH, FISH_ASSET_PURPOSES, LUMINOUS_ARCHIPELAGO_FISH_COUNT, LUMINOUS_ARCHIPELAGO_ID, RODS, SLEEPING_TIDE_BAY_ID,
   getFishHabitat, getRegionFish, getRegionFishingSpots, getRegionObservationSpots, resolveFishAsset
 } from "../src/data.js";
 import {
@@ -9,20 +9,22 @@ import {
   fishWeight, generateCatch, getActiveBayEvent, getActiveBayEventState, migrateState, recordCatch
 } from "../src/core.js";
 
-const SHARED_FISH_IDS = ["parrotfish", "surgeonfish", "mahi", "flyingfish"];
-
-test("luminous pool contains eleven sourced new fish and four ecological cross-region fish", () => {
+test("luminous pool contains thirty-three sourced fish assigned only to the archipelago", () => {
   const pool = getRegionFish(FISH, LUMINOUS_ARCHIPELAGO_ID);
-  const original = pool.filter(fish => !getFishHabitat(fish, SLEEPING_TIDE_BAY_ID));
-  const shared = pool.filter(fish => getFishHabitat(fish, SLEEPING_TIDE_BAY_ID));
 
-  assert.equal(pool.length, 15);
-  assert.equal(original.length, 11);
-  assert.deepEqual(shared.map(fish => fish.id).sort(), [...SHARED_FISH_IDS].sort());
-  assert.equal(new Set(pool.map(fish => fish.id)).size, 15);
-  assert.ok(original.every(fish => fish.scientific.split(" ").length === 2));
-  assert.ok(original.every(fish => fish.ecologySource?.label === "FishBase 物種摘要"));
-  assert.ok(original.every(fish => /^https:\/\/www\.fishbase\.se\/summary\//.test(fish.ecologySource?.url)));
+  assert.equal(pool.length, LUMINOUS_ARCHIPELAGO_FISH_COUNT);
+  assert.equal(new Set(pool.map(fish => fish.id)).size, LUMINOUS_ARCHIPELAGO_FISH_COUNT);
+  assert.ok(pool.every(fish => fish.habitats.length === 1 && fish.habitats[0].regionId === LUMINOUS_ARCHIPELAGO_ID));
+  assert.ok(pool.every(fish => !getFishHabitat(fish, SLEEPING_TIDE_BAY_ID)));
+  assert.ok(pool.every(fish => fish.scientific.split(" ").length === 2));
+  assert.ok(pool.every(fish => fish.ecologySource?.label === "FishBase 物種摘要"));
+  assert.ok(pool.every(fish => /^https:\/\/www\.fishbase\.se\/summary\//.test(fish.ecologySource?.url)));
+  assert.ok(pool.every(fish => !Number.isNaN(Date.parse(fish.ecologySource?.checkedAt))));
+  assert.ok(pool.every(fish => fish.ecologySource?.note.length >= 20));
+  assert.deepEqual(Object.fromEntries(["common", "uncommon", "rare"].map(rarity => [
+    rarity, pool.filter(fish => fish.rarity === rarity).length
+  ])), { common: 16, uncommon: 13, rare: 4 });
+  assert.ok(pool.filter(fish => fish.rarity === "rare").every(fish => fish.bodyClass === "large"));
 });
 
 test("every luminous fish has a reachable fishing condition and SVG fallback coverage", () => {
@@ -53,28 +55,25 @@ test("every luminous fish has a reachable fishing condition and SVG fallback cov
   }
 });
 
-test("a shared fish receives its luminous stamp only after a local catch", () => {
+test("sleeping and luminous fish remain isolated while local catches record one regional discovery", () => {
   const state = createInitialState();
-  const fish = FISH.find(entry => entry.id === "parrotfish");
-  const sleepingCatch = generateCatch(fish, {
-    regionId: SLEEPING_TIDE_BAY_ID, spotId: "reef", timeId: "day", weather: "sunny",
-    baitId: "shrimp", rodId: "wood", day: state.day
-  }, state, () => .5);
-  const sleepingResult = recordCatch(state, sleepingCatch);
-  assert.equal(sleepingResult.isNew, true);
-  assert.equal(sleepingResult.isNewRegional, true);
-  assert.equal(state.world.regionProgress[LUMINOUS_ARCHIPELAGO_ID], undefined);
+  const sleepingFish = FISH.find(entry => entry.id === "parrotfish");
+  const luminousFish = FISH.find(entry => entry.id === "convict_surgeonfish");
+  assert.equal(getFishHabitat(sleepingFish, LUMINOUS_ARCHIPELAGO_ID), null);
+  assert.equal(getFishHabitat(luminousFish, SLEEPING_TIDE_BAY_ID), null);
 
   state.world.currentRegionId = LUMINOUS_ARCHIPELAGO_ID;
   state.world.docking = { status: "docked", regionId: LUMINOUS_ARCHIPELAGO_ID };
-  const luminousCatch = generateCatch(fish, {
-    regionId: LUMINOUS_ARCHIPELAGO_ID, spotId: "prism_coral_garden", timeId: "day", weather: "sunny",
+  state.world.regionProgress[LUMINOUS_ARCHIPELAGO_ID] = { discoveredFishIds: [] };
+  const luminousCatch = generateCatch(luminousFish, {
+    regionId: LUMINOUS_ARCHIPELAGO_ID, spotId: "windrest_shallows", timeId: "day", weather: "sunny",
     baitId: "shrimp", rodId: "wood", day: state.day
   }, state, () => .5);
   const luminousResult = recordCatch(state, luminousCatch);
-  assert.equal(luminousResult.isNew, false);
+  assert.equal(luminousResult.isNew, true);
   assert.equal(luminousResult.isNewRegional, true);
-  assert.deepEqual(state.world.regionProgress[LUMINOUS_ARCHIPELAGO_ID].discoveredFishIds, ["parrotfish"]);
+  assert.deepEqual(state.world.regionProgress[LUMINOUS_ARCHIPELAGO_ID].discoveredFishIds, ["convict_surgeonfish"]);
+  assert.equal(state.world.regionProgress[SLEEPING_TIDE_BAY_ID].discoveredFishIds.includes(luminousFish.id), false);
 });
 
 test("regional event state migrates independently for both ports", () => {

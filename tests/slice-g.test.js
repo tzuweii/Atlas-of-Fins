@@ -78,7 +78,7 @@ test("wonders do not alter formal completion and never require a hidden slot", (
   assert.equal(Object.keys(state.observations.wonderRecordsById).length, 1);
 });
 
-test("luminous research completes at twelve species and grants full cosmetics once at fifteen", () => {
+test("luminous research completes its story at twelve species and full collection at thirty-three", () => {
   const state = createInitialState();
   const pool = getRegionFish(FISH, LUMINOUS_ARCHIPELAGO_ID);
   state.world.currentRegionId = LUMINOUS_ARCHIPELAGO_ID;

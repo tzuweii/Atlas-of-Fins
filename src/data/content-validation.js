@@ -1,3 +1,7 @@
+import {
+  FISH_BODY_CLASSES, MINIMUM_BODY_CLASS_BY_RARITY, bodyClassMeetsMinimum
+} from "./fish-body-classes.js";
+
 const COLLECTION_NAMES = [
   "times", "spots", "rods", "baits", "furniture", "fish", "dailyGoals",
   "events", "achievements", "aquariumDecorations", "regions", "routes", "residents", "commissions",
@@ -11,6 +15,7 @@ const SIZE_TARGETS = new Set(["small", "standard", "large", "record"]);
 const ROUTE_DISTANCE_CLASSES = new Set(["short", "medium", "long"]);
 const SPOT_ACTIVITY_TYPES = new Set(["fishing", "observation"]);
 const FISH_BODY_SHAPES = new Set(["slender", "torpedo", "round", "flat", "spiky", "ribbon", "cephalopod", "mahi", "winged", "glow", "box", "needle"]);
+const FISH_BODY_CLASS_IDS = new Set(Object.keys(FISH_BODY_CLASSES));
 const SHIP_INTERIOR_SLOT_TYPES = new Set(["sleep", "wall", "table", "light", "corner"]);
 const isChartPosition = value => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100;
 
@@ -126,8 +131,15 @@ export function validateContentCatalog(content = {}) {
     if (!FISH_BODY_SHAPES.has(fish?.shape)) {
       addError("invalid-shape", "fish", fish?.id, `fish[${fish?.id || "missing-id"}].shape`, `SVG fallback 輪廓「${String(fish?.shape)}」不存在`);
     }
+    if (!FISH_BODY_CLASS_IDS.has(fish?.bodyClass)) {
+      addError("invalid-body-class", "fish", fish?.id, `fish[${fish?.id || "missing-id"}].bodyClass`, `魚類體型「${String(fish?.bodyClass)}」不存在`);
+    }
+    const habitats = asArray(fish?.habitats);
+    if (habitats.length !== 1) {
+      addError("invalid-region-count", "fish", fish?.id, `fish[${fish?.id || "missing-id"}].habitats`, "每種魚必須且只能屬於一片海域");
+    }
     asArray(fish?.regionIds).forEach((id, index) => requireReference("fish", fish, `regionIds[${index}]`, id, ids.regions, "區域"));
-    asArray(fish?.habitats).forEach((habitat, habitatIndex) => {
+    habitats.forEach((habitat, habitatIndex) => {
       requireReference("fish", fish, `habitats[${habitatIndex}].regionId`, habitat?.regionId, ids.regions, "區域");
       asArray(habitat?.spotIds).forEach((id, index) => {
         requireReference("fish", fish, `habitats[${habitatIndex}].spotIds[${index}]`, id, ids.spots, "釣點");
@@ -158,14 +170,21 @@ export function validateContentCatalog(content = {}) {
         }
       });
     });
-    const isLuminousOriginal = asArray(fish?.habitats).some(habitat => habitat?.regionId === "luminous_archipelago")
-      && !asArray(fish?.habitats).some(habitat => habitat?.regionId === "sleeping_tide_bay");
-    if (isLuminousOriginal) {
+    const isLegacySleepingFish = habitats[0]?.regionId === "sleeping_tide_bay";
+    if (!isLegacySleepingFish) {
       if (typeof fish?.scientific !== "string" || !fish.scientific.includes(" ")) {
-        addError("missing-ecology", "fish", fish?.id, `fish[${fish?.id || "missing-id"}].scientific`, "琉光群島新魚需要學名");
+        addError("missing-ecology", "fish", fish?.id, `fish[${fish?.id || "missing-id"}].scientific`, "新海域魚需要學名");
       }
       if (typeof fish?.ecologySource?.label !== "string" || !/^https:\/\//.test(fish?.ecologySource?.url || "")) {
-        addError("missing-ecology", "fish", fish?.id, `fish[${fish?.id || "missing-id"}].ecologySource`, "琉光群島新魚需要可追溯的 HTTPS 生態來源");
+        addError("missing-ecology", "fish", fish?.id, `fish[${fish?.id || "missing-id"}].ecologySource`, "新海域魚需要可追溯的 HTTPS 生態來源");
+      }
+      if (Number.isNaN(Date.parse(fish?.ecologySource?.checkedAt || ""))
+        || typeof fish?.ecologySource?.note !== "string" || !fish.ecologySource.note.trim()) {
+        addError("missing-ecology-audit", "fish", fish?.id, `fish[${fish?.id || "missing-id"}].ecologySource`, "新海域魚需要來源查核日期與遊戲化簡化說明");
+      }
+      const minimumBodyClass = MINIMUM_BODY_CLASS_BY_RARITY[fish?.rarity];
+      if (minimumBodyClass && !bodyClassMeetsMinimum(fish?.bodyClass, minimumBodyClass)) {
+        addError("invalid-rarity-body-class", "fish", fish?.id, `fish[${fish?.id || "missing-id"}].bodyClass`, `${fish.rarity} 魚體型至少必須為 ${minimumBodyClass}`);
       }
     }
   }
@@ -212,6 +231,13 @@ export function validateContentCatalog(content = {}) {
       }
     });
     asArray(region?.residentIds).forEach((id, index) => requireReference("regions", region, `residentIds[${index}]`, id, ids.residents, "居民"));
+    if (region?.status === "available") {
+      const regionFishCount = collections.fish.filter(fish => asArray(fish?.habitats)
+        .some(habitat => habitat?.regionId === region.id)).length;
+      if (regionFishCount < 30 || regionFishCount > 40) {
+        addError("invalid-fish-count", "regions", region?.id, `regions[${region?.id || "missing-id"}].fish`, `已實作海域魚種數必須介於 30～40，目前為 ${regionFishCount}`);
+      }
+    }
   }
   for (const route of collections.routes) {
     requireReference("routes", route, "fromRegionId", route?.fromRegionId, ids.regions, "區域");

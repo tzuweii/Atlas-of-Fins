@@ -18,16 +18,18 @@ const NEW_FISH_IDS = [
   "needlefish", "red_seabream", "malabar_grouper", "mirror_butterflyfish", "greater_amberjack"
 ];
 
-test("catalog preserves the thirty legacy fish and adds eleven distinct island fish", () => {
-  assert.equal(FISH.length, 41);
-  assert.equal(new Set(FISH.map(fish => fish.id)).size, 41);
+test("catalog preserves thirty legacy fish and adds thirty-three distinct island fish", () => {
+  assert.equal(FISH.length, 63);
+  assert.equal(new Set(FISH.map(fish => fish.id)).size, 63);
   assert.deepEqual(Object.fromEntries(Object.entries(RARITY).map(([id, rarity]) => [id, rarity.color])), {
     common: "#686f73",
     uncommon: "#477ca5",
     rare: "#76529b"
   });
   assert.deepEqual(FISH.slice(20, 30).map(fish => fish.id), NEW_FISH_IDS);
-  assert.equal(FISH.slice(30).every(fish => fish.habitats.some(habitat => habitat.regionId === LUMINOUS_ARCHIPELAGO_ID)), true);
+  assert.equal(FISH.slice(30).length, 33);
+  assert.equal(FISH.slice(30).every(fish => fish.habitats.length === 1
+    && fish.habitats[0].regionId === LUMINOUS_ARCHIPELAGO_ID), true);
 });
 
 test("ten new fish have balanced rarity, conditions, and catchable weights", () => {

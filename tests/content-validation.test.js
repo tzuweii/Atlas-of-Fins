@@ -81,18 +81,24 @@ test("future region, route, and resident references use the same validation boun
   assert.ok(report.disabledIds.chartRoutes.includes("missing-path"));
 });
 
-test("luminous fish cannot use observation points or omit ecology and SVG fallback metadata", () => {
+test("new-region fish require one habitat, sourced ecology, valid silhouettes, and rarity body minimums", () => {
   const catalog = currentCatalog();
   const fish = catalog.fish.find(entry => entry.id === "bluegreen_chromis");
   fish.habitats[0].spotIds = ["starlight_observation_cape"];
+  fish.habitats.push(structuredClone(catalog.fish.find(entry => entry.id === "sardine").habitats[0]));
   fish.shape = "missing-shape";
+  fish.rarity = "rare";
+  fish.bodyClass = "small";
   delete fish.ecologySource;
 
   const report = validateContentCatalog(catalog);
   assert.equal(report.ok, false);
   assert.ok(report.errors.some(error => error.code === "invalid-activity" && error.path.includes("bluegreen_chromis")));
   assert.ok(report.errors.some(error => error.code === "invalid-shape" && error.path === "fish[bluegreen_chromis].shape"));
+  assert.ok(report.errors.some(error => error.code === "invalid-region-count" && error.path === "fish[bluegreen_chromis].habitats"));
   assert.ok(report.errors.some(error => error.code === "missing-ecology" && error.path === "fish[bluegreen_chromis].ecologySource"));
+  assert.ok(report.errors.some(error => error.code === "missing-ecology-audit" && error.path === "fish[bluegreen_chromis].ecologySource"));
+  assert.ok(report.errors.some(error => error.code === "invalid-rarity-body-class" && error.path === "fish[bluegreen_chromis].bodyClass"));
 });
 
 test("Tideglow sources require unique event types, positive points, and stable reference keys", () => {

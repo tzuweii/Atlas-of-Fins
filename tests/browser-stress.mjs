@@ -117,8 +117,9 @@ assert.ok(stressedDom.documents <= baselineDom.documents + 1, `documents grew fr
 assert.ok(stressedDom.nodes <= baselineDom.nodes + 300, `DOM nodes grew from ${baselineDom.nodes} to ${stressedDom.nodes}`);
 assert.ok(stressedDom.jsEventListeners <= baselineDom.jsEventListeners + 8, `listeners grew from ${baselineDom.jsEventListeners} to ${stressedDom.jsEventListeners}`);
 assert.ok(heapGrowth <= Math.max(16 * 1024 * 1024, baselineHeap * 0.75), `heap grew by ${heapGrowth} bytes`);
-assert.equal(await evaluate("document.querySelectorAll('.fish-card').length"), 41);
-assert.ok(await evaluate("document.querySelectorAll('svg').length") <= 50);
+assert.equal(await evaluate("document.querySelectorAll('.fish-card').length"), 63);
+const stressedSvgCount = await evaluate("document.querySelectorAll('svg').length");
+assert.ok(stressedSvgCount <= 70, `SVG count grew beyond the 63-fish catalog budget: ${stressedSvgCount}`);
 assert.ok(await evaluate("localStorage.getItem('atlas-of-fins.dev-save').length") < 1_000_000);
 
 await click("#developer-tools-button");
