@@ -45,8 +45,6 @@ export function isProgressConditionAvailable(condition, context = {}) {
       if (!intersects(condition.regionIds, [habitat.regionId])) return false;
       const availableHabitatSpots = habitat.spotIds?.filter(spotId => !Array.isArray(context.availableSpotIds) || context.availableSpotIds.includes(spotId)) || [];
       if (!availableHabitatSpots.length || !intersects(condition.spotIds, availableHabitatSpots)) return false;
-      if (!intersects(condition.timeIds, habitat.timeIds || [])) return false;
-      if (!intersects(condition.weatherIds, habitat.weatherIds || [])) return false;
       return true;
     });
   });

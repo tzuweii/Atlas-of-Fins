@@ -47,7 +47,7 @@ test("Slice F completes luminous fishing content while preserving the Slice E ro
 
 test("fish habitat queries return only the species' single assigned region", () => {
   const fish = FISH[0];
-  assert.equal(getFishHabitat(fish, SLEEPING_TIDE_BAY_ID).baseWeight, 1);
+  assert.equal(getFishHabitat(fish, SLEEPING_TIDE_BAY_ID).spotIds.includes("shore"), true);
   assert.equal(getFishHabitat(fish, LUMINOUS_ARCHIPELAGO_ID), null);
   assert.equal(FISH.every(entry => entry.habitats.length === 1), true);
 });

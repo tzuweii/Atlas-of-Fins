@@ -6,7 +6,7 @@ import {
 } from "../src/data.js";
 import {
   createDeveloperState, createInitialState, developerDockRegion, developerSetRegionEvent,
-  fishWeight, generateCatch, getActiveBayEvent, getActiveBayEventState, migrateState, recordCatch
+  generateCatch, getActiveBayEvent, getActiveBayEventState, getFishAppearanceRate, migrateState, recordCatch
 } from "../src/core.js";
 
 test("luminous pool contains thirty-three sourced fish assigned only to the archipelago", () => {
@@ -42,11 +42,11 @@ test("every luminous fish has a reachable fishing condition and SVG fallback cov
     assert.ok(habitat.spotIds.length > 0);
     assert.ok(habitat.spotIds.every(spotId => fishingSpotIds.has(spotId)));
     assert.ok(habitat.spotIds.every(spotId => !observationSpotIds.has(spotId)));
-    state.timeIndex = ["dawn", "day", "dusk", "night"].indexOf(habitat.timeIds[0]);
-    state.weather = habitat.weatherIds[0];
+    state.timeIndex = ["dawn", "day", "dusk", "night"].indexOf(fish.preferredTimeIds[0] || "dawn");
+    state.weather = fish.preferredWeatherIds[0] || "sunny";
     state.selectedSpot = habitat.spotIds[0];
     state.equippedBait = fish.baits[0];
-    assert.ok(fishWeight(fish, state, habitat.spotIds[0], fish.baits[0]) > 0, fish.id);
+    assert.ok(getFishAppearanceRate(fish, state, habitat.spotIds[0], fish.baits[0]) > 0, fish.id);
     for (const purpose of FISH_ASSET_PURPOSES) {
       const asset = resolveFishAsset(fish, { purpose, variant: "shimmer" });
       assert.equal(asset.source, "svg-fallback");

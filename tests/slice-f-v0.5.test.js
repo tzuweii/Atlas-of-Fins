@@ -29,8 +29,8 @@ function economicCatch(fish, habitat, index) {
     context: {
       regionId: habitat.regionId,
       spotId: habitat.spotIds[0],
-      timeId: habitat.timeIds[0],
-      weather: habitat.weatherIds[0],
+      timeId: fish.preferredTimeIds[0] || "dawn",
+      weather: fish.preferredWeatherIds[0] || "sunny",
       baitId: "bread",
       rodId: "farcast",
       day: 1

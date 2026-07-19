@@ -161,6 +161,13 @@ export function getFishHabitat(fish, regionId) {
   return fish?.habitats?.find(habitat => habitat.regionId === regionId) || null;
 }
 
+export function fishCanAppearAtSpot(fish, regionId, spotId) {
+  const habitat = getFishHabitat(fish, regionId);
+  if (!habitat) return false;
+  if (["common", "uncommon"].includes(fish?.rarity)) return true;
+  return habitat.spotIds.includes(spotId);
+}
+
 export function getRegionFish(fishCatalog, regionId) {
   return fishCatalog.filter(fish => Boolean(getFishHabitat(fish, regionId)));
 }

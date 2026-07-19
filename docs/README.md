@@ -5,6 +5,7 @@
 | 想確認的事情 | 唯一主要文件 |
 |---|---|
 | 遊戲永久玩法與限制 | [GAME_DESIGN.md](GAME_DESIGN.md) |
+| 目前各海域有哪些魚、機率與出現條件 | [FISH_CATALOG.md](FISH_CATALOG.md) |
 | 六海域主線、角色承接與章節日誌 | [MAIN_STORY.md](MAIN_STORY.md) |
 | 如何新增海域或修改共用系統 | [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md) |
 | 現在實作到哪裡、下一個工作包是什麼 | [CURRENT.md](CURRENT.md) |
@@ -15,6 +16,7 @@
 ```text
 docs/
 ├── GAME_DESIGN.md        # 穩定玩法規則
+├── FISH_CATALOG.md       # 目前實裝魚種的閱讀清單
 ├── MAIN_STORY.md         # 單一主線權威
 ├── DEVELOPMENT_GUIDE.md  # 兩種開發工作流
 ├── CURRENT.md            # 簡短、可替換的現況

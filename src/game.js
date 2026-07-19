@@ -85,7 +85,7 @@ let tutorialFocusedStep = null;
 
 const TUTORIAL_COPY = [
   ["先看釣具", "點開甲板釣具台，確認這一竿所在的釣點、魚竿與魚餌。"],
-  ["認識釣具台", "這就是實際使用的甲板釣具台：釣點決定下竿位置，魚竿影響張力與捕獲，魚餌只改變魚種出現權重。確認後按「回到海面」。"],
+  ["認識釣具台", "這就是實際使用的甲板釣具台：釣點決定下竿位置，魚竿影響張力與捕獲，魚餌只改變魚種出現機率。確認後按「回到海面」。"],
   ["拋下第一竿", "按下「拋竿」。教學期間魚餌不會消耗，可以安心練習。"],
   ["等候魚訊", "先不要起竿。觀察魚影、浮標與魚線，等待真正吞餌的驚嘆提示。"],
   ["現在起竿", "浮標下沉、魚線繃直且驚嘆號出現了。教學不會倒數，閱讀完再按「起竿」。"],
@@ -95,7 +95,7 @@ const TUTORIAL_COPY = [
   ["前往魚類圖鑑", "販售完成，漁獲箱已經清空；魚類紀錄仍會永久保留。按下「魚類圖鑑」確認紀錄。"],
   ["魚類圖鑑", "這裡是永久收藏你相遇過每種魚的地方：仍保留剛才售出的魚，連同相遇的地點、時段、天氣與最長／最重的尺寸紀錄都記在卡片裡。看完後，從下方發亮的「海灣商店」繼續。"],
   ["海灣商店", "商店永久提供釣竿、魚餌、船隻與家具，不需要擔心限時商品。"],
-  ["魚餌", "魚餌只調整魚種的出現權重，不改變張力或最後的捕獲成功率。"],
+  ["魚餌", "魚餌只調整魚種的出現機率，不改變張力或最後的捕獲成功率。"],
   ["補給完成", "購買的魚餌會直接加入庫存，船屋則是整理收藏與安排休息的地方。"],
   ["我的船屋", "船屋可以佈置收藏、翻閱日誌，並透過休息切換釣魚時段。"]
 ];
@@ -701,11 +701,14 @@ function renderFishing() {
   const rod = rodById(state.equippedRod), bait = baitById(state.equippedBait);
   const spot = regionSpots.find(item => item.id === state.selectedSpot);
   const hasBait = tutorialActive() || Boolean(state.baitAmounts[state.equippedBait]);
+  const tutorialRetry = tutorialActive() && state.tutorialStep === 5;
   const action = fishing.phase === "idle"
     ? { id: "cast", label: hasBait ? "拋竿" : "魚餌用完了", disabled: !hasBait }
     : ["approaching", "nibbling", "biting"].includes(fishing.phase)
       ? { id: "strike", label: "起竿", disabled: false }
-      : ["failed", "escaped"].includes(fishing.phase)
+      : fishing.phase === "escaped"
+        ? { id: "reset-fishing", label: tutorialRetry ? "再拋一竿" : "返回海面", disabled: false }
+        : ["failed", "departed"].includes(fishing.phase)
         ? { id: "reset-fishing", label: "再拋一竿", disabled: false }
         : null;
   const controls = action
@@ -723,7 +726,7 @@ function showFishingSetup() {
   if (fishing.phase !== "idle" || !isDockedAt(state.world?.currentRegionId)) return;
   const regionSpots = getRegionFishingSpots(state.world.currentRegionId);
   const rod = rodById(state.equippedRod), bait = baitById(state.equippedBait);
-  modalRoot.innerHTML = `<div class="modal-backdrop"><div class="modal fishing-setup-modal"><span class="section-label">甲板釣具台</span><h2>釣點與裝備</h2><p class="modal-copy">魚餌只改變魚影出現權重；釣竿也可能提高捕獲成功率。真正吞餌後再起竿，才會進入張力拼搏。</p>
+  modalRoot.innerHTML = `<div class="modal-backdrop"><div class="modal fishing-setup-modal"><span class="section-label">甲板釣具台</span><h2>釣點與裝備</h2><p class="modal-copy">魚餌只改變魚影出現機率；釣竿也可能提高出現與捕獲成功率。真正吞餌後再起竿，才會進入張力拼搏。</p>
     <span class="section-label">選擇釣點</span><div class="spot-grid">${regionSpots.map(spot => {
       const locked = spot.requires && !state.ownedRods.includes(spot.requires);
       return `<button class="spot-card ${state.selectedSpot === spot.id ? "is-active" : ""}" data-action="spot" data-id="${spot.id}" ${locked ? "disabled" : ""}><span class="spot-icon">${locked ? "⌑" : spot.icon}</span><b>${escapeText(spot.name)}</b><small>${locked ? "需要強化遠投竿" : escapeText(spot.hint)}</small></button>`;
@@ -749,7 +752,7 @@ function renderBayEvent() {
   const firstCompleted = Boolean(state.bayEventHistory?.[event.id]?.completions);
   const reward = complete ? current.rewardLabel : (firstCompleted ? event.repeatReward.label : event.firstReward.label);
   const status = complete ? `已完成 · ${current.rewardLabel}` : `${activeNow ? "目前生效" : `${conditions}生效`} · 獎勵 ${reward}`;
-  return `<aside class="card bay-event-card ${complete ? "is-complete" : ""} ${!complete&&!activeNow ? "is-inactive" : ""}" data-bay-event="${event.id}"><div class="bay-event-heading"><span>${event.icon}</span><div><span class="section-label">${regionById(event.regionId)?.name || "海域"}事件 · 第 ${state.day} 日</span><h3>${event.name}</h3></div></div><p>${event.description}</p><div class="bay-event-effect"><small>魚群變化 · ${conditions}</small><b>${spots || "指定釣點"} · ${targets}權重 ×${event.fishWeightMultiplier}</b></div><div class="bay-event-objective"><div><span>${complete ? "✓ " : ""}${event.objective}</span><b>${progress} / ${event.goal}</b></div><div class="progress-track"><i style="width:${Math.min(100, progress / event.goal * 100)}%"></i></div><p>${getBayEventHint(state)}</p></div><span class="bay-event-status">${status}</span></aside>`;
+  return `<aside class="card bay-event-card ${complete ? "is-complete" : ""} ${!complete&&!activeNow ? "is-inactive" : ""}" data-bay-event="${event.id}"><div class="bay-event-heading"><span>${event.icon}</span><div><span class="section-label">${regionById(event.regionId)?.name || "海域"}事件 · 第 ${state.day} 日</span><h3>${event.name}</h3></div></div><p>${event.description}</p><div class="bay-event-effect"><small>魚群變化 · ${conditions}</small><b>${spots || "指定釣點"} · ${targets}較常靠近</b></div><div class="bay-event-objective"><div><span>${complete ? "✓ " : ""}${event.objective}</span><b>${progress} / ${event.goal}</b></div><div class="progress-track"><i style="width:${Math.min(100, progress / event.goal * 100)}%"></i></div><p>${getBayEventHint(state)}</p></div><span class="bay-event-status">${status}</span></aside>`;
 }
 
 function renderQuests() {
@@ -1063,7 +1066,8 @@ function renderFishingStage() {
     const early = fishing.failureReason === "early";
     return `<div class="fishing-stage is-failed"><div class="fishing-result-fail"><span>⌁</span><h3>${early ? "起竿太早了" : "魚線沒有穩住"}</h3><p>${early ? "剛才只是試探咬餌；等到浮標下沉、魚線繃直與驚嘆提示同時出現。" : "牠掙開魚線，游回海裡了。"}</p></div></div>`;
   }
-  if (fishing.phase === "escaped") return `<div class="fishing-stage is-escaped"><div class="fishing-result-fail is-capture-escape"><span>≈</span><h3>最後一刻逃脫了</h3><p>你已完成拼搏，但這尾魚掙脫了魚鉤。本次捕獲判定已結束，下一竿會重新獨立計算。</p></div></div>`;
+  if (fishing.phase === "escaped") return `<div class="fishing-stage is-escaped"><div class="fishing-result-fail is-capture-escape"><span>≈</span><h3>最後一刻逃脫了</h3><p>你已完成拼搏，但這尾魚掙脫了魚鉤。本次只消耗已投入的魚餌，不會自動再拋一竿。</p></div></div>`;
+  if (fishing.phase === "departed") return `<div class="fishing-stage is-departed"><div class="fishing-result-fail"><span>⌁</span><h3>魚影離開了</h3><p>牠只在魚餌旁試探，沒有真正吞餌。</p></div></div>`;
   if (fishing.phase === "reeling") {
     const rod = rodById(state.equippedRod), config = getTensionConfig(fishing.fish, rod);
     const remaining = Math.ceil((1 - fishing.progress) * 100);
@@ -1095,9 +1099,9 @@ function castLine() {
   if (!canFishHere || fishing.phase !== "idle" || (!teaching && !state.baitAmounts[state.equippedBait])) return;
   if (!teaching) state.baitAmounts[state.equippedBait]--;
   if (teaching) advanceTutorial(2, 3, { persist: false });
-  fishing.phase = "approaching"; fishing.fish = chooseFish(state); fishing.context = currentCatchContext(); fishing.progress = 0; fishing.tension = .36; fishing.danger = 0;
+  fishing.phase = "approaching"; fishing.fish = chooseFish(state, teaching ? () => 0 : Math.random); fishing.context = currentCatchContext(); fishing.progress = 0; fishing.tension = .36; fishing.danger = 0;
   fishing.nibbleIndex = 0;
-  fishing.falseNibbles = ({steady:1,sprint:2,endurance:2,sway:2,rare:3})[fishing.fish.behavior] || 1;
+  fishing.falseNibbles = fishing.fish ? (({steady:1,sprint:2,endurance:2,sway:2,rare:3})[fishing.fish.behavior] || 1) : 2;
   fishing.failureReason = null; fishing.captureChance = null;
   sound.play("cast"); saveGame(); renderFishing(); updateTutorial();
   const bait = baitById(state.equippedBait);
@@ -1133,6 +1137,15 @@ function advanceBiteSequence() {
       updateFishingCuePhase("approaching");
       fishing.timer = setTimeout(advanceBiteSequence, 1500 + Math.random()*1100);
     }, 780);
+    return;
+  }
+  if (!fishing.fish) {
+    fishing.failureReason = "departed";
+    fishing.phase = "departed";
+    sound.play("fail");
+    saveGame();
+    renderFishing();
+    updateTutorial();
     return;
   }
   updateFishingCuePhase("biting");
@@ -1312,14 +1325,16 @@ function recordedConditionNames(record) {
   return `<div class="journal-history"><div><small>曾相遇地點</small><b>${spots.join("、")||"尚未記錄"}</b></div><div><small>曾相遇時段</small><b>${times.join("、")||"尚未記錄"}</b></div><div><small>曾相遇天氣</small><b>${weathers.join("、")||"尚未記錄"}</b></div></div>`;
 }
 function fishDetail(fish,record) {
-  if(!record) return `<aside class="card fish-detail"><div class="fish-detail-hero unknown-hero">${fishArt(fish,true,"normal","silhouette")}</div><h3>尚未相遇</h3><p class="fish-detail-copy">${unknownHint(fish)}。試著改變釣點、時段或魚餌，也許下一竿就會認識牠。</p></aside>`;
+  if(!record) return `<aside class="card fish-detail"><div class="fish-detail-hero unknown-hero">${fishArt(fish,true,"normal","silhouette")}</div><h3>尚未相遇</h3><p class="fish-detail-copy">${unknownHint(fish)}。試著改變釣點或魚餌，也許下一竿就會認識牠。</p></aside>`;
   const full=record.count>=3;
   const familiarity=getFamiliarity(record.count);
   const progress=familiarity.nextCount?`${record.count} / ${familiarity.nextCount}`:"已完成全部熟悉度階段";
   const ecologySource=full&&fish.ecologySource?`<div class="fact-box ecology-source">生態資料：<a href="${fish.ecologySource.url}" target="_blank" rel="noreferrer">${fish.ecologySource.label}</a></div>`:"";
   const encounterLine=state.journal?.fishEncounterLineById?.[fish.id];
   const encounterNote=encounterLine?`<div class="fish-encounter-note"><span>初遇短句</span><p>${escapeText(encounterLine)}</p></div>`:"";
-  return `<aside class="card fish-detail"><div class="fish-detail-hero ${record.caughtShimmer?"has-shimmer":""}">${fishArt(fish,false,record.caughtShimmer?"shimmer":"normal","journal")}</div><h3>${fish.name}</h3><span class="latin">${fish.english} · ${fish.scientific}</span><span class="rarity-pill" style="background:${RARITY[fish.rarity].color}">${RARITY[fish.rarity].name}</span>${record.caughtShimmer?`<span class="shimmer-record">✦ 閃光紀錄 ${record.shimmerCount} 次</span>`:""}${renderRegionStamps(fish)}${encounterNote}<div class="familiarity-summary"><span>${familiarity.name}</span><b>${progress}</b></div><p class="fish-detail-copy">${full?fish.detail:fish.short}</p><div class="detail-stats"><div><small>捕獲次數</small><b>${record.count}</b></div><div><small>最長紀錄</small><b>${record.bestLength} cm</b></div><div><small>最重紀錄</small><b>${record.bestWeight} kg</b></div></div><div class="catch-dates"><span>初次：${formatCatchDate(record.firstCaught)}</span><span>最近：${formatCatchDate(record.lastCaught)}</span></div>${full?`<div class="fact-box">✦ ${fish.fact}</div><div class="fact-box">推薦：${fish.baits.map(id=>baitById(id).name).join("、")} · ${fish.times.map(id=>TIMES.find(t=>t.id===id).name).join("／")}</div>${ecologySource}`:`<div class="fact-box">再捕獲 ${3-record.count} 次，解鎖偏好魚餌、活躍時間與有趣知識。</div>`}${record.count>=5?recordedConditionNames(record):`<div class="fact-box">再捕獲 ${5-record.count} 次，整理完整的相遇地點、時段與天氣紀錄。</div>`}</aside>`;
+  const preferenceTimes=fish.preferredTimeIds.map(id=>TIMES.find(item=>item.id===id)?.name).filter(Boolean).join("／")||"全天皆有機會";
+  const preferenceWeather=fish.preferredWeatherIds.map(id=>({sunny:"晴朗",rain:"細雨"})[id]).filter(Boolean).join("／")||"不限天氣";
+  return `<aside class="card fish-detail"><div class="fish-detail-hero ${record.caughtShimmer?"has-shimmer":""}">${fishArt(fish,false,record.caughtShimmer?"shimmer":"normal","journal")}</div><h3>${fish.name}</h3><span class="latin">${fish.english} · ${fish.scientific}</span><span class="rarity-pill" style="background:${RARITY[fish.rarity].color}">${RARITY[fish.rarity].name}</span>${record.caughtShimmer?`<span class="shimmer-record">✦ 閃光紀錄 ${record.shimmerCount} 次</span>`:""}${renderRegionStamps(fish)}${encounterNote}<div class="familiarity-summary"><span>${familiarity.name}</span><b>${progress}</b></div><p class="fish-detail-copy">${full?fish.detail:fish.short}</p><div class="detail-stats"><div><small>捕獲次數</small><b>${record.count}</b></div><div><small>最長紀錄</small><b>${record.bestLength} cm</b></div><div><small>最重紀錄</small><b>${record.bestWeight} kg</b></div></div><div class="catch-dates"><span>初次：${formatCatchDate(record.firstCaught)}</span><span>最近：${formatCatchDate(record.lastCaught)}</span></div>${full?`<div class="fact-box">✦ ${fish.fact}</div><div class="fact-box">推薦魚餌：${fish.baits.map(id=>baitById(id).name).join("、")} · 偏好：${preferenceTimes}／${preferenceWeather}</div>${ecologySource}`:`<div class="fact-box">再捕獲 ${3-record.count} 次，解鎖偏好魚餌、時段與天氣線索。</div>`}${record.count>=5?recordedConditionNames(record):`<div class="fact-box">再捕獲 ${5-record.count} 次，整理完整的相遇地點、時段與天氣紀錄。</div>`}</aside>`;
 }
 
 function fishArt(fish,silhouette=false,variant="normal",purpose="card") {

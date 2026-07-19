@@ -1,6 +1,7 @@
 import {
   AUTO_FISHING_EQUIPMENT, AUTO_FISHING_POETIC_LINES, AUTO_FISHING_REASON_LABELS,
-  BAITS, FISH, RARITY, getFishHabitat, getRegionFishingSpots, regionById, regionSpotById, shipById
+  BAITS, FISH, FISH_APPEARANCE_BONUSES, RARITY, fishCanAppearAtSpot, getFishHabitat,
+  getRegionFishingSpots, regionById, regionSpotById, shipById
 } from "../data.js";
 
 export const AUTO_FISHING_VERSION = 1;
@@ -124,14 +125,15 @@ export function getAutoFishingFishPool(state, { regionId, spotId, baitId }) {
   if (!bait) return [];
   return FISH.filter(fish => ["common", "uncommon"].includes(fish.rarity)
       && state?.discovered?.[fish.id]
-      && getFishHabitat(fish, regionId)?.spotIds.includes(spotId))
+      && fishCanAppearAtSpot(fish, regionId, spotId))
     .map(fish => {
-      const habitat = getFishHabitat(fish, regionId);
-      let weight = (fish.rarity === "common" ? 10 : 4.2) * Math.max(.1, Number(habitat?.baseWeight) || 1);
-      if (fish.baits.includes(baitId)) weight *= 2.65;
-      if (bait.tags.some(tag => fish.tags.includes(tag) || tag === fish.rarity || tag === spotId)) weight *= 1.45;
-      if ((state.discovered[fish.id]?.count || 0) >= 4) weight *= .86;
-      return { fish, weight };
+      let bonusRatio = 0;
+      if (fish.baits.includes(baitId)) bonusRatio += FISH_APPEARANCE_BONUSES.recommendedBait;
+      if (bait.tags.some(tag => fish.tags.includes(tag) || tag === fish.rarity || tag === spotId)) {
+        bonusRatio += FISH_APPEARANCE_BONUSES.matchingBaitTag;
+      }
+      if (fish.spots.includes(spotId)) bonusRatio += FISH_APPEARANCE_BONUSES.nativeSpot;
+      return { fish, weight: fish.appearanceWeight * (1 + bonusRatio) };
     }).filter(entry => entry.weight > 0);
 }
 

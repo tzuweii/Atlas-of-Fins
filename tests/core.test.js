@@ -1,10 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ACHIEVEMENTS, BAITS, BAY_EVENTS, FISH, FURNITURE, LUMINOUS_ARCHIPELAGO_ID, RARITY, RODS, SLEEPING_TIDE_BAY_ID } from "../src/data.js";
+import { ACHIEVEMENTS, BAITS, BASE_APPEARANCE_BUDGETS, BAY_EVENTS, FISH, FISH_APPEARANCE_BONUSES, FURNITURE, LUMINOUS_ARCHIPELAGO_ID, RARITY, RODS, SLEEPING_TIDE_BAY_ID, fishCanAppearAtSpot } from "../src/data.js";
 import {
   SAVE_VERSION, SHIMMER_CONFIG, advanceTime, applyMilestones, buyBait, buyRod, chooseFish, claimAchievement,
-  createBayEventState, createDeveloperState, createInitialState, equipTitle, evaluateAchievements, fishWeight, generateCatch, getAchievementProgress,
-  getCaptureSuccessRate,
+  createBayEventState, createDeveloperState, createInitialState, equipTitle, evaluateAchievements, generateCatch, getAchievementProgress,
+  getCaptureSuccessRate, getFishAppearanceRate, getFishAppearanceTable, getUnboostedFishAppearanceRate, getUnboostedSingleCastSuccessRate,
   getActiveBayEvent, getAquariumCapacity, getFamiliarity, getScheduledBayEvent, getUnclaimedAchievementCount, migrateState, moveCatchToAquarium,
   recordCatch, removeFishFromAquarium, replaceAquariumFish, rollCaptureSuccess, rollVariant, sellCatches,
   setAquariumDecoration, swapAquariumFish, updateBayEventProgress
@@ -32,14 +32,14 @@ test("catalog preserves thirty legacy fish and adds thirty-three distinct island
     && fish.habitats[0].regionId === LUMINOUS_ARCHIPELAGO_ID), true);
 });
 
-test("ten new fish have balanced rarity, conditions, and catchable weights", () => {
+test("ten new fish have balanced rarity, preferences, and appearance weights", () => {
   const additions = FISH.filter(fish => NEW_FISH_IDS.includes(fish.id));
   assert.equal(additions.filter(fish => fish.rarity === "common").length, 4);
   assert.equal(additions.filter(fish => fish.rarity === "uncommon").length, 4);
   assert.equal(additions.filter(fish => fish.rarity === "rare").length, 2);
   assert.ok(additions.some(fish => fish.shape === "box"));
   assert.ok(additions.some(fish => fish.shape === "needle"));
-  assert.ok(additions.some(fish => fish.weather === "rain"));
+  assert.ok(additions.some(fish => fish.preferredWeatherIds.includes("rain")));
   assert.ok(additions.some(fish => fish.spots.includes("shore")));
   assert.ok(additions.some(fish => fish.spots.includes("reef")));
   assert.ok(additions.some(fish => fish.spots.includes("deep")));
@@ -47,9 +47,9 @@ test("ten new fish have balanced rarity, conditions, and catchable weights", () 
   for (const fish of additions) {
     const state = createInitialState();
     state.bayEvent = null;
-    state.timeIndex = ["dawn", "day", "dusk", "night"].indexOf(fish.times[0]);
-    state.weather = fish.weather === "rain" ? "rain" : "sunny";
-    assert.ok(fishWeight(fish, state, fish.spots[0], fish.baits[0]) > 0, `${fish.name} can enter its intended fish pool`);
+    state.timeIndex = ["dawn", "day", "dusk", "night"].indexOf(fish.preferredTimeIds[0]);
+    state.weather = fish.preferredWeatherIds[0] || "sunny";
+    assert.ok(getFishAppearanceRate(fish, state, fish.spots[0], fish.baits[0]) > 0, `${fish.name} can enter its intended fish pool`);
     assert.ok(fish.short.length >= 20 && fish.detail.length >= 40 && fish.fact.length >= 20, `${fish.name} has complete journal writing`);
   }
 });
@@ -221,9 +221,11 @@ test("silver tide only boosts its target fish at the shore", () => {
   const sardine = FISH.find(fish => fish.id === "sardine");
   const anchovy = FISH.find(fish => fish.id === "anchovy");
   const mackerel = FISH.find(fish => fish.id === "mackerel");
-  assert.equal(fishWeight(sardine, state, "shore", "bread"), fishWeight(sardine, quietState, "shore", "bread") * 4);
-  assert.equal(fishWeight(anchovy, state, "shore", "bread"), fishWeight(anchovy, quietState, "shore", "bread") * 4);
-  assert.equal(fishWeight(mackerel, state, "shore", "bread"), fishWeight(mackerel, quietState, "shore", "bread"));
+  assert.ok(getFishAppearanceRate(sardine, state, "shore", "bread") > getFishAppearanceRate(sardine, quietState, "shore", "bread"));
+  assert.ok(getFishAppearanceRate(anchovy, state, "shore", "bread") > getFishAppearanceRate(anchovy, quietState, "shore", "bread"));
+  const eventMackerel = getFishAppearanceTable(state, "shore", "bread").entries.find(entry => entry.fish.id === mackerel.id);
+  const quietMackerel = getFishAppearanceTable(quietState, "shore", "bread").entries.find(entry => entry.fish.id === mackerel.id);
+  assert.equal(eventMackerel.baseRate, quietMackerel.baseRate, "events never rewrite a fish's published base rate");
 });
 
 test("bay event progress filters catches and grants first and repeat rewards once", () => {
@@ -266,26 +268,26 @@ test("moonlit tide requires night at the reef or deep water", () => {
   const state = createInitialState();
   state.day = 3;
   state.bayEvent = createBayEventState(3);
-  const squid = FISH.find(fish => fish.id === "squid");
+  const cuttlefish = FISH.find(fish => fish.id === "cuttlefish");
   const quietState = { ...state, bayEvent: null };
 
   state.timeIndex = 0;
   quietState.timeIndex = 0;
-  assert.equal(fishWeight(squid, state, "reef", "shrimp"), fishWeight(squid, quietState, "reef", "shrimp"));
+  assert.equal(getFishAppearanceRate(cuttlefish, state, "reef", "shrimp"), getFishAppearanceRate(cuttlefish, quietState, "reef", "shrimp"));
   state.timeIndex = 3;
   quietState.timeIndex = 3;
-  assert.equal(fishWeight(squid, state, "reef", "shrimp"), fishWeight(squid, quietState, "reef", "shrimp") * 3.5);
+  assert.ok(getFishAppearanceRate(cuttlefish, state, "reef", "shrimp") > getFishAppearanceRate(cuttlefish, quietState, "reef", "shrimp"));
 
-  const makeCatch = (spotId, timeId, day = state.day) => generateCatch(
-    squid,
+  const makeCatch = (fishId, spotId, timeId, day = state.day) => generateCatch(
+    FISH.find(fish => fish.id === fishId),
     { spotId, timeId, weather: "sunny", baitId: "shrimp", rodId: "wood", day },
     () => .5
   );
-  assert.equal(recordCatch(state, makeCatch("reef", "dawn")).bayEventUpdate.updated, false);
-  assert.equal(recordCatch(state, makeCatch("shore", "night")).bayEventUpdate.updated, false);
+  assert.equal(recordCatch(state, makeCatch("cuttlefish", "reef", "dawn")).bayEventUpdate.updated, false);
+  assert.equal(recordCatch(state, makeCatch("cuttlefish", "shore", "night")).bayEventUpdate.updated, false);
   assert.equal(state.bayEvent.progress, 0);
-  assert.equal(recordCatch(state, makeCatch("reef", "night")).bayEventUpdate.progress, 1);
-  const completion = recordCatch(state, makeCatch("deep", "night")).bayEventUpdate;
+  assert.equal(recordCatch(state, makeCatch("cuttlefish", "reef", "night")).bayEventUpdate.progress, 1);
+  const completion = recordCatch(state, makeCatch("cutlass", "deep", "night")).bayEventUpdate;
   assert.equal(completion.completed, true);
   assert.equal(completion.reward.value, "月潮聆聽者");
   assert.ok(state.unlockedTitles.includes("月潮聆聽者"));
@@ -294,8 +296,8 @@ test("moonlit tide requires night at the reef or deep water", () => {
   state.day = 9;
   state.bayEvent = createBayEventState(9);
   const moneyBeforeRepeat = state.money;
-  recordCatch(state, makeCatch("reef", "night"));
-  const repeatCompletion = recordCatch(state, makeCatch("deep", "night")).bayEventUpdate;
+  recordCatch(state, makeCatch("cuttlefish", "reef", "night"));
+  const repeatCompletion = recordCatch(state, makeCatch("cutlass", "deep", "night")).bayEventUpdate;
   assert.equal(repeatCompletion.reward.amount, 80);
   assert.equal(state.money, moneyBeforeRepeat + 80);
   assert.equal(state.bayEventHistory.moonlit_tide.completions, 2);
@@ -312,11 +314,14 @@ test("rain drift forces rain and filters reef catches by weather", () => {
 
   state.weather = "sunny";
   quietState.weather = "sunny";
-  assert.equal(fishWeight(blackBream, state, "reef", "shrimp"), fishWeight(blackBream, quietState, "reef", "shrimp"));
+  assert.equal(getFishAppearanceRate(blackBream, state, "reef", "shrimp"), getFishAppearanceRate(blackBream, quietState, "reef", "shrimp"));
   state.weather = "rain";
   quietState.weather = "rain";
-  assert.equal(fishWeight(blackBream, state, "reef", "shrimp"), fishWeight(blackBream, quietState, "reef", "shrimp") * 3.2);
-  assert.equal(fishWeight(wrasse, state, "reef", "shrimp"), fishWeight(wrasse, quietState, "reef", "shrimp"));
+  assert.ok(getFishAppearanceRate(blackBream, state, "reef", "shrimp") > getFishAppearanceRate(blackBream, quietState, "reef", "shrimp"));
+  assert.equal(
+    getFishAppearanceTable(state, "reef", "shrimp").entries.find(entry => entry.fish.id === wrasse.id).baseRate,
+    getFishAppearanceTable(quietState, "reef", "shrimp").entries.find(entry => entry.fish.id === wrasse.id).baseRate
+  );
 
   const makeCatch = (fishId, spotId, weather, day = state.day) => generateCatch(
     FISH.find(fish => fish.id === fishId),
@@ -384,12 +389,12 @@ test("fish pool respects fishing spot", () => {
   const state = createInitialState();
   state.selectedSpot = "shore";
   for (const fish of FISH) {
-    assert.equal(fishWeight(fish, state) > 0, fish.spots.includes("shore"));
+    assert.equal(getFishAppearanceRate(fish, state) > 0, fishCanAppearAtSpot(fish, SLEEPING_TIDE_BAY_ID, "shore"));
   }
-  assert.ok(chooseFish(state, () => .5).spots.includes("shore"));
+  assert.ok(fishCanAppearAtSpot(chooseFish(state, () => .5), SLEEPING_TIDE_BAY_ID, "shore"));
 });
 
-test("manual fishing separates appearance weight from one independent capture roll", () => {
+test("manual fishing separates weighted appearance from one independent capture roll", () => {
   const common = FISH.find(fish => fish.rarity === "common");
   const uncommon = FISH.find(fish => fish.rarity === "uncommon");
   const rare = FISH.find(fish => fish.rarity === "rare");
@@ -397,22 +402,61 @@ test("manual fishing separates appearance weight from one independent capture ro
   const light = RODS.find(rod => rod.id === "light");
   const farcast = RODS.find(rod => rod.id === "farcast");
 
-  assert.equal(getCaptureSuccessRate(common, wood), 0.95);
-  assert.equal(getCaptureSuccessRate(uncommon, light), 0.89);
-  assert.equal(getCaptureSuccessRate(rare, farcast), 0.78);
+  assert.equal(getCaptureSuccessRate(common, wood), 0.9);
+  assert.equal(getCaptureSuccessRate(uncommon, light), 0.74);
+  assert.equal(getCaptureSuccessRate(rare, farcast), 0.68);
   assert.equal(getCaptureSuccessRate(common, farcast), 0.98, "every fish keeps a possible independent escape outcome");
-  assert.deepEqual(rollCaptureSuccess(rare, farcast, () => 0.779), { success: true, chance: 0.78 });
-  assert.deepEqual(rollCaptureSuccess(rare, farcast, () => 0.78), { success: false, chance: 0.78 });
+  assert.deepEqual(rollCaptureSuccess(rare, farcast, () => 0.679), { success: true, chance: 0.68 });
+  assert.deepEqual(rollCaptureSuccess(rare, farcast, () => 0.68), { success: false, chance: 0.68 });
 
   const state = createInitialState();
   const rareFish = FISH.find(fish => fish.rarity === "rare" && fish.spots.includes("deep"));
   state.selectedSpot = "deep";
   state.equippedBait = rareFish.baits[0];
   state.equippedRod = "wood";
-  const woodWeight = fishWeight(rareFish, state);
+  const woodRate = getFishAppearanceRate(rareFish, state);
   state.equippedRod = "farcast";
-  assert.equal(fishWeight(rareFish, state), woodWeight * (1 + farcast.appearanceBonus));
+  assert.ok(getFishAppearanceRate(rareFish, state) > woodRate);
+  assert.equal(
+    getUnboostedSingleCastSuccessRate(rareFish, SLEEPING_TIDE_BAY_ID, "deep"),
+    getUnboostedFishAppearanceRate(rareFish, SLEEPING_TIDE_BAY_ID, "deep") * RARITY.rare.catchRate
+  );
   assert.equal("catchBonus" in BAITS[0], false, "bait never changes capture success");
+});
+
+test("fixed pool budgets keep a four-percent no-bite outcome through positive bonuses", () => {
+  const state = createInitialState();
+  state.bayEvent = null;
+  state.selectedSpot = "shore";
+  state.equippedRod = "wood";
+  state.equippedBait = "bread";
+  state.timeIndex = 2;
+  state.weather = "rain";
+  const table = getFishAppearanceTable(state);
+  assert.equal(Math.round(table.baseTotal * 100), 96);
+  assert.equal(Math.round(table.noBiteRate * 100), 4);
+  assert.equal(table.baseBudgets.noBite, BASE_APPEARANCE_BUDGETS.noBite);
+  assert.equal(chooseFish(state, () => 1), null, "the unallocated part of one cast is a real no-bite result");
+});
+
+test("time and weather preferences are small bonuses rather than eligibility gates or penalties", () => {
+  const fish = FISH.find(entry => entry.id === "mullet");
+  const state = createInitialState();
+  state.bayEvent = null;
+  state.selectedSpot = "shore";
+  state.equippedRod = "wood";
+  state.equippedBait = "worm";
+  state.timeIndex = 3;
+  state.weather = "rain";
+  const neutral = getFishAppearanceRate(fish, state);
+  state.timeIndex = 1;
+  const preferredTime = getFishAppearanceRate(fish, state);
+  state.weather = "sunny";
+  const preferredBoth = getFishAppearanceRate(fish, state);
+  assert.ok(preferredTime > neutral);
+  assert.ok(preferredBoth > preferredTime);
+  assert.equal(FISH_APPEARANCE_BONUSES.preferredTime, .05);
+  assert.equal(FISH_APPEARANCE_BONUSES.preferredWeather, .05);
 });
 
 test("catch price uses size and rarity and records discoveries", () => {

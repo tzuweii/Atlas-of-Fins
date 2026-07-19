@@ -100,8 +100,8 @@ await wait(350);
 await waitFor(`document.readyState === "complete"`);
 await evaluate(`localStorage.clear()`);
 assert.equal(await evaluate("document.title"), "Atlas of Fins｜鰭之圖鑑");
-assert.equal(await evaluate("document.querySelector('#app').dataset.uiRevision"), "20260719-tutorial-clean-progress");
-assert.equal(await evaluate("document.querySelector('script[type=\"module\"]').src.endsWith('src/game.js?rev=20260719-tutorial-clean-progress')"), true);
+assert.equal(await evaluate("document.querySelector('#app').dataset.uiRevision"), "20260720-escape-return");
+assert.equal(await evaluate("document.querySelector('script[type=\"module\"]').src.endsWith('src/game.js?rev=20260720-escape-return')"), true);
 
 await click("#title-settings-button");
 assert.match(await evaluate("document.querySelector('.settings-modal').innerText"), /聲音與顯示[\s\S]*文字大小[\s\S]*介面縮放/);
@@ -741,6 +741,13 @@ await click('[data-view="fishing"]');
 assert.equal(await evaluate("document.querySelector('#tutorial').classList.contains('is-hidden')"), true);
 assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).tutorialStep`), 14);
 
+await evaluate(`Math.random = () => 1`);
+await click('[data-action="cast"]');
+await waitFor(`Boolean(document.querySelector('.fishing-stage.is-departed'))`, 16000);
+assert.match(await evaluate("document.querySelector('.fishing-result-fail').innerText"), /魚影離開了[\s\S]*沒有真正吞餌/);
+assert.equal(await evaluate("document.querySelector('[data-action=\\\"reset-fishing\\\"]').innerText.includes('再拋一竿')"), true);
+await click('[data-action="reset-fishing"]');
+
 await evaluate(`Math.random = () => 0`);
 assert.equal(await evaluate("document.querySelector('.fishing-water-hitbox') === null"), true);
 assert.equal(await evaluate("document.querySelectorAll('[data-action=\"cast\"]').length"), 1);
@@ -757,6 +764,21 @@ assert.equal(await evaluate("document.querySelector('.fishing-result-fail') === 
 await click('[data-action="strike"]');
 assert.match(await evaluate("document.querySelector('.fishing-result-fail').innerText"), /起竿太早了[\s\S]*只是試探咬餌/);
 await click('[data-action="reset-fishing"]');
+const baitBeforeNormalEscape = await evaluate(`(() => { const save=JSON.parse(localStorage.getItem('atlas-of-fins.save')); return save.baitAmounts[save.equippedBait]; })()`);
+await evaluate(`Math.random = () => 0`);
+await click('[data-action="cast"]');
+await waitFor(`document.querySelector('#game-shell').dataset.fishingPhase === 'biting'`, 16000);
+await click('[data-action="strike"]');
+await waitFor(`Boolean(document.querySelector('#reel-button'))`);
+await evaluate(`Math.random = () => 1`);
+assert.equal(await playTutorialTension(14), "escaped", "normal capture escape ends this cast");
+assert.match(await evaluate("document.querySelector('.fishing-result-fail').innerText"), /只消耗已投入的魚餌[\s\S]*不會自動再拋一竿/);
+assert.equal(await evaluate("document.querySelector('[data-action=\\\"reset-fishing\\\"]').innerText.includes('返回海面')"), true);
+assert.equal(await evaluate(`(() => { const save=JSON.parse(localStorage.getItem('atlas-of-fins.save')); return save.baitAmounts[save.equippedBait]; })()`), baitBeforeNormalEscape - 1);
+await click('[data-action="reset-fishing"]');
+assert.equal(await evaluate("document.querySelector('#game-shell').dataset.fishingPhase"), "idle");
+assert.equal(await evaluate("document.querySelectorAll('[data-action=\\\"cast\\\"]').length"), 1);
+await evaluate(`Math.random = () => 0`);
 const deliberateWaitStarted = Date.now();
 await click('[data-action="cast"]');
 assert.equal(await evaluate("document.querySelector('.bite-callout') === null"), true);

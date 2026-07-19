@@ -1,6 +1,10 @@
 import {
   FISH_BODY_CLASSES, MINIMUM_BODY_CLASS_BY_RARITY, bodyClassMeetsMinimum
 } from "./fish-body-classes.js";
+import {
+  FISH_APPEARANCE_WEIGHT_RANGE, HIGH_TIER_RARITIES, MAX_APPEARANCE_WEIGHT_RATIO,
+  MAX_RARITY_FISH_PER_SPOT, appearanceWeightIsValid
+} from "./fish-probabilities.js";
 
 const COLLECTION_NAMES = [
   "times", "spots", "rods", "baits", "furniture", "fish", "dailyGoals",
@@ -31,6 +35,26 @@ export function validateContentCatalog(content = {}) {
     const safeItemId = itemId || "(missing-id)";
     errors.push({ code, collection, itemId: safeItemId, path, message });
     disabled[collection]?.add(safeItemId);
+  };
+
+  const validateWeightPool = (pool, collection, itemId, path) => {
+    if (pool.length < 2) return;
+    const weights = pool.map(fish => Number(fish?.appearanceWeight)).filter(Number.isFinite);
+    if (weights.length !== pool.length) return;
+    const minimum = Math.min(...weights);
+    const maximum = Math.max(...weights);
+    if (new Set(weights).size === 1) {
+      addError("uniform-appearance-weights", collection, itemId, path, "同稀有度魚池不可全部使用相同權重");
+    }
+    if (minimum > 0 && maximum / minimum > MAX_APPEARANCE_WEIGHT_RATIO + Number.EPSILON * 16) {
+      addError(
+        "appearance-weight-ratio-exceeded",
+        collection,
+        itemId,
+        path,
+        `同稀有度魚池最高／最低權重比 ${(maximum / minimum).toFixed(2)} 超過 ${MAX_APPEARANCE_WEIGHT_RATIO.toFixed(1)} 倍`
+      );
+    }
   };
 
   for (const [collection, entries] of Object.entries(collections)) {
@@ -120,13 +144,44 @@ export function validateContentCatalog(content = {}) {
 
   for (const fish of collections.fish) {
     asArray(fish?.spots).forEach((id, index) => requireReference("fish", fish, `spots[${index}]`, id, ids.spots, "釣點"));
-    asArray(fish?.times).forEach((id, index) => requireReference("fish", fish, `times[${index}]`, id, ids.times, "時段"));
     asArray(fish?.baits).forEach((id, index) => requireReference("fish", fish, `baits[${index}]`, id, ids.baits, "魚餌"));
     if (!rarityIds.has(fish?.rarity)) {
       addError("missing-reference", "fish", fish?.id, `fish[${fish?.id || "missing-id"}].rarity`, `引用的稀有度 ID「${String(fish?.rarity)}」不存在`);
     }
-    if (fish?.weather !== "any" && !WEATHER_IDS.has(fish?.weather)) {
-      addError("missing-reference", "fish", fish?.id, `fish[${fish?.id || "missing-id"}].weather`, `引用的天氣 ID「${String(fish?.weather)}」不存在`);
+    asArray(fish?.preferredTimeIds).forEach((id, index) => requireReference("fish", fish, `preferredTimeIds[${index}]`, id, ids.times, "時段"));
+    asArray(fish?.preferredWeatherIds).forEach((id, index) => {
+      if (!WEATHER_IDS.has(id)) {
+        addError("missing-reference", "fish", fish?.id, `fish[${fish?.id || "missing-id"}].preferredWeatherIds[${index}]`, `引用的天氣 ID「${String(id)}」不存在`);
+      }
+    });
+    for (const deprecatedKey of ["times", "weather"]) {
+      if (Object.hasOwn(fish || {}, deprecatedKey)) {
+        addError(
+          "deprecated-fish-pool-field",
+          "fish",
+          fish?.id,
+          `fish[${fish?.id || "missing-id"}].${deprecatedKey}`,
+          `魚類時段與天氣只能使用偏好欄位，不可再使用「${deprecatedKey}」`
+        );
+      }
+    }
+    if (!appearanceWeightIsValid(fish?.appearanceWeight)) {
+      addError(
+        "invalid-appearance-weight",
+        "fish",
+        fish?.id,
+        `fish[${fish?.id || "missing-id"}].appearanceWeight`,
+        `魚種權重 ${String(fish?.appearanceWeight)} 必須在 ${FISH_APPEARANCE_WEIGHT_RANGE.min}～${FISH_APPEARANCE_WEIGHT_RANGE.max} 之間`
+      );
+    }
+    if (Object.hasOwn(fish || {}, "baseAppearanceRate")) {
+      addError(
+        "deprecated-fish-pool-field",
+        "fish",
+        fish?.id,
+        `fish[${fish?.id || "missing-id"}].baseAppearanceRate`,
+        "魚種不再保存絕對基礎出現率，請使用 appearanceWeight"
+      );
     }
     if (!FISH_BODY_SHAPES.has(fish?.shape)) {
       addError("invalid-shape", "fish", fish?.id, `fish[${fish?.id || "missing-id"}].shape`, `SVG fallback 輪廓「${String(fish?.shape)}」不存在`);
@@ -163,13 +218,23 @@ export function validateContentCatalog(content = {}) {
           );
         }
       });
-      asArray(habitat?.timeIds).forEach((id, index) => requireReference("fish", fish, `habitats[${habitatIndex}].timeIds[${index}]`, id, ids.times, "時段"));
-      asArray(habitat?.weatherIds).forEach((id, index) => {
-        if (!WEATHER_IDS.has(id)) {
-          addError("missing-reference", "fish", fish?.id, `fish[${fish?.id || "missing-id"}].habitats[${habitatIndex}].weatherIds[${index}]`, `引用的天氣 ID「${String(id)}」不存在`);
+      for (const deprecatedKey of ["timeIds", "weatherIds", "baseWeight"]) {
+        if (Object.hasOwn(habitat || {}, deprecatedKey)) {
+          addError(
+            "deprecated-fish-pool-field",
+            "fish",
+            fish?.id,
+            `fish[${fish?.id || "missing-id"}].habitats[${habitatIndex}].${deprecatedKey}`,
+            `魚池只綁定釣點，不可再使用「${deprecatedKey}」`
+          );
         }
-      });
+      }
     });
+    const habitatSpots = [...new Set(asArray(habitats[0]?.spotIds))].sort();
+    const listedSpots = [...new Set(asArray(fish?.spots))].sort();
+    if (JSON.stringify(habitatSpots) !== JSON.stringify(listedSpots)) {
+      addError("fish-pool-mismatch", "fish", fish?.id, `fish[${fish?.id || "missing-id"}].spots`, "魚類釣點清單必須與唯一海域 habitat 的釣點完全一致");
+    }
     const isLegacySleepingFish = habitats[0]?.regionId === "sleeping_tide_bay";
     if (!isLegacySleepingFish) {
       if (typeof fish?.scientific !== "string" || !fish.scientific.includes(" ")) {
@@ -189,6 +254,47 @@ export function validateContentCatalog(content = {}) {
     }
   }
 
+  for (const spot of collections.spots.filter(entry => (entry?.activityType || "fishing") === "fishing")) {
+    const pool = collections.fish.filter(fish => asArray(fish?.habitats).some(habitat =>
+      habitat?.regionId === spot.regionId
+        && (["common", "uncommon"].includes(fish?.rarity) || asArray(habitat?.spotIds).includes(spot.id))));
+    const highTierPool = pool.filter(fish => HIGH_TIER_RARITIES.includes(fish?.rarity));
+    if (!highTierPool.length) {
+      addError(
+        "missing-high-tier-fish",
+        "spots",
+        spot.id,
+        `spots[${spot.id}].highTierPool`,
+        "每個釣點至少需要一種稀有以上魚，才能完整分配固定高階預算"
+      );
+    }
+    for (const [rarity, maximum] of Object.entries(MAX_RARITY_FISH_PER_SPOT)) {
+      const count = pool.filter(fish => fish?.rarity === rarity).length;
+      if (count > maximum) {
+        addError(
+          "rarity-budget-exceeded",
+          "spots",
+          spot.id,
+          `spots[${spot.id}].rarity.${rarity}`,
+          `${rarity} 魚共 ${count} 種，超過單一釣點上限 ${maximum} 種`
+        );
+      }
+      validateWeightPool(pool.filter(fish => fish?.rarity === rarity), "spots", spot.id, `spots[${spot.id}].rarity.${rarity}.appearanceWeights`);
+    }
+  }
+
+  for (const region of collections.regions) {
+    const regionFish = collections.fish.filter(fish => asArray(fish?.habitats).some(habitat => habitat?.regionId === region.id));
+    for (const rarity of ["common", "uncommon"]) {
+      validateWeightPool(
+        regionFish.filter(fish => fish?.rarity === rarity),
+        "regions",
+        region.id,
+        `regions[${region.id}].rarity.${rarity}.appearanceWeights`
+      );
+    }
+  }
+
   for (const event of collections.events) {
     if (event?.regionId) requireReference("events", event, "regionId", event.regionId, ids.regions, "區域");
     asArray(event?.fishIds).forEach((id, index) => requireReference("events", event, `fishIds[${index}]`, id, ids.fish, "魚種"));
@@ -199,6 +305,21 @@ export function validateContentCatalog(content = {}) {
     });
     if (event?.forceWeather && !WEATHER_IDS.has(event.forceWeather)) {
       addError("missing-reference", "events", event?.id, `events[${event?.id || "missing-id"}].forceWeather`, `引用的天氣 ID「${String(event.forceWeather)}」不存在`);
+    }
+    if (!(Number(event?.fishAppearanceMultiplier) > 1)) {
+      addError("invalid-appearance-bonus", "events", event?.id, `events[${event?.id || "missing-id"}].fishAppearanceMultiplier`, "海域事件的目標魚出現倍率必須大於 1");
+    }
+    for (const fishId of asArray(event?.fishIds)) {
+      const fish = collections.fish.find(entry => entry.id === fishId);
+      if (!fish) continue;
+      const reachable = asArray(fish.habitats).some(habitat => habitat?.regionId === event.regionId
+        && (["common", "uncommon"].includes(fish?.rarity)
+          ? asArray(event?.spotIds).some(spotId => collections.spots.some(spot => spot.id === spotId
+            && spot.regionId === event.regionId && (spot.activityType || "fishing") === "fishing"))
+          : asArray(habitat?.spotIds).some(spotId => asArray(event?.spotIds).includes(spotId))));
+      if (!reachable) {
+        addError("unreachable-event-fish", "events", event?.id, `events[${event?.id || "missing-id"}].fishIds`, `目標魚「${fishId}」不會出現在事件指定釣點`);
+      }
     }
   }
 

@@ -101,6 +101,38 @@ test("new-region fish require one habitat, sourced ecology, valid silhouettes, a
   assert.ok(report.errors.some(error => error.code === "invalid-rarity-body-class" && error.path === "fish[bluegreen_chromis].bodyClass"));
 });
 
+test("fish probability validation enforces relative weights and a high-tier fish at every spot", () => {
+  const catalog = currentCatalog();
+  const sardine = catalog.fish.find(fish => fish.id === "sardine");
+  sardine.baseAppearanceRate = .2;
+  sardine.habitats[0].timeIds = ["dawn"];
+  const flyingfish = catalog.fish.find(fish => fish.id === "flyingfish");
+  flyingfish.spots = ["deep"];
+  flyingfish.habitats[0].spotIds = ["deep"];
+  for (const fish of catalog.fish.filter(entry => entry.habitats[0].regionId === "sleeping_tide_bay" && entry.rarity === "common")) {
+    fish.appearanceWeight = 100;
+  }
+  for (const fish of catalog.fish.filter(entry => entry.habitats[0].regionId === "sleeping_tide_bay" && entry.rarity === "uncommon")) {
+    fish.appearanceWeight = 100;
+  }
+  sardine.appearanceWeight = 121;
+
+  const report = validateContentCatalog(catalog);
+  assert.ok(report.errors.some(error => error.code === "invalid-appearance-weight" && error.itemId === "sardine"));
+  assert.ok(report.errors.some(error => error.code === "deprecated-fish-pool-field" && error.itemId === "sardine"));
+  assert.ok(report.errors.some(error => error.code === "missing-high-tier-fish" && error.itemId === "shore"));
+  assert.ok(report.errors.some(error => error.code === "uniform-appearance-weights" && error.itemId === "sleeping_tide_bay"));
+});
+
+test("regional event targets must use the appearance bonus contract and a reachable event spot", () => {
+  const catalog = currentCatalog();
+  catalog.events[0].fishAppearanceMultiplier = 1;
+  catalog.events[0].fishIds = ["dogtooth_tuna"];
+  const report = validateContentCatalog(catalog);
+  assert.ok(report.errors.some(error => error.code === "invalid-appearance-bonus"));
+  assert.ok(report.errors.some(error => error.code === "unreachable-event-fish"));
+});
+
 test("Tideglow sources require unique event types, positive points, and stable reference keys", () => {
   const catalog = currentCatalog();
   catalog.tideglowSources[1].eventType = catalog.tideglowSources[0].eventType;

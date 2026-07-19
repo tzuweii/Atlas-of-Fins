@@ -94,7 +94,7 @@ test("luminous research completes its story at twelve species and full collectio
   };
   for (const fish of pool.slice(0, 12)) {
     const habitat = getFishHabitat(fish, LUMINOUS_ARCHIPELAGO_ID);
-    state.discovered[fish.id] = { count: 1, spots: [...habitat.spotIds], times: [...habitat.timeIds] };
+    state.discovered[fish.id] = { count: 1, spots: [...habitat.spotIds], times: [...fish.preferredTimeIds] };
   }
 
   const main = evaluateResearchProgress(state, LUMINOUS_ARCHIPELAGO_ID);
@@ -106,7 +106,7 @@ test("luminous research completes its story at twelve species and full collectio
   for (const fish of pool.slice(12)) {
     const habitat = getFishHabitat(fish, LUMINOUS_ARCHIPELAGO_ID);
     state.world.regionProgress[LUMINOUS_ARCHIPELAGO_ID].discoveredFishIds.push(fish.id);
-    state.discovered[fish.id] = { count: 1, spots: [...habitat.spotIds], times: [...habitat.timeIds] };
+    state.discovered[fish.id] = { count: 1, spots: [...habitat.spotIds], times: [...fish.preferredTimeIds] };
   }
   const full = evaluateResearchProgress(state, LUMINOUS_ARCHIPELAGO_ID);
   assert.deepEqual(full.rewards.map(reward => reward.id), ["luminous_region_badge", "luminous_sail_pattern"]);

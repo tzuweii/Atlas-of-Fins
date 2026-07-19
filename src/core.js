@@ -1,8 +1,10 @@
 import {
   ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, AQUARIUM_DECORATIONS, AUTO_FISHING_EQUIPMENT, BAITS, BAY_EVENTS,
-  CHENGYE_ID, DAILY_GOAL_TEMPLATES, FISH, FURNITURE, LUMINOUS_ARCHIPELAGO_ID, MILESTONES, RARITY,
+  BASE_APPEARANCE_BUDGETS, CHENGYE_ID, DAILY_GOAL_TEMPLATES, FISH, FISH_APPEARANCE_BONUSES,
+  FISH_RARITY_ORDER, FURNITURE, HIGH_TIER_RARITIES, LUMINOUS_ARCHIPELAGO_ID, MILESTONES, RARITY,
   REGIONS, RODS, ROUTES, SHIPS, SHIP_FURNITURE, SLEEPING_TIDE_BAY_ID, SPOTS, TIDEGLOW_SOURCES, TIMES,
-  getFishHabitat, getRegionFishingSpots, isRegionAvailable, shipFurnitureById as findShipFurnitureById
+  cascadeHighTierSplit, fishCanAppearAtSpot, getFishHabitat, getRegionFishingSpots,
+  isRegionAvailable, shipFurnitureById as findShipFurnitureById
 } from "./data.js";
 import {
   BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, DEV_TEMP_SAVE_KEY, SAVE_KEY, SAVE_VERSION, TEMP_SAVE_KEY
@@ -431,8 +433,8 @@ export function createDeveloperState() {
     caughtAt,
     context: {
       spotId: habitat.spotIds[0],
-      timeId: habitat.timeIds[0],
-      weather: habitat.weatherIds[0],
+      timeId: fish.preferredTimeIds[0] || "dawn",
+      weather: fish.preferredWeatherIds[0] || "sunny",
       baitId: fish.baits[0],
       rodId: "farcast",
       regionId: habitat.regionId,
@@ -467,8 +469,8 @@ export function createDeveloperState() {
     bestLength: fish.maxLength,
     bestWeight: fish.maxWeight,
     spots: [...fish.spots],
-    times: [...fish.times],
-    weathers: fish.weather === "any" ? ["sunny", "rain"] : [fish.weather],
+    times: [...fish.preferredTimeIds],
+    weathers: fish.preferredWeatherIds.length ? [...fish.preferredWeatherIds] : ["sunny", "rain"],
     caughtShimmer: true,
     shimmerCount: 1,
     shimmerPity: 0
@@ -860,41 +862,114 @@ export function isUnlocked(item, state) {
   return discoveredCount(state) >= item.unlockDiscoveries;
 }
 
-export function fishWeight(fish, state, spotId = state.selectedSpot, baitId = state.equippedBait) {
-  const regionId = state.world?.currentRegionId || SLEEPING_TIDE_BAY_ID;
-  const habitat = getFishHabitat(fish, regionId);
-  if (!habitat?.spotIds.includes(spotId)) return 0;
-  const rod = RODS.find(r => r.id === state.equippedRod) || RODS[0];
-  const bait = BAITS.find(b => b.id === baitId) || BAITS[0];
+function fishAppearanceBonusRatio(fish, state, spotId, baitId) {
+  const bait = BAITS.find(item => item.id === baitId) || BAITS[0];
   const currentTime = TIMES[state.timeIndex]?.id || "dawn";
-  const rarityBase = { common: 10, uncommon: 4.2, rare: 0.85 }[fish.rarity];
-  const habitatWeight = Number.isFinite(Number(habitat.baseWeight))
-    ? Math.max(0, Number(habitat.baseWeight))
-    : 1;
-  let weight = rarityBase * habitatWeight;
-  weight *= habitat.timeIds.includes(currentTime) ? 2.8 : 0.22;
-  if (habitat.weatherIds.length === 1 && habitat.weatherIds.includes(state.weather)) weight *= 2.2;
-  else if (!habitat.weatherIds.includes(state.weather)) weight *= 0.48;
-  if (fish.baits.includes(baitId)) weight *= 2.65;
-  if (bait.tags.some(tag => fish.tags.includes(tag) || tag === fish.rarity || tag === spotId)) weight *= 1.45;
-  if (fish.rarity !== "common") weight *= 1 + Math.max(0, Number(rod.appearanceBonus) || 0);
-  if (state.discovered[fish.id]?.count >= 4) weight *= 0.86;
+  let ratio = 0;
+  if (fish.baits?.includes(baitId)) ratio += FISH_APPEARANCE_BONUSES.recommendedBait;
+  if (bait.tags.some(tag => fish.tags?.includes(tag) || tag === fish.rarity || tag === spotId)) {
+    ratio += FISH_APPEARANCE_BONUSES.matchingBaitTag;
+  }
+  if (["common", "uncommon"].includes(fish.rarity) && fish.spots?.includes(spotId)) {
+    ratio += FISH_APPEARANCE_BONUSES.nativeSpot;
+  }
+  if (fish.preferredTimeIds?.includes(currentTime)) ratio += FISH_APPEARANCE_BONUSES.preferredTime;
+  if (fish.preferredWeatherIds?.includes(state.weather)) ratio += FISH_APPEARANCE_BONUSES.preferredWeather;
   const bayEvent = getActiveBayEvent(state);
   if (bayEvent && isBayEventConditionActive(state, bayEvent) && bayEventSpotIds(bayEvent).includes(spotId) && bayEvent.fishIds.includes(fish.id)) {
-    weight *= bayEvent.fishWeightMultiplier;
+    ratio += Math.max(0, Number(bayEvent.fishAppearanceMultiplier) - 1 || 0);
   }
-  return Math.max(0, weight);
+  return ratio;
+}
+
+function highestHighTierRarity(regionFish) {
+  return [...HIGH_TIER_RARITIES].reverse().find(rarity => regionFish.some(fish => fish.rarity === rarity)) || "rare";
+}
+
+function cascadeHighTierShares(regionFish, spotFish) {
+  return cascadeHighTierSplit(
+    highestHighTierRarity(regionFish),
+    spotFish.filter(fish => HIGH_TIER_RARITIES.includes(fish.rarity)).map(fish => fish.rarity)
+  );
+}
+
+function appearanceBudgets(regionFish, spotFish, rod = RODS[0]) {
+  const requestedHighTierBonus = Math.max(0, Number(rod?.appearanceBonus) || 0);
+  const highTierShift = Math.min(BASE_APPEARANCE_BUDGETS.common,
+    BASE_APPEARANCE_BUDGETS.highTier * requestedHighTierBonus);
+  const highTier = BASE_APPEARANCE_BUDGETS.highTier + highTierShift;
+  const highTierShares = cascadeHighTierShares(regionFish, spotFish);
+  const budgets = {
+    common: BASE_APPEARANCE_BUDGETS.common - highTierShift,
+    uncommon: BASE_APPEARANCE_BUDGETS.uncommon,
+    noBite: BASE_APPEARANCE_BUDGETS.noBite,
+    highTier
+  };
+  for (const rarity of HIGH_TIER_RARITIES) budgets[rarity] = highTier * highTierShares[rarity];
+  return { budgets, highTierShares, highTierShift };
+}
+
+function baseAppearanceBudgets(regionFish, spotFish) {
+  return appearanceBudgets(regionFish, spotFish, RODS[0]);
+}
+
+function appearancePool(regionId, spotId) {
+  const regionFish = FISH.filter(fish => Boolean(getFishHabitat(fish, regionId)));
+  const spotFish = regionFish.filter(fish => fishCanAppearAtSpot(fish, regionId, spotId));
+  return { regionFish, spotFish };
+}
+
+export function getFishAppearanceTable(state, spotId = state.selectedSpot, baitId = state.equippedBait) {
+  const regionId = state.world?.currentRegionId || SLEEPING_TIDE_BAY_ID;
+  const { regionFish, spotFish } = appearancePool(regionId, spotId);
+  const rod = RODS.find(item => item.id === state.equippedRod) || RODS[0];
+  const base = baseAppearanceBudgets(regionFish, spotFish);
+  const adjusted = appearanceBudgets(regionFish, spotFish, rod);
+  const entries = [];
+  for (const rarity of FISH_RARITY_ORDER) {
+    const tierFish = spotFish.filter(fish => fish.rarity === rarity);
+    if (!tierFish.length) continue;
+    const baseWeightTotal = tierFish.reduce((sum, fish) => sum + Math.max(0, Number(fish.appearanceWeight) || 0), 0);
+    const weighted = tierFish.map(fish => {
+      const baseWeight = Math.max(0, Number(fish.appearanceWeight) || 0);
+      const bonusRatio = fishAppearanceBonusRatio(fish, state, spotId, baitId);
+      return { fish, baseWeight, bonusRatio, effectiveWeight: baseWeight * (1 + bonusRatio) };
+    });
+    const effectiveWeightTotal = weighted.reduce((sum, entry) => sum + entry.effectiveWeight, 0);
+    for (const entry of weighted) {
+      const baseRate = baseWeightTotal > 0 ? (base.budgets[rarity] || 0) * entry.baseWeight / baseWeightTotal : 0;
+      const finalRate = effectiveWeightTotal > 0
+        ? (adjusted.budgets[rarity] || 0) * entry.effectiveWeight / effectiveWeightTotal
+        : 0;
+      entries.push({ ...entry, baseRate, finalRate, bonusRate: finalRate - baseRate });
+    }
+  }
+  const baseTotal = entries.reduce((sum, entry) => sum + entry.baseRate, 0);
+  const fishRate = entries.reduce((sum, entry) => sum + entry.finalRate, 0);
+  return {
+    entries,
+    baseTotal,
+    fishRate,
+    noBiteRate: Math.max(0, 1 - fishRate),
+    baseBudgets: base.budgets,
+    budgets: adjusted.budgets,
+    highTierShares: adjusted.highTierShares,
+    highTierShift: adjusted.highTierShift
+  };
+}
+
+export function getFishAppearanceRate(fish, state, spotId = state.selectedSpot, baitId = state.equippedBait) {
+  return getFishAppearanceTable(state, spotId, baitId).entries.find(entry => entry.fish.id === fish?.id)?.finalRate || 0;
 }
 
 export function chooseFish(state, random = Math.random) {
-  const candidates = FISH.map(fish => ({ fish, weight: fishWeight(fish, state) })).filter(entry => entry.weight > 0);
-  const total = candidates.reduce((sum, entry) => sum + entry.weight, 0);
-  let roll = random() * total;
-  for (const entry of candidates) {
-    roll -= entry.weight;
-    if (roll <= 0) return entry.fish;
+  const table = getFishAppearanceTable(state);
+  let roll = Math.max(0, Math.min(1, Number(random()) || 0));
+  for (const entry of table.entries) {
+    roll -= entry.finalRate;
+    if (roll < 0) return entry.fish;
   }
-  return candidates.at(-1)?.fish || FISH[0];
+  return null;
 }
 
 export function getCaptureSuccessRate(fish, rod) {
@@ -902,6 +977,24 @@ export function getCaptureSuccessRate(fish, rod) {
   const catchBonus = Math.max(0, Number(rod?.catchBonus) || 0);
   const rate = Math.max(0, Math.min(0.98, (Number.isFinite(baseRate) ? baseRate : 0) + catchBonus));
   return Math.round(rate * 10000) / 10000;
+}
+
+export function getUnboostedFishAppearanceRate(fish, regionId = null, spotId = null) {
+  const habitat = fish?.habitats?.find(entry => !regionId || entry.regionId === regionId) || fish?.habitats?.[0];
+  const resolvedRegionId = regionId || habitat?.regionId || SLEEPING_TIDE_BAY_ID;
+  const resolvedSpotId = spotId || habitat?.spotIds?.[0];
+  if (!fishCanAppearAtSpot(fish, resolvedRegionId, resolvedSpotId)) return 0;
+  const { regionFish, spotFish } = appearancePool(resolvedRegionId, resolvedSpotId);
+  const base = baseAppearanceBudgets(regionFish, spotFish);
+  const tierFish = spotFish.filter(candidate => candidate.rarity === fish.rarity);
+  const totalWeight = tierFish.reduce((sum, candidate) => sum + Math.max(0, Number(candidate.appearanceWeight) || 0), 0);
+  return totalWeight > 0 ? (base.budgets[fish.rarity] || 0) * Math.max(0, Number(fish.appearanceWeight) || 0) / totalWeight : 0;
+}
+
+export function getUnboostedSingleCastSuccessRate(fish, regionId = null, spotId = null) {
+  const appearanceRate = getUnboostedFishAppearanceRate(fish, regionId, spotId);
+  const captureRate = Math.max(0, Number(RARITY[fish?.rarity]?.catchRate) || 0);
+  return appearanceRate * captureRate;
 }
 
 export function rollCaptureSuccess(fish, rod, random = Math.random) {

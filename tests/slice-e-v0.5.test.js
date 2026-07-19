@@ -98,12 +98,12 @@ test("configuration only offers caught fishing spots at the current dock and sto
   assert.deepEqual(getEligibleAutoFishingSpots(state), []);
 });
 
-test("the fish pool contains only already-discovered common and uncommon local fish", () => {
-  const state = preparedState({ fishIds: ["sardine", "needlefish"] });
+test("the fish pool contains only discovered common and uncommon fish from the current region", () => {
+  const state = preparedState({ fishIds: ["sardine", "threadfin_bream"] });
   const rare = FISH.find(fish => fish.rarity === "rare" && fish.habitats.some(habitat => habitat.regionId === "sleeping_tide_bay"));
   state.discovered[rare.id] = { count: 1, manualCount: 1, autoCount: 0 };
   const pool = getAutoFishingFishPool(state, { regionId: "sleeping_tide_bay", spotId: "shore", baitId: "bread" });
-  assert.deepEqual(new Set(pool.map(entry => entry.fish.id)), new Set(["sardine", "needlefish"]));
+  assert.deepEqual(new Set(pool.map(entry => entry.fish.id)), new Set(["sardine", "threadfin_bream"]));
   assert.ok(pool.every(entry => ["common", "uncommon"].includes(entry.fish.rarity)));
   assert.ok(!pool.some(entry => entry.fish.id === rare.id));
   assert.ok(!pool.some(entry => entry.fish.id === "mackerel"));
