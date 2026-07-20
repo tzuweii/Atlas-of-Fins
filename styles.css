@@ -296,7 +296,7 @@ body{touch-action:manipulation}
 .content-panel.is-feature-view{inset:66px 0 0;padding:28px max(28px,calc((100% - 1180px)/2)) 110px;overflow-y:auto;overscroll-behavior:contain;background:linear-gradient(180deg,#f7f4eb,#f2f0e8);pointer-events:auto;scrollbar-gutter:stable}
 /* 我的船屋: a fixed, full-screen cabin stage — no scrolling; extra info lives in the side dock and popups. */
 .content-panel.is-feature-view.is-home-view{padding:0;overflow:hidden}
-.home-stage{box-sizing:border-box;height:100%;display:grid;grid-template-columns:minmax(0,1fr) minmax(288px,344px);gap:18px;padding:22px max(22px,calc((100% - 1180px)/2)) 96px;max-width:1180px;margin:0 auto}
+.home-stage{box-sizing:border-box;height:100%;display:grid;grid-template-columns:minmax(0,1fr) minmax(288px,344px);grid-template-rows:1fr;gap:18px;padding:22px max(22px,calc((100% - 1180px)/2)) 96px}
 .home-stage .cabin-view{height:100%;min-height:0;margin:0}
 .home-dock{display:flex;flex-direction:column;gap:12px;min-height:0;overflow:hidden}
 .home-dock-head{padding:14px 16px;border:1px solid var(--line);border-radius:16px;background:#fbf6ea;box-shadow:var(--shadow)}
