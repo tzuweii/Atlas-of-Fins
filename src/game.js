@@ -481,6 +481,7 @@ function syncWorld() {
   $("#weather-icon").textContent = state.weather === "rain" ? "☂" : "☀";
   $("#weather-label").textContent = state.weather === "rain" ? "細雨" : "晴朗";
   $("#money-label").textContent = state.money.toLocaleString("zh-TW");
+  $(".tideglow-chip").hidden = !state.tideglow?.enabled;
   $("#tideglow-label").textContent = (state.tideglow?.total || 0).toLocaleString("zh-TW");
   const unclaimed=getUnclaimedAchievementCount(state);
   $("#journal-badge").textContent = `${discoveredCount(state)}/${FISH.length}${unclaimed?` · ${unclaimed}`:""}`;
@@ -1680,9 +1681,21 @@ function notifyTideglow(events = []) {
     const result = event?.results?.tideglow;
     return sum + (result?.awarded ? Number(result.points) || 0 : 0);
   }, 0);
-  if (points > 0) setTimeout(() => toast(`潮光悄悄亮起了 +${points}`, "gold"), 260);
+  if (points > 0) {
+    if (!state.tideglow.seenIntro) {
+      state.tideglow = { ...state.tideglow, seenIntro: true };
+      saveGame();
+      setTimeout(() => showTideglowIntro(points), 400);
+    } else {
+      setTimeout(() => toast(`潮光悄悄亮起了 +${points}`, "gold"), 260);
+    }
+  }
   const revealed = events.flatMap(event => event?.results?.tideglow?.newlyRevealed || []);
   if (revealed.length) setTimeout(() => toast(`遠處船影漸漸清楚：${revealed.map(ship => ship.name).join("、")}`, "gold"), 620);
+}
+
+function showTideglowIntro(points) {
+  modalRoot.innerHTML = `<div class="modal-backdrop"><div class="modal"><span class="section-label">✦ 永久潮光</span><h2>潮光亮起了 +${points}</h2><p class="modal-copy">潮光是探索世界留下的光跡，會永久累積，不會因購買或任何動作消耗。<br><br>抵達新海域、發現新魚種、完成觀察與研究，都能讓潮光增加。累積到一定數量，可以在海灣商店解鎖新的船隻。</p><div class="modal-actions"><button class="primary-button" data-action="close-modal">開始探索</button></div></div></div>`;
 }
 
 function notifyCompletedAchievements(achievements=[]) {

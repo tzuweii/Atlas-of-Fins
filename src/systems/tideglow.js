@@ -4,7 +4,7 @@ const isObject = value => Boolean(value && typeof value === "object" && !Array.i
 const safeDate = value => typeof value === "string" && !Number.isNaN(Date.parse(value)) ? value : null;
 
 export function createTideglowState() {
-  return { total: 0, ledgerBySourceId: {}, developerAdjustment: 0 };
+  return { enabled: false, seenIntro: false, total: 0, ledgerBySourceId: {}, developerAdjustment: 0 };
 }
 
 export function normalizeTideglowState(raw, { allowDeveloperAdjustment = false } = {}) {
@@ -24,7 +24,12 @@ export function normalizeTideglowState(raw, { allowDeveloperAdjustment = false }
   const developerAdjustment = allowDeveloperAdjustment
     ? Math.trunc(Number(source.developerAdjustment) || 0)
     : 0;
+  // Backward-compat: existing saves with points already earned are treated as enabled/intro-seen.
+  const enabled = Boolean(source.enabled) || ledgerTotal > 0;
+  const seenIntro = Boolean(source.seenIntro) || ledgerTotal > 0;
   return {
+    enabled,
+    seenIntro,
     total: Math.max(0, ledgerTotal + developerAdjustment),
     ledgerBySourceId,
     developerAdjustment: Math.max(-ledgerTotal, developerAdjustment)

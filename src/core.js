@@ -1096,6 +1096,13 @@ function gameEventConsumers(state) {
       return { ok: true };
     },
     tideglow: event => {
+      if (!state.tideglow.enabled) {
+        // Tideglow activates on first arrival outside 眠潮灣; all other events before that are suppressed.
+        if (event.type !== "region.arrived" || event.refs?.regionId === SLEEPING_TIDE_BAY_ID) {
+          return { ok: true, awarded: false, reason: "not-enabled" };
+        }
+        state.tideglow = { ...state.tideglow, enabled: true };
+      }
       const result = applyTideglowEvent(state.tideglow, event, {
         allowDeveloperAdjustment: state.developerMode === true,
         allowDeveloperSource: state.developerMode === true
