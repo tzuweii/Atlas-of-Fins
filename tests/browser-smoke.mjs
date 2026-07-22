@@ -100,9 +100,9 @@ await wait(350);
 await waitFor(`document.readyState === "complete"`);
 await evaluate(`localStorage.clear()`);
 assert.equal(await evaluate("document.title"), "Atlas of Fins｜鰭之圖鑑");
-assert.equal(await evaluate("document.querySelector('#app').dataset.uiRevision"), "20260722-main-menu-unlock");
-assert.equal(await evaluate("document.querySelector('link[rel=\"stylesheet\"]').href.endsWith('styles.css?rev=20260722-main-menu-unlock')"), true);
-assert.equal(await evaluate("document.querySelector('script[type=\"module\"]').src.endsWith('src/game.js?rev=20260722-main-menu-unlock')"), true);
+assert.equal(await evaluate("document.querySelector('#app').dataset.uiRevision"), "20260723-fish-body-unified");
+assert.equal(await evaluate("document.querySelector('link[rel=\"stylesheet\"]').href.endsWith('styles.css?rev=20260723-fish-body-unified')"), true);
+assert.equal(await evaluate("document.querySelector('script[type=\"module\"]').src.endsWith('src/game.js?rev=20260723-fish-body-unified')"), true);
 
 await clickCenter("#title-settings-button");
 assert.match(await evaluate("document.querySelector('.settings-modal').innerText"), /聲音與顯示[\s\S]*文字大小[\s\S]*介面縮放/);
@@ -510,9 +510,156 @@ assert.match(await evaluate("document.querySelector('#tutorial').innerText"), /�
 assert.equal(await evaluate("document.querySelector('#tutorial').classList.contains('is-hidden')"), false);
 assert.equal(await evaluate("document.querySelector('#tutorial-spotlight').classList.contains('is-hidden')"), false);
 assert.equal(await evaluate(`(() => { const save=JSON.parse(localStorage.getItem('atlas-of-fins.save')); return save.baitAmounts[save.equippedBait]; })()`), tutorialBaitBeforeCast);
+await waitFor(`Boolean(document.querySelector('.fishing-line-cue path')?.getAttribute('d'))`);
+const fishingRigAlignment = await evaluate(`(() => {
+  const stage = document.querySelector('.fishing-stage');
+  const path = document.querySelector('.fishing-line-cue path');
+  const tip = document.querySelector('.rod-tip').getBoundingClientRect();
+  const bait = document.querySelector('.fishing-bait').getBoundingClientRect();
+  const stageRect = stage.getBoundingClientRect();
+  const start = path.getPointAtLength(0);
+  const end = path.getPointAtLength(path.getTotalLength());
+  const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  return {
+    rodToLineGap: distance({ x: start.x + stageRect.left, y: start.y + stageRect.top }, { x: tip.left + tip.width / 2, y: tip.top + tip.height / 2 }),
+    lineToBaitGap: distance({ x: end.x + stageRect.left, y: end.y + stageRect.top }, { x: bait.left + bait.width / 2, y: bait.top + bait.height / 2 }),
+    baitIsVisible: bait.left >= 0 && bait.right <= innerWidth && bait.top >= 0 && bait.bottom <= innerHeight,
+    hasMouthAnchor: Boolean(document.querySelector('.fish-mouth')),
+    hasProbeRipples: Boolean(document.querySelector('.probe-ripples'))
+  };
+})()`);
+assert.ok(fishingRigAlignment.rodToLineGap < 3, `rod tip joins line (${fishingRigAlignment.rodToLineGap}px)`);
+assert.ok(fishingRigAlignment.lineToBaitGap < 3, `line joins bait (${fishingRigAlignment.lineToBaitGap}px)`);
+assert.equal(fishingRigAlignment.baitIsVisible, true);
+assert.equal(fishingRigAlignment.hasMouthAnchor, true);
+assert.equal(fishingRigAlignment.hasProbeRipples, true);
+const probeFishBodyContract = await evaluate(`(() => {
+  const body = document.querySelector('.fish-shadow-body');
+  const bodyStyle = getComputedStyle(body);
+  const tailStyle = getComputedStyle(body, '::before');
+  const finStyle = getComputedStyle(body.querySelector('.fishing-fish-fin'));
+  const mouthStyle = getComputedStyle(body.querySelector('.fishing-fish-mouth'));
+  return {
+    tagName: body.tagName,
+    width: bodyStyle.width,
+    height: bodyStyle.height,
+    borderRadius: bodyStyle.borderRadius,
+    tailWidth: tailStyle.width,
+    tailHeight: tailStyle.height,
+    tailRight: tailStyle.right,
+    tailClipPath: tailStyle.clipPath,
+    finWidth: finStyle.width,
+    finHeight: finStyle.height,
+    finLeft: finStyle.left,
+    finTop: finStyle.top,
+    mouthWidth: mouthStyle.width,
+    mouthHeight: mouthStyle.height,
+    mouthLeft: mouthStyle.left,
+    mouthTop: mouthStyle.top
+  };
+})()`);
+await waitFor(`(() => {
+  const stage = document.querySelector('.fishing-stage');
+  const ripple = document.querySelector('.probe-ripples > i');
+  const rod = document.querySelector('.rod-line');
+  const fish = document.querySelector('.fish-shadow');
+  return stage?.classList.contains('is-nibbling')
+    && stage.dataset.fishSide === 'left'
+    && getComputedStyle(ripple).animationName.includes('probeRipple')
+    && getComputedStyle(rod).animationName.includes('rodProbe')
+    && getComputedStyle(fish).animationName.includes('fishProbeFromLeft');
+})()`, 5000);
+await waitFor(`(() => {
+  const mouth = document.querySelector('.fish-mouth')?.getBoundingClientRect();
+  const bait = document.querySelector('.fishing-bait')?.getBoundingClientRect();
+  return document.querySelector('.fishing-stage')?.classList.contains('is-nibbling')
+    && mouth && bait
+    && Math.hypot(mouth.left + mouth.width / 2 - bait.left - bait.width / 2, mouth.top + mouth.height / 2 - bait.top - bait.height / 2) < 6;
+})()`, 5000);
+await waitFor(`(() => {
+  const fish = document.querySelector('.fish-shadow');
+  const probe = fish?.getAnimations().find(animation => animation.animationName === 'fishProbeFromLeft');
+  return probe?.currentTime >= 650;
+})()`, 1000);
+const probeExitMouth = await evaluate(`(() => {
+  const mouth = document.querySelector('.fish-mouth').getBoundingClientRect();
+  return { x: mouth.left + mouth.width / 2, y: mouth.top + mouth.height / 2 };
+})()`);
+await waitFor(`document.querySelector('#game-shell').dataset.fishingPhase === 'approaching'`, 1500);
+const crossEntry = await evaluate(`(() => {
+  const stage = document.querySelector('.fishing-stage');
+  const mouth = document.querySelector('.fish-mouth').getBoundingClientRect();
+  return {
+    side: stage.dataset.fishSide,
+    animation: getComputedStyle(document.querySelector('.fish-shadow')).animationName,
+    mouth: { x: mouth.left + mouth.width / 2, y: mouth.top + mouth.height / 2 }
+  };
+})()`);
+assert.equal(crossEntry.side, 'right');
+assert.match(crossEntry.animation, /fishCrossToRight/);
+assert.ok(Math.hypot(crossEntry.mouth.x - probeExitMouth.x, crossEntry.mouth.y - probeExitMouth.y) < 8, 'probe hands off to the opposite-side turn without teleporting');
+await waitFor(`(() => {
+  const fish = document.querySelector('.fish-shadow');
+  return fish?.getAnimations().some(animation => animation.animationName === 'fishCrossToRight' && animation.playState === 'finished');
+})()`, 1400);
+const rightSideProbeOffset = await evaluate(`(() => {
+  const mouth = document.querySelector('.fish-mouth').getBoundingClientRect();
+  const bait = document.querySelector('.fishing-bait').getBoundingClientRect();
+  return mouth.left + mouth.width / 2 - bait.left - bait.width / 2;
+})()`);
+assert.ok(rightSideProbeOffset > 18, `fish crosses to the opposite side (${rightSideProbeOffset}px)`);
+await command("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+await wait(180);
+const narrowRigAlignment = await evaluate(`(() => {
+  const stage = document.querySelector('.fishing-stage');
+  const path = document.querySelector('.fishing-line-cue path');
+  const tip = document.querySelector('.rod-tip').getBoundingClientRect();
+  const bait = document.querySelector('.fishing-bait').getBoundingClientRect();
+  const stageRect = stage.getBoundingClientRect();
+  const start = path.getPointAtLength(0);
+  const end = path.getPointAtLength(path.getTotalLength());
+  return {
+    rodGap: Math.hypot(start.x + stageRect.left - tip.left - tip.width / 2, start.y + stageRect.top - tip.top - tip.height / 2),
+    baitGap: Math.hypot(end.x + stageRect.left - bait.left - bait.width / 2, end.y + stageRect.top - bait.top - bait.height / 2),
+    baitIsForwardOfRod: bait.left + bait.width / 2 > tip.left + tip.width / 2,
+    baitIsVisible: bait.left >= 0 && bait.right <= innerWidth && bait.top >= 0 && bait.bottom <= innerHeight
+  };
+})()`);
+assert.ok(narrowRigAlignment.rodGap < 3, `narrow rod tip joins line (${narrowRigAlignment.rodGap}px)`);
+assert.ok(narrowRigAlignment.baitGap < 3, `narrow line joins bait (${narrowRigAlignment.baitGap}px)`);
+assert.equal(narrowRigAlignment.baitIsForwardOfRod, true);
+assert.equal(narrowRigAlignment.baitIsVisible, true);
+await command("Emulation.clearDeviceMetricsOverride");
 await click('[data-view="chart"]');
 assert.equal(await evaluate("document.querySelector('.nav-button.is-active').dataset.view"), "fishing");
 await waitFor(`document.querySelector('#game-shell').dataset.fishingPhase === 'biting'`, 16000);
+await waitFor(`(() => {
+  const mouth = document.querySelector('.fish-mouth')?.getBoundingClientRect();
+  const bait = document.querySelector('.fishing-bait')?.getBoundingClientRect();
+  return mouth && bait
+    && document.querySelector('.fishing-stage').dataset.fishSide === 'right'
+    && getComputedStyle(document.querySelector('.fish-shadow')).animationName.includes('fishBiteFromRight')
+    && Math.hypot(mouth.left + mouth.width / 2 - bait.left - bait.width / 2, mouth.top + mouth.height / 2 - bait.top - bait.height / 2) < 6;
+})()`, 1000);
+const biteArtAlignment = await evaluate(`(() => {
+  const alert = document.querySelector('.bite-alert').getBoundingClientRect();
+  const bait = document.querySelector('.fishing-bait').getBoundingClientRect();
+  const splash = document.querySelector('.bite-splash');
+  return {
+    alertCenterGap: Math.abs(alert.left + alert.width / 2 - bait.left - bait.width / 2),
+    alertIsAboveBait: alert.top + alert.height / 2 < bait.top + bait.height / 2,
+    alertIsNearBait: bait.top + bait.height / 2 - alert.top - alert.height / 2 < 130,
+    splashIsExpanded: splash.offsetWidth >= 70,
+    splashAnimation: getComputedStyle(splash).animationName,
+    rodAnimation: getComputedStyle(document.querySelector('.rod-line')).animationName
+  };
+})()`);
+assert.ok(biteArtAlignment.alertCenterGap < 4, `bite alert centers on bait (${biteArtAlignment.alertCenterGap}px)`);
+assert.equal(biteArtAlignment.alertIsAboveBait, true);
+assert.equal(biteArtAlignment.alertIsNearBait, true);
+assert.equal(biteArtAlignment.splashIsExpanded, true);
+assert.match(biteArtAlignment.splashAnimation, /biteSplash/);
+assert.match(biteArtAlignment.rodAnimation, /rodBite/);
 assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).tutorialStep`), 4);
 assert.match(await evaluate("document.querySelector('#tutorial').innerText"), /航海教學 · 5 \/ 14[\s\S]*教學不會倒數/);
 await wait(3000);
@@ -813,7 +960,7 @@ await evaluate(`Math.random = () => 0`);
 const deliberateWaitStarted = Date.now();
 await click('[data-action="cast"]');
 assert.equal(await evaluate("document.querySelector('.bite-callout') === null"), true);
-assert.match(await evaluate("getComputedStyle(document.querySelector('.fish-shadow')).animationName"), /fishInvestigate/);
+assert.match(await evaluate("getComputedStyle(document.querySelector('.fish-shadow')).animationName"), /fishApproachFromLeft/);
 await evaluate(`document.querySelector('.fish-shadow').dataset.continuity = 'kept'`);
 await wait(3400);
 assert.equal(await evaluate("document.querySelector('.fish-shadow')?.dataset.continuity"), "kept");
@@ -824,10 +971,134 @@ assert.equal(await evaluate("getComputedStyle(document.querySelector('.fishing-c
 assert.match(await evaluate("document.querySelector('.bite-alert').textContent"), /真正吞餌/);
 await click('[data-action="strike"]');
 await waitFor(`Boolean(document.querySelector('#reel-button'))`);
+await waitFor(`Boolean(document.querySelector('.struggle-line path')?.getAttribute('d'))`);
 await evaluate(`window.__catchRolls = [0, .4, .4, 0, 0, 0]; Math.random = () => window.__catchRolls.length ? window.__catchRolls.shift() : 0`);
 assert.match(await evaluate("document.querySelector('.reel-ui').innerText"), /張力[\s\S]*距離[\s\S]*100%[\s\S]*收線/);
 assert.doesNotMatch(await evaluate("document.querySelector('.reel-ui').innerText"), /穩住魚線|按住收線|完成後進行捕獲判定|平穩型|衝刺型|耐力型|擺動型|稀有型/);
 assert.match(await evaluate("document.querySelector('.fight-behavior-cue').innerText"), /魚勢[\s\S]*(平穩型|衝刺型|耐力型|擺動型|稀有型)/);
+const fightRigAlignment = await evaluate(`(() => {
+  const stage = document.querySelector('.fishing-stage.is-reeling');
+  const stageRect = stage.getBoundingClientRect();
+  const path = document.querySelector('.struggle-line path');
+  const tip = document.querySelector('.rod-tip').getBoundingClientRect();
+  const mouth = document.querySelector('.struggle-fish-mouth').getBoundingClientRect();
+  const fish = document.querySelector('.struggle-fish-cue');
+  const start = path.getPointAtLength(0);
+  const end = path.getPointAtLength(path.getTotalLength());
+  return {
+    usesSvgLine: document.querySelector('.struggle-line').tagName === 'svg',
+    rodGap: Math.hypot(start.x + stageRect.left - tip.left - tip.width / 2, start.y + stageRect.top - tip.top - tip.height / 2),
+    mouthGap: Math.hypot(end.x + stageRect.left - mouth.left - mouth.width / 2, end.y + stageRect.top - mouth.top - mouth.height / 2),
+    hasWake: Boolean(document.querySelector('.struggle-wake')),
+    fishAnimation: getComputedStyle(fish).animationName,
+    tensionState: stage.dataset.tensionState,
+    rodAngle: parseFloat(getComputedStyle(document.querySelector('#game-shell')).getPropertyValue('--reel-rod-angle'))
+  };
+})()`);
+assert.equal(fightRigAlignment.usesSvgLine, true);
+assert.ok(fightRigAlignment.rodGap < 3, `fight line joins rod tip (${fightRigAlignment.rodGap}px)`);
+assert.ok(fightRigAlignment.mouthGap < 3, `fight line joins fish mouth (${fightRigAlignment.mouthGap}px)`);
+assert.equal(fightRigAlignment.hasWake, true);
+assert.match(fightRigAlignment.fishAnimation, /fightFish(Steady|Sprint|Endurance|Sway|Rare)/);
+assert.match(fightRigAlignment.tensionState, /^(slack|safe|danger)$/);
+const fightFishBodyContract = await evaluate(`(() => {
+  const body = document.querySelector('.struggle-fish-body');
+  const bodyStyle = getComputedStyle(body);
+  const tailStyle = getComputedStyle(body, '::before');
+  const finStyle = getComputedStyle(body.querySelector('.fishing-fish-fin'));
+  const mouthStyle = getComputedStyle(body.querySelector('.fishing-fish-mouth'));
+  return {
+    tagName: body.tagName,
+    width: bodyStyle.width,
+    height: bodyStyle.height,
+    borderRadius: bodyStyle.borderRadius,
+    tailWidth: tailStyle.width,
+    tailHeight: tailStyle.height,
+    tailRight: tailStyle.right,
+    tailClipPath: tailStyle.clipPath,
+    finWidth: finStyle.width,
+    finHeight: finStyle.height,
+    finLeft: finStyle.left,
+    finTop: finStyle.top,
+    mouthWidth: mouthStyle.width,
+    mouthHeight: mouthStyle.height,
+    mouthLeft: mouthStyle.left,
+    mouthTop: mouthStyle.top
+  };
+})()`);
+assert.deepEqual(fightFishBodyContract, probeFishBodyContract, 'probe and fight use the same fish body geometry');
+const behaviorShapeContracts = await evaluate(`(() => {
+  const cue = document.querySelector('.struggle-fish-cue');
+  const body = document.querySelector('.struggle-fish-body');
+  const originalClass = cue.className;
+  const entries = ['steady','sprint','endurance','sway','rare'].map(behavior => {
+    cue.className = 'struggle-fish-cue is-' + behavior;
+    const bodyStyle = getComputedStyle(body);
+    const animationName = getComputedStyle(cue).animationName;
+    const animation = cue.getAnimations().find(item => item.animationName === animationName);
+    return {
+      behavior,
+      width: bodyStyle.width,
+      height: bodyStyle.height,
+      borderRadius: bodyStyle.borderRadius,
+      animationName,
+      changesScale: animation?.effect.getKeyframes().some(frame => String(frame.transform).includes('scale')) || false
+    };
+  });
+  cue.className = originalClass;
+  return entries;
+})()`);
+assert.equal(new Set(behaviorShapeContracts.map(entry => `${entry.width}|${entry.height}|${entry.borderRadius}`)).size, 1);
+assert.equal(new Set(behaviorShapeContracts.map(entry => entry.animationName)).size, 5);
+assert.equal(behaviorShapeContracts.some(entry => entry.changesScale), false);
+const fightSideContracts = await evaluate(`(() => {
+  const stage = document.querySelector('.fishing-stage.is-reeling');
+  const body = document.querySelector('.struggle-fish-body');
+  const originalSide = stage.dataset.fishSide;
+  const entries = ['left','right'].map(side => {
+    stage.dataset.fishSide = side;
+    const animationName = getComputedStyle(body).animationName;
+    const animation = body.getAnimations().find(item => item.animationName === animationName);
+    const finalTransform = animation?.effect.getKeyframes().at(-1)?.transform || '';
+    return { side, animationName, finalTransform };
+  });
+  stage.dataset.fishSide = originalSide;
+  return entries;
+})()`);
+assert.match(fightSideContracts.find(entry => entry.side === 'left').animationName, /fightBodySettleLeft/);
+assert.match(fightSideContracts.find(entry => entry.side === 'left').finalTransform, /scaleX\(-1\)/);
+assert.match(fightSideContracts.find(entry => entry.side === 'right').animationName, /fightBodySettleRight/);
+assert.match(fightSideContracts.find(entry => entry.side === 'right').finalTransform, /scaleX\(1\)/);
+await evaluate(`document.querySelector('#reel-button').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:15}))`);
+await wait(360);
+await evaluate(`window.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:15}))`);
+const tautRodAngle = await evaluate(`parseFloat(getComputedStyle(document.querySelector('#game-shell')).getPropertyValue('--reel-rod-angle'))`);
+assert.ok(tautRodAngle > fightRigAlignment.rodAngle + .3, `rod responds to tension (${fightRigAlignment.rodAngle}deg → ${tautRodAngle}deg)`);
+await command("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+await wait(180);
+const narrowFightRig = await evaluate(`(() => {
+  const stage = document.querySelector('.fishing-stage.is-reeling');
+  const stageRect = stage.getBoundingClientRect();
+  const path = document.querySelector('.struggle-line path');
+  const tip = document.querySelector('.rod-tip').getBoundingClientRect();
+  const mouth = document.querySelector('.struggle-fish-mouth').getBoundingClientRect();
+  const fish = document.querySelector('.struggle-fish-body').getBoundingClientRect();
+  const hud = document.querySelector('.reel-ui').getBoundingClientRect();
+  const start = path.getPointAtLength(0);
+  const end = path.getPointAtLength(path.getTotalLength());
+  return {
+    rodGap: Math.hypot(start.x + stageRect.left - tip.left - tip.width / 2, start.y + stageRect.top - tip.top - tip.height / 2),
+    mouthGap: Math.hypot(end.x + stageRect.left - mouth.left - mouth.width / 2, end.y + stageRect.top - mouth.top - mouth.height / 2),
+    fishVisible: fish.left >= 0 && fish.right <= innerWidth && fish.top >= 0 && fish.bottom <= innerHeight,
+    hudFits: hud.left >= 0 && hud.right <= innerWidth && hud.bottom <= innerHeight
+  };
+})()`);
+assert.ok(narrowFightRig.rodGap < 3, `narrow fight line joins rod tip (${narrowFightRig.rodGap}px)`);
+assert.ok(narrowFightRig.mouthGap < 3, `narrow fight line joins fish mouth (${narrowFightRig.mouthGap}px)`);
+assert.equal(narrowFightRig.fishVisible, true);
+assert.equal(narrowFightRig.hudFits, true);
+await command("Emulation.clearDeviceMetricsOverride");
+await wait(180);
 await wait(1800);
 const persistentBehaviorCue = await evaluate(`(() => {
   const cue = document.querySelector('.fight-behavior-cue');
@@ -841,7 +1112,7 @@ assert.equal(await evaluate("document.querySelector('#task-tracker').hidden"), t
 const compactFightLayout = await evaluate(`(() => {
   const stage = document.querySelector('.fishing-stage.is-reeling').getBoundingClientRect();
   const hud = document.querySelector('.reel-ui').getBoundingClientRect();
-  const fish = document.querySelector('.struggle-fish-cue').getBoundingClientRect();
+  const fish = document.querySelector('.struggle-fish-body').getBoundingClientRect();
   const behaviorCue = document.querySelector('.fight-behavior-cue').getBoundingClientRect();
   return {
     hudCompact: hud.width <= 400 && hud.height <= 110,

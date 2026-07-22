@@ -80,6 +80,7 @@ let fishing = {
   held: false, tension: .38, progress: 0, danger: 0, last: 0,
   nibbleIndex: 0, falseNibbles: 0, failureReason: null, captureChance: null
 };
+let fishingRigFrame = null;
 let tutorialFocusFrame = null;
 let tutorialFocusedStep = null;
 
@@ -551,6 +552,7 @@ function syncWorld() {
 function render() {
   syncWorld();
   const fishingView = currentView === "fishing";
+  if (!fishingView) stopFishingRigTracking();
   gameShell.classList.toggle("is-fishing-view", fishingView);
   // Reeling only happens on the fishing view; clear the fighting lock when we leave it so the
   // catch modal or tutorial navigation can't strand `.is-fighting` (which disables the bottom nav).
@@ -736,6 +738,7 @@ function renderFishing() {
     <div class="fishing-loadout-bar">
       <button data-action="show-fishing-setup" type="button" ${fishing.phase !== "idle" ? "disabled" : ""}><span>${spot?.icon || "⌁"}</span><b>${escapeText(spot?.name || "目前釣點")}</b><small>${escapeText(rod.name)} · ${escapeText(bait.name)} × ${state.baitAmounts[state.equippedBait] || 0}</small></button>
     </div>${controls}</div>`;
+  trackFishingRig();
   if (fishing.phase === "reeling") bindReelButton();
   renderTaskTracker();
 }
@@ -1107,9 +1110,22 @@ function showResidentDialogue(residentId, deliveredDialogue = null) {
   modalRoot.innerHTML = `<div class="modal-backdrop"><div class="modal"><span class="section-label">一般交談 · ${escapeText(resident.portLocationName)}</span><h2>${escapeText(resident.name)}</h2><p class="modal-copy">「${escapeText(dialogue)}」</p><p class="quiet-note">這是一般港口對話，不會接受、完成或推進主線，也不會改變今日提案。</p><div class="modal-actions"><button class="primary-button" data-action="close-modal">結束交談</button></div></div></div>`;
 }
 
+function fishingFishSide(phase = fishing.phase) {
+  if (phase === "nibbling") return fishing.nibbleIndex % 2 === 1 ? "left" : "right";
+  return fishing.nibbleIndex % 2 === 1 ? "right" : "left";
+}
+
+function syncFishingFishMotion(stage, phase = fishing.phase) {
+  if (!stage) return;
+  stage.dataset.fishSide = fishingFishSide(phase);
+  stage.dataset.fishMotion = phase === "approaching" && fishing.nibbleIndex === 0 ? "initial" : "cross";
+}
+
 function renderFishingStage() {
   if (["approaching", "nibbling", "biting"].includes(fishing.phase)) {
-    return `<div class="fishing-stage is-${fishing.phase}"><div class="fish-shadow" aria-hidden="true"><i></i></div><div class="fishing-line-cue" aria-hidden="true"><i></i><b></b></div><div class="waiting-bobber" aria-hidden="true"><div class="bobber"></div><i class="bite-splash"></i></div><div class="bite-alert" role="status" aria-live="assertive"><strong aria-hidden="true">!</strong><span class="visually-hidden">真正吞餌，現在起竿</span></div></div>`;
+    const fishSide = fishingFishSide();
+    const fishMotion = fishing.phase === "approaching" && fishing.nibbleIndex === 0 ? "initial" : "cross";
+    return `<div class="fishing-stage is-${fishing.phase}" data-fish-side="${fishSide}" data-fish-motion="${fishMotion}"><div class="fish-shadow" aria-hidden="true"><span class="fishing-fish-body fish-shadow-body"><i class="fishing-fish-fin"></i><b class="fishing-fish-mouth fish-mouth"></b></span></div><svg class="fishing-line-cue" aria-hidden="true"><path></path></svg><div class="waiting-bobber" aria-hidden="true"><div class="bobber"></div><span class="fishing-bait"><i></i></span><span class="probe-ripples"><i></i><b></b></span><i class="bite-splash"></i></div><div class="bite-alert" role="status" aria-live="assertive"><strong aria-hidden="true">!</strong><span class="visually-hidden">真正吞餌，現在起竿</span></div></div>`;
   }
   if (fishing.phase === "failed") {
     const early = fishing.failureReason === "early";
@@ -1120,9 +1136,55 @@ function renderFishingStage() {
   if (fishing.phase === "reeling") {
     const rod = rodById(state.equippedRod), config = getTensionConfig(fishing.fish, rod);
     const remaining = Math.ceil((1 - fishing.progress) * 100);
-    return `<div class="fishing-stage is-reeling"><div class="struggle-line" aria-hidden="true"></div><div class="struggle-fish-cue" aria-hidden="true"><i></i><span>≈</span></div><div class="fight-behavior-cue is-${fishing.fish.behavior}" role="status" aria-live="polite"><small>魚勢</small><strong>${behaviorName(fishing.fish.behavior)}</strong></div><div class="reel-ui" aria-label="釣魚拼搏"><div class="reel-meters"><div class="reel-meter tension-meter"><div class="reel-meter-label"><span>張力</span></div><div class="tension-bar"><i class="safe-zone" style="left:${config.safeMin*100}%;width:${(config.safeMax-config.safeMin)*100}%"></i><i id="tension-needle" class="tension-needle" style="left:${fishing.tension*100}%"></i></div></div><div class="reel-meter distance-meter"><div class="reel-meter-label"><span>距離</span><output id="distance-value">${remaining}%</output></div><div class="catch-progress"><i id="catch-progress-fill" style="width:${fishing.progress*100}%"></i></div></div></div><button id="reel-button" class="reel-button" type="button"><span aria-hidden="true">↟</span><b>收線</b></button><p id="danger-text" class="danger-text" aria-live="polite"></p></div></div>`;
+    const tensionState = fishing.tension > config.safeMax ? "danger" : fishing.tension < config.safeMin ? "slack" : "safe";
+    const fishSide = fishingFishSide();
+    return `<div class="fishing-stage is-reeling" data-tension-state="${tensionState}" data-fish-side="${fishSide}"><svg class="struggle-line" aria-hidden="true"><path></path></svg><div class="struggle-fish-cue is-${fishing.fish.behavior}" aria-hidden="true"><span class="fishing-fish-body struggle-fish-body"><i class="fishing-fish-fin"></i><b class="fishing-fish-mouth struggle-fish-mouth"></b></span><span class="struggle-wake"><i></i><b></b></span></div><div class="fight-behavior-cue is-${fishing.fish.behavior}" role="status" aria-live="polite"><small>魚勢</small><strong>${behaviorName(fishing.fish.behavior)}</strong></div><div class="reel-ui" aria-label="釣魚拼搏"><div class="reel-meters"><div class="reel-meter tension-meter"><div class="reel-meter-label"><span>張力</span></div><div class="tension-bar"><i class="safe-zone" style="left:${config.safeMin*100}%;width:${(config.safeMax-config.safeMin)*100}%"></i><i id="tension-needle" class="tension-needle" style="left:${fishing.tension*100}%"></i></div></div><div class="reel-meter distance-meter"><div class="reel-meter-label"><span>距離</span><output id="distance-value">${remaining}%</output></div><div class="catch-progress"><i id="catch-progress-fill" style="width:${fishing.progress*100}%"></i></div></div></div><button id="reel-button" class="reel-button" type="button"><span aria-hidden="true">↟</span><b>收線</b></button><p id="danger-text" class="danger-text" aria-live="polite"></p></div></div>`;
   }
   return "";
+}
+
+function stopFishingRigTracking() {
+  cancelAnimationFrame(fishingRigFrame);
+  fishingRigFrame = null;
+}
+
+function trackFishingRig() {
+  stopFishingRigTracking();
+  if (!["approaching", "nibbling", "biting", "reeling"].includes(fishing.phase)) return;
+  const update = () => {
+    if (currentView !== "fishing" || !["approaching", "nibbling", "biting", "reeling"].includes(fishing.phase)) {
+      fishingRigFrame = null;
+      return;
+    }
+    const stage = $(".fishing-stage", content);
+    const fighting = fishing.phase === "reeling";
+    const line = $(fighting ? ".struggle-line" : ".fishing-line-cue", stage);
+    const path = line?.querySelector("path");
+    const rodTip = $(".rod-tip", worldScene);
+    const target = $(fighting ? ".struggle-fish-mouth" : ".fishing-bait", stage);
+    if (!stage?.isConnected || !line || !path || !rodTip || !target) {
+      fishingRigFrame = null;
+      return;
+    }
+    const stageRect = stage.getBoundingClientRect();
+    const tipRect = rodTip.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const startX = tipRect.left + tipRect.width / 2 - stageRect.left;
+    const startY = tipRect.top + tipRect.height / 2 - stageRect.top;
+    const endX = targetRect.left + targetRect.width / 2 - stageRect.left;
+    const endY = targetRect.top + targetRect.height / 2 - stageRect.top;
+    const horizontal = endX - startX;
+    const vertical = endY - startY;
+    const slack = fighting
+      ? 7 + (1 - fishing.tension) * 38
+      : Math.max(12, Math.min(42, Math.abs(vertical) * .16));
+    line.setAttribute("viewBox", `0 0 ${stageRect.width} ${stageRect.height}`);
+    path.setAttribute("d", fighting
+      ? `M ${startX} ${startY} C ${startX + horizontal * .34} ${startY + slack}, ${endX - horizontal * .18} ${endY - slack * .22}, ${endX} ${endY}`
+      : `M ${startX} ${startY} C ${startX + horizontal * .42} ${startY + slack}, ${endX - horizontal * .12} ${endY - slack * .32}, ${endX} ${endY}`);
+    fishingRigFrame = requestAnimationFrame(update);
+  };
+  fishingRigFrame = requestAnimationFrame(update);
 }
 
 function behaviorName(id) {
@@ -1169,6 +1231,7 @@ function updateFishingCuePhase(phase) {
   }
   scene?.classList.add(`is-${phase}`);
   stage?.classList.add(`is-${phase}`);
+  syncFishingFishMotion(stage, phase);
   action?.classList.toggle("is-urgent", phase === "biting");
   const icon = action?.querySelector("span");
   if (icon) icon.textContent = phase === "biting" ? "!" : "⌁";
@@ -1216,6 +1279,7 @@ function strikeLine() {
 function startReeling() {
   if (fishing.phase !== "biting") return;
   advanceTutorial(4, 5);
+  gameShell.style.setProperty("--reel-rod-angle",`${(-28+fishing.tension*13).toFixed(2)}deg`);
   fishing.phase="reeling"; fishing.last=performance.now(); renderFishing();
   updateTutorial();
   fishing.raf=requestAnimationFrame(reelLoop);
@@ -1244,6 +1308,13 @@ function reelLoop(now) {
   fishing.progress=Math.max(0,Math.min(1,fishing.progress));
   if (fishing.tension>.91) fishing.danger+=dt; else fishing.danger=Math.max(0,fishing.danger-dt*1.8);
   const needle=$("#tension-needle"), fill=$("#catch-progress-fill"), remaining=$("#distance-value"), danger=$("#danger-text");
+  const stage=$(".fishing-stage.is-reeling",content);
+  if(stage) {
+    stage.dataset.tensionState=fishing.danger>.1||fishing.tension>config.safeMax?"danger":fishing.tension<config.safeMin?"slack":"safe";
+    stage.style.setProperty("--fight-wake-opacity",Math.min(.94,.36+fishing.tension*.58).toFixed(2));
+    stage.style.setProperty("--fight-line-width",`${(1.15+fishing.tension*1.2).toFixed(2)}px`);
+  }
+  gameShell.style.setProperty("--reel-rod-angle",`${(-28+fishing.tension*13).toFixed(2)}deg`);
   if(needle) needle.style.left=`${fishing.tension*100}%`; if(fill) fill.style.width=`${fishing.progress*100}%`;
   if(remaining) remaining.textContent=`${Math.ceil((1-fishing.progress)*100)}%`;
   if(danger) {
@@ -1297,7 +1368,7 @@ function resetFishing() {
   renderFishing();
   updateTutorial();
 }
-function clearFishing(){ clearTimeout(fishing.timer); cancelAnimationFrame(fishing.raf); fishing.timer=null; fishing.raf=null; fishing.held=false; }
+function clearFishing(){ clearTimeout(fishing.timer); cancelAnimationFrame(fishing.raf); stopFishingRigTracking(); fishing.timer=null; fishing.raf=null; fishing.held=false; }
 
 function showCatchModal(fish,caught,result,milestones) {
   const isShimmer=caught.variant==="shimmer";
