@@ -10,7 +10,7 @@ import {
   setAquariumDecoration, swapAquariumFish, updateBayEventProgress
 } from "../src/core.js";
 import {
-  TUTORIAL_TOTAL_STEPS, TUTORIAL_VERSION, normalizeTutorialProgress, tutorialIsActive
+  TUTORIAL_TOTAL_STEPS, TUTORIAL_VERSION, completeTutorial, normalizeTutorialProgress, tutorialIsActive
 } from "../src/systems/tutorial.js";
 
 const NEW_FISH_IDS = [
@@ -109,6 +109,19 @@ test("forced first-journey tutorial normalizes legacy saves without restarting c
   assert.equal(tutorialIsActive(completed), false);
 });
 
+test("tutorial can be skipped and remains completed in the saved state", () => {
+  const state = createInitialState();
+  state.tutorialStep = 5;
+  state.tutorialCatchUid = "tutorial-catch";
+  assert.equal(completeTutorial(state), true);
+  assert.equal(state.completedTutorial, true);
+  assert.equal(state.tutorialVersion, TUTORIAL_VERSION);
+  assert.equal(state.tutorialStep, TUTORIAL_TOTAL_STEPS);
+  assert.equal(state.tutorialCatchUid, null);
+  assert.equal(tutorialIsActive(state), false);
+  assert.equal(completeTutorial(state), false);
+});
+
 test("tutorial catch and sale preserve collection and coins without advancing task objectives", () => {
   const state = createInitialState();
   state.dailyBoard = {
@@ -146,7 +159,7 @@ test("tutorial catch and sale preserve collection and coins without advancing ta
   assert.equal(state.totalCaught, 1);
   assert.equal(state.catchInventory.length, 1);
   assert.ok(state.money > moneyBeforeCatch);
-  assert.equal(state.tideglow.total, 1, "the real first discovery still grants its permanent collection reward");
+  assert.equal(state.tideglow.total, 0, "chapter 1 keeps Tideglow completely inactive");
 
   const moneyBeforeSale = state.money;
   const sale = sellCatches(state, [caught.uid], { source: "tutorial" });

@@ -2,9 +2,10 @@ import {
   ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, AQUARIUM_DECORATIONS, AUTO_FISHING_EQUIPMENT, BAITS, BAY_EVENTS,
   BASE_APPEARANCE_BUDGETS, CHENGYE_ID, DAILY_GOAL_TEMPLATES, FISH, FISH_APPEARANCE_BONUSES,
   FISH_RARITY_ORDER, FURNITURE, HIGH_TIER_RARITIES, LUMINOUS_ARCHIPELAGO_ID, MILESTONES, RARITY,
-  REGIONS, RODS, ROUTES, SHIPS, SHIP_FURNITURE, SLEEPING_TIDE_BAY_ID, SPOTS, TIDEGLOW_SOURCES, TIMES,
+  REGIONS, RODS, ROUTES, SHIPS, SHIP_FURNITURE, SLEEPING_TIDE_BAY_ID, SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID,
+  SPOTS, TIDEGLOW_SOURCES, TIMES,
   cascadeHighTierSplit, fishCanAppearAtSpot, getFishHabitat, getRegionFishingSpots,
-  isRegionAvailable, shipFurnitureById as findShipFurnitureById
+  isRegionAvailable, residentStorySceneById, shipFurnitureById as findShipFurnitureById
 } from "./data.js";
 import {
   BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, DEV_TEMP_SAVE_KEY, SAVE_KEY, SAVE_VERSION, TEMP_SAVE_KEY
@@ -444,6 +445,7 @@ export function createDeveloperState() {
   };
 
   state.developerMode = true;
+  state.tideglow = { ...state.tideglow, enabled: true, seenIntro: true };
   state.autoFishing = { ...createAutoFishingState(), owned: true, purchasedAt: caughtAt };
   state.money = 999999;
   state.day = 99;
@@ -513,10 +515,47 @@ export function createDeveloperState() {
   for (const shipId of state.ships.ownedShipIds) fillShipFurnitureForDeveloper(state, shipId);
   syncLegacyStarterFurniture(state);
   state.observations = createDeveloperObservationState({ day: state.day, observedAt: caughtAt });
-  evaluateResearchProgress(state, LUMINOUS_ARCHIPELAGO_ID);
+  for (const region of REGIONS) evaluateResearchProgress(state, region.id);
   state.journal = syncJournalUnlocks(state);
   state.settings.sound = false;
   return state;
+}
+
+function routeStoryCompleted(state, route) {
+  if (route?.unlock?.type !== "resident-story") return true;
+  const scene = residentStorySceneById(route.unlock.sceneId);
+  return Boolean(scene && state.residentStories?.[scene.residentId]?.completedSceneIds?.includes(scene.id));
+}
+
+function routeWasAlreadyTraversed(state, route) {
+  if (!route) return false;
+  if (state.world?.completedRouteIds?.includes(route.id)) return true;
+  const visited = new Set(state.world?.visitedRegionIds || []);
+  return visited.has(route.fromRegionId) && visited.has(route.toRegionId);
+}
+
+export function isRouteUnlockedForState(state, routeId) {
+  const route = ROUTES.find(entry => entry.id === routeId);
+  if (!route || route.status !== "available" || !state.world?.unlockedRouteIds?.includes(routeId)) return false;
+  if (state.developerMode) return true;
+  const legacyReturnTrip = routeWasAlreadyTraversed(state, route) && state.world.currentRegionId === route.toRegionId;
+  return routeStoryCompleted(state, route) || legacyReturnTrip;
+}
+
+function syncStoryRouteUnlocks(state) {
+  const unlocked = new Set(state.world?.unlockedRouteIds || []);
+  for (const route of ROUTES.filter(entry => entry.status === "available" && entry.unlock?.type === "resident-story")) {
+    if (state.developerMode || routeStoryCompleted(state, route) || routeWasAlreadyTraversed(state, route)) unlocked.add(route.id);
+    else unlocked.delete(route.id);
+  }
+  state.world = { ...state.world, unlockedRouteIds: [...unlocked] };
+}
+
+function storyRouteUnlocksAreCurrent(state) {
+  return ROUTES.filter(entry => entry.status === "available" && entry.unlock?.type === "resident-story").every(route => {
+    const shouldBeUnlocked = Boolean(state.developerMode || routeStoryCompleted(state, route) || routeWasAlreadyTraversed(state, route));
+    return state.world?.unlockedRouteIds?.includes(route.id) === shouldBeUnlocked;
+  });
 }
 
 function migrateDeveloperUnlocks(state, raw) {
@@ -525,6 +564,7 @@ function migrateDeveloperUnlocks(state, raw) {
   const newlyCataloguedFish = FISH.filter(fish => !Object.hasOwn(priorDiscoveries, fish.id));
 
   state.developerMode = true;
+  state.tideglow = { ...state.tideglow, enabled: true, seenIntro: true };
   state.money = Math.max(state.money, full.money);
   state.ownedRods = [...new Set([...(Array.isArray(state.ownedRods) ? state.ownedRods : []), ...full.ownedRods])];
   state.ownedFurniture = [...new Set([...(Array.isArray(state.ownedFurniture) ? state.ownedFurniture : []), ...full.ownedFurniture])];
@@ -593,7 +633,7 @@ function migrateDeveloperUnlocks(state, raw) {
     if (!raw?.ships?.interiorsByShipId?.[shipId]) fillShipFurnitureForDeveloper(state, shipId);
   }
   syncLegacyStarterFurniture(state);
-  evaluateResearchProgress(state, LUMINOUS_ARCHIPELAGO_ID);
+  for (const region of REGIONS) evaluateResearchProgress(state, region.id);
   evaluateAchievements(state);
   return state;
 }
@@ -660,8 +700,14 @@ export function migrateState(raw) {
     backfillLegacyDiscoveries: rawVersion < SAVE_VERSION || !raw.world,
     firstArrivedAt: safeDate(raw.lastSavedAt)
   });
+  const reachedSecondChapter = merged.world.visitedRegionIds.some(regionId => regionId !== SLEEPING_TIDE_BAY_ID)
+    || merged.ships.ownedShipIds.some(shipId => shipId !== STARTER_SHIP_ID);
+  if (reachedSecondChapter && !merged.tideglow.enabled) {
+    merged.tideglow = { ...merged.tideglow, enabled: true };
+  }
   merged.observations = normalizeObservationState(raw.observations, merged.day);
   merged.residentStories = normalizeResidentStoryState(raw.residentStories);
+  syncStoryRouteUnlocks(merged);
   const migratedInventory = (Array.isArray(raw.catchInventory) ? raw.catchInventory : []).map(migrateCatch).filter(Boolean);
   const migratedAquarium = (Array.isArray(raw.aquarium?.fish) ? raw.aquarium.fish : []).map(migrateCatch).filter(Boolean);
   const aquariumUids = new Set();
@@ -751,6 +797,7 @@ export function isCurrentSaveSchema(raw) {
     && raw?.travelSettings && typeof raw.travelSettings === "object"
     && Number.isFinite(Number(raw.travelSettings.developerDurationScale))
     && Array.isArray(raw?.world?.completedRouteIds)
+    && storyRouteUnlocksAreCurrent(raw)
     && Object.values(raw?.world?.regionProgress || {}).every(progress => (
       Array.isArray(progress?.caughtSpotIds) && Array.isArray(progress?.caughtTimeIds)
     ))
@@ -758,6 +805,10 @@ export function isCurrentSaveSchema(raw) {
     && Object.hasOwn(raw.regionEvents, LUMINOUS_ARCHIPELAGO_ID)
     && raw?.gameEvents && Array.isArray(raw.gameEvents.pending) && Array.isArray(raw.gameEvents.recent)
     && raw?.tideglow && Number.isFinite(Number(raw.tideglow.total))
+    && typeof raw.tideglow.enabled === "boolean"
+    && typeof raw.tideglow.seenIntro === "boolean"
+    && (!raw.world?.visitedRegionIds?.some(regionId => regionId !== SLEEPING_TIDE_BAY_ID) || raw.tideglow.enabled)
+    && (!raw.ships?.ownedShipIds?.some(shipId => shipId !== STARTER_SHIP_ID) || raw.tideglow.enabled)
     && raw?.ships && Array.isArray(raw.ships.ownedShipIds)
     && raw.ships.catalogVersion === SHIP_CATALOG_VERSION
     && raw.ships.interiorVersion === SHIP_INTERIOR_VERSION
@@ -1076,6 +1127,7 @@ function gameEventContext(state, overrides = {}) {
 function legacyProgressFromGameEvent(event) {
   if (event.type === "fish.caught") return { type: "catch", source: event.source, ...event.payload };
   if (event.type === "fish.sold") return { type: "sell", source: event.source, ...event.payload };
+  if (event.type === "aquarium.displayed") return { type: "aquarium", source: event.source, ...event.payload };
   if (event.type === "observation.recorded") return { type: "observe", source: event.source, ...event.payload };
   return null;
 }
@@ -1259,7 +1311,7 @@ export function sellCatches(state, uids, { source = "manual" } = {}) {
   state.catchInventory = state.catchInventory.filter(item => !uidSet.has(item.uid));
   state.money += total;
   state.totalSold += total;
-  updateProgressEvent(state, { type: "sell", source: progressSource, amount: total });
+  updateProgressEvent(state, { type: "sell", source: progressSource, amount: total, count: sold.length });
   return { sold: sold.length, total };
 }
 
@@ -1278,6 +1330,7 @@ export function moveCatchToAquarium(state, uid) {
   if (displayed.length >= capacity) return { ok: false, reason: "full" };
   const [caught] = state.catchInventory.splice(catchIndex, 1);
   displayed.push(caught);
+  updateProgressEvent(state, { type: "aquarium", source: "manual", count: 1 });
   return { ok: true, caught, index: displayed.length - 1, completedAchievements: evaluateAchievements(state) };
 }
 
@@ -1301,6 +1354,7 @@ export function replaceAquariumFish(state, catchUid, aquariumUid) {
   const outgoing = displayed[aquariumIndex];
   state.catchInventory.splice(catchIndex, 1, outgoing);
   displayed.splice(aquariumIndex, 1, incoming);
+  updateProgressEvent(state, { type: "aquarium", source: "manual", count: 1 });
   return { ok: true, incoming, outgoing, index: aquariumIndex, completedAchievements: evaluateAchievements(state) };
 }
 
@@ -1358,7 +1412,13 @@ export function claimQuest(state, instanceId) {
 
 export function updateProgressEvent(state, event) {
   const source = event?.source || "manual";
-  const type = event?.type === "catch" ? "fish.caught" : event?.type === "sell" ? "fish.sold" : "observation.recorded";
+  const type = event?.type === "catch"
+    ? "fish.caught"
+    : event?.type === "sell"
+      ? "fish.sold"
+      : event?.type === "aquarium"
+        ? "aquarium.displayed"
+        : "observation.recorded";
   const dispatched = dispatchGameEvent(state, {
     type,
     source,
@@ -1534,6 +1594,8 @@ export function developerSimulateAutoFishing(state, {
 
 export function beginRouteTravel(state, routeId, now = Date.now()) {
   if (!state?.world) return { ok: false, reason: "missing-world", world: state?.world };
+  if (!state.world.unlockedRouteIds?.includes(routeId)) return { ok: false, reason: "route-locked", world: state.world };
+  if (!isRouteUnlockedForState(state, routeId)) return { ok: false, reason: "story-route-locked", world: state.world };
   const scale = state.developerMode ? state.travelSettings?.developerDurationScale : 1;
   const ship = activeShip(state);
   const speedMultiplier = activeShipSpeed(state);
@@ -1654,8 +1716,9 @@ export function developerResetRouteState(state) {
   if (!state?.developerMode) return false;
   stopAutoFishingSessionState(state, "region-changed");
   const previousBayProgress = state.world?.regionProgress?.[SLEEPING_TIDE_BAY_ID];
-  state.world = createInitialWorldState({
+  state.world = createDeveloperWorldState({
     discoveredFishIds: previousBayProgress?.discoveredFishIds || Object.keys(state.discovered || {}),
+    currentRegionId: SLEEPING_TIDE_BAY_ID,
     firstArrivedAt: previousBayProgress?.firstArrivedAt || state.lastSavedAt
   });
   const firstSpot = SPOTS.find(spot => spot.regionId === SLEEPING_TIDE_BAY_ID);

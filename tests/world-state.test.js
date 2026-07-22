@@ -56,7 +56,7 @@ test("new and developer games only unlock currently implemented world content", 
   const initial = createInitialWorldState();
   assert.equal(initial.currentRegionId, SLEEPING_TIDE_BAY_ID);
   assert.deepEqual(initial.visitedRegionIds, [SLEEPING_TIDE_BAY_ID]);
-  assert.deepEqual(initial.unlockedRouteIds, [SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID]);
+  assert.deepEqual(initial.unlockedRouteIds, []);
   assert.deepEqual(initial.completedRouteIds, []);
   assert.deepEqual(initial.docking, { status: "docked", regionId: SLEEPING_TIDE_BAY_ID });
   assert.equal(initial.travel, null);

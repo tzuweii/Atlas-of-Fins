@@ -9,8 +9,14 @@ import {
   migrateState, switchActiveShip
 } from "../src/core.js";
 import { revealEligibleShips } from "../src/systems/ships.js";
+import { grantChapterOneRoute } from "./story-route-helper.js";
 
 const ROUTE_ID = SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID;
+const unlockTideglow = (state, total) => {
+  state.tideglow.enabled = true;
+  state.tideglow.total = total;
+  return state;
+};
 
 test("six ships keep the confirmed thresholds, prices, speeds, and preview boundary", () => {
   assert.deepEqual(SHIPS.map(ship => ({
@@ -32,7 +38,9 @@ test("six ships keep the confirmed thresholds, prices, speeds, and preview bound
 test("ship purchase requires Tideglow, coins, and a valid dock without spending Tideglow", () => {
   const state = createInitialState();
   state.money = 10000;
-  state.tideglow.total = 19;
+  state.tideglow.total = 999;
+  assert.equal(buyShip(state, "tidewhisper_residence").reason, "chapter-locked");
+  unlockTideglow(state, 19);
   assert.equal(buyShip(state, "tidewhisper_residence").reason, "tideglow");
   state.tideglow.total = 20;
   state.world.docking = { status: "traveling", regionId: null };
@@ -52,7 +60,7 @@ test("ship purchase requires Tideglow, coins, and a valid dock without spending 
 test("switching is idempotent, only uses owned ships, and is blocked away from port", () => {
   const state = createInitialState();
   state.money = 10000;
-  state.tideglow.total = 50;
+  unlockTideglow(state, 50);
   buyShip(state, "tidewhisper_residence");
   assert.equal(switchActiveShip(state, "voyager_study").reason, "not-owned");
   assert.equal(switchActiveShip(state, "drifting_home").ok, true);
@@ -63,7 +71,7 @@ test("switching is idempotent, only uses owned ships, and is blocked away from p
 
 test("Tideglow thresholds reveal once without granting ownership", () => {
   const state = createInitialState();
-  state.tideglow.total = 50;
+  unlockTideglow(state, 50);
   const first = revealEligibleShips(state);
   assert.deepEqual(first.map(ship => ship.id), ["tidewhisper_residence", "voyager_study"]);
   assert.deepEqual(state.ships.ownedShipIds, ["drifting_home"]);
@@ -72,8 +80,9 @@ test("Tideglow thresholds reveal once without granting ownership", () => {
 
 test("route duration uses the active ship and locks ship and speed into the voyage", () => {
   const state = createInitialState();
+  grantChapterOneRoute(state);
   state.money = 10000;
-  state.tideglow.total = 20;
+  unlockTideglow(state, 20);
   buyShip(state, "tidewhisper_residence");
   const expected = Math.round(6 * 60 * 1000 / 1.06);
   assert.equal(getRouteDurationForState(state, ROUTE_ID), expected);

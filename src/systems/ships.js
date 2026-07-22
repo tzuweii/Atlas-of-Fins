@@ -60,6 +60,7 @@ export function activeShipSpeed(state) {
 }
 
 export function revealEligibleShips(state) {
+  if (!state?.tideglow?.enabled) return [];
   const current = normalizeShipsState(state.ships);
   const total = Math.max(0, Number(state?.tideglow?.total) || 0);
   const newlyRevealed = SHIPS.filter(ship => total >= ship.tideglowRequired && !current.revealedShipIds.includes(ship.id));
@@ -76,6 +77,7 @@ export function getShipPurchaseState(state, shipId) {
   const ship = shipById(shipId);
   if (!ship) return { ok: false, reason: "missing-ship", ship: null };
   if (state?.ships?.ownedShipIds?.includes(ship.id)) return { ok: false, reason: "owned", ship };
+  if (!state?.tideglow?.enabled) return { ok: false, reason: "chapter-locked", ship };
   if (ship.status !== "implemented") return { ok: false, reason: "preview", ship };
   if (!canUseShipStore(state)) return { ok: false, reason: "not-docked", ship };
   if ((state?.tideglow?.total || 0) < ship.tideglowRequired) return { ok: false, reason: "tideglow", ship };
@@ -102,6 +104,7 @@ export function purchaseShip(state, shipId, purchasedAt = new Date().toISOString
 export function switchShip(state, shipId) {
   const ship = shipById(shipId);
   if (!ship) return { ok: false, reason: "missing-ship" };
+  if (ship.id !== STARTER_SHIP_ID && !state?.tideglow?.enabled) return { ok: false, reason: "chapter-locked", ship };
   if (!canUseShipStore(state)) return { ok: false, reason: "not-docked", ship };
   if (!state?.ships?.ownedShipIds?.includes(ship.id)) return { ok: false, reason: "not-owned", ship };
   if (state.ships.activeShipId === ship.id) return { ok: true, unchanged: true, ship };

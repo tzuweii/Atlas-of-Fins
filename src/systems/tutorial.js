@@ -67,3 +67,16 @@ export function tutorialIsActive(state) {
     && Number(state?.tutorialVersion) === TUTORIAL_VERSION
     && boundedStep(state?.tutorialStep) < TUTORIAL_TOTAL_STEPS;
 }
+
+export function completeTutorial(state) {
+  if (!state || typeof state !== "object") return false;
+  const changed = state.completedTutorial !== true
+    || Number(state.tutorialVersion) !== TUTORIAL_VERSION
+    || boundedStep(state.tutorialStep) !== TUTORIAL_TOTAL_STEPS
+    || state.tutorialCatchUid !== null;
+  state.tutorialVersion = TUTORIAL_VERSION;
+  state.completedTutorial = true;
+  state.tutorialStep = TUTORIAL_TOTAL_STEPS;
+  state.tutorialCatchUid = null;
+  return changed;
+}

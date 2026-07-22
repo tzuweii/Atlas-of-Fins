@@ -11,10 +11,12 @@ import {
   getRouteDurationForState, getRouteTravelDurationMs, getTravelStatus, migrateState,
   progressTravel
 } from "../src/core.js";
+import { grantChapterOneRoute } from "./story-route-helper.js";
 
 const ROUTE_ID = SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID;
 const T0 = "2026-01-01T00:00:00.000Z";
 const atMinutes = minutes => new Date(Date.parse(T0) + minutes * 60000).toISOString();
+const unlockRoute = grantChapterOneRoute;
 
 test("first voyage distance profiles and familiar route time follow the design contract", () => {
   const route = ROUTES[0];
@@ -27,7 +29,7 @@ test("first voyage distance profiles and familiar route time follow the design c
 });
 
 test("a first journey advances by real elapsed time and arrives offshore exactly once", () => {
-  const state = createInitialState();
+  const state = unlockRoute(createInitialState());
   const before = structuredClone(state.world);
   const started = beginRouteTravel(state, ROUTE_ID, T0);
   assert.equal(started.ok, true);
@@ -67,7 +69,7 @@ test("locked routes and invalid clocks fail without changing world state", () =>
   assert.equal(lockedResult.reason, "route-locked");
   assert.deepEqual(locked.world, lockedBefore);
 
-  const invalid = createInitialState();
+  const invalid = unlockRoute(createInitialState());
   const invalidBefore = structuredClone(invalid.world);
   const invalidResult = beginRouteTravel(invalid, ROUTE_ID, "not-a-date");
   assert.equal(invalidResult.ok, false);
@@ -76,7 +78,7 @@ test("locked routes and invalid clocks fail without changing world state", () =>
 });
 
 test("clock rollback never removes progress and a large forward jump completes safely", () => {
-  const state = createInitialState();
+  const state = unlockRoute(createInitialState());
   beginRouteTravel(state, ROUTE_ID, T0);
   progressTravel(state, atMinutes(2));
   assert.equal(getTravelStatus(state.world).elapsedMs, 120000);
@@ -92,7 +94,7 @@ test("clock rollback never removes progress and a large forward jump completes s
 });
 
 test("docking records first arrival and the reverse familiar voyage remains available", () => {
-  const state = createInitialState();
+  const state = unlockRoute(createInitialState());
   assert.equal(dockAtDestination(state, T0).ok, false);
   beginRouteTravel(state, ROUTE_ID, T0);
   progressTravel(state, atMinutes(6));
@@ -117,7 +119,7 @@ test("docking records first arrival and the reverse familiar voyage remains avai
 });
 
 test("serialized travel resumes offline without losing segment progress", () => {
-  const state = createInitialState();
+  const state = unlockRoute(createInitialState());
   beginRouteTravel(state, ROUTE_ID, T0);
   progressTravel(state, atMinutes(1));
   const reloaded = migrateState(JSON.parse(JSON.stringify(state)));

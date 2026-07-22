@@ -42,7 +42,8 @@ import {
   getWondersForSpot, observationSubjectById, wonderById
 } from "./data/observations.js";
 import {
-  LUMINOUS_RESEARCH_NODE_IDS, REGION_RESEARCH, RESEARCH_NODES, getRegionResearch, researchNodeById
+  LUMINOUS_RESEARCH_NODE_IDS, REGION_RESEARCH, RESEARCH_NODES, SLEEPING_TIDE_RESEARCH_NODE_IDS,
+  getRegionResearch, researchNodeById
 } from "./data/research.js";
 import {
   RESIDENT_STORY_SCENES, getResidentStoryScenes, residentStorySceneById
@@ -70,7 +71,8 @@ export {
   CLARKS_ANEMONEFISH_OBSERVATION_ID, OBSERVATION_SUBJECTS, STARLIGHT_OBSERVATION_CAPE_ID,
   TWO_SPINED_ANGELFISH_OBSERVATION_ID, WONDERS, getObservationSubjectsForSpot,
   getWondersForSpot, observationSubjectById, wonderById,
-  LUMINOUS_RESEARCH_NODE_IDS, REGION_RESEARCH, RESEARCH_NODES, getRegionResearch, researchNodeById,
+  LUMINOUS_RESEARCH_NODE_IDS, REGION_RESEARCH, RESEARCH_NODES, SLEEPING_TIDE_RESEARCH_NODE_IDS,
+  getRegionResearch, researchNodeById,
   RESIDENT_STORY_SCENES, getResidentStoryScenes, residentStorySceneById,
   LUMINOUS_ARCHIPELAGO_ID, REGIONS, REGION_SPOTS, ROUTES, SLEEPING_TIDE_BAY_ID,
   SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID, SPOTS, getFishHabitat, getRegionFish,

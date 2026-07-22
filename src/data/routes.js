@@ -9,7 +9,7 @@ export const ROUTES = [
     toRegionId: LUMINOUS_ARCHIPELAGO_ID,
     name: "琉光暖流航線",
     currentTags: ["warm_current"],
-    unlock: { type: "default" },
+    unlock: { type: "resident-story", sceneId: "keeper_outer_current_chart" },
     distanceClass: "short",
     travelSegments: 3,
     preview: {

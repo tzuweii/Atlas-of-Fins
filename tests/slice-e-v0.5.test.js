@@ -12,6 +12,7 @@ import {
   recordCatch, sellCatches, settleAutoFishing, stopAutoFishing, switchActiveShip
 } from "../src/core.js";
 import { createDailyGoalEntry } from "../src/systems/daily-board.js";
+import { grantChapterOneRoute } from "./story-route-helper.js";
 
 const AT = Date.parse("2026-07-18T00:00:00.000Z");
 const iso = milliseconds => new Date(AT + milliseconds).toISOString();
@@ -42,6 +43,7 @@ function manualCatch(fishId, index = 0, overrides = {}) {
 function preparedState({ fishIds = ["sardine"], bait = 60 } = {}) {
   const state = createInitialState();
   state.money = 10_000;
+  state.tideglow.enabled = true;
   state.tideglow.total = 20;
   assert.equal(buyShip(state, "tidewhisper_residence", iso(0)).ok, true);
   fishIds.forEach((fishId, index) => recordCatch(state, manualCatch(fishId, index)));
@@ -70,6 +72,7 @@ test("the permanent rack requires Tidewhisper Residence, a dock, and exactly 1,5
   const state = createInitialState();
   state.money = 10_000;
   assert.equal(buyAutoFishingEquipment(state).reason, "requires-ship");
+  state.tideglow.enabled = true;
   state.tideglow.total = 20;
   assert.equal(buyShip(state, "tidewhisper_residence", iso(0)).ok, true);
   state.money = AUTO_FISHING_EQUIPMENT.price - 1;
@@ -244,6 +247,7 @@ test("three-hour, bait-empty, early-return, and clock-rollback outcomes stop or 
 
 test("departing, changing ports, manual stop, and ship switching keep the rack safe", () => {
   const sailing = preparedState();
+  grantChapterOneRoute(sailing);
   arm(sailing);
   assert.equal(beginRouteTravel(sailing, SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID, AT).ok, true);
   assert.equal(sailing.autoFishing.activeSession, null);

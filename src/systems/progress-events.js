@@ -7,7 +7,12 @@ export function isManualProgressEvent(event) {
 
 export function progressIncrement(condition, event) {
   if (!condition || !isManualProgressEvent(event) || event.type !== condition.eventType) return 0;
-  if (event.type === "sell") return condition.metric === "amount" ? Math.max(0, Number(event.amount) || 0) : 0;
+  if (event.type === "sell") {
+    if (condition.metric === "amount") return Math.max(0, Number(event.amount) || 0);
+    if (condition.metric === "count") return Math.max(0, Math.floor(Number(event.count) || 0));
+    return 0;
+  }
+  if (event.type === "aquarium") return condition.metric === "count" ? Math.max(0, Math.floor(Number(event.count) || 0)) : 0;
   if (event.type !== "catch" || !event.fish || !event.caught) return 0;
 
   if (!intersects(condition.regionIds, [event.regionId])) return 0;
@@ -23,8 +28,8 @@ export function progressIncrement(condition, event) {
 }
 
 export function isProgressConditionAvailable(condition, context = {}) {
-  if (!condition || !["catch", "sell"].includes(condition.eventType)) return false;
-  if (condition.eventType === "sell") return true;
+  if (!condition || !["catch", "sell", "aquarium"].includes(condition.eventType)) return false;
+  if (["sell", "aquarium"].includes(condition.eventType)) return true;
   if (Array.isArray(context.availableRegionIds) && !intersects(condition.regionIds, context.availableRegionIds)) return false;
   if (Array.isArray(context.availableSpotIds) && !intersects(condition.spotIds, context.availableSpotIds)) return false;
   if (Array.isArray(context.availableBaitIds) && !intersects(condition.baitIds, context.availableBaitIds)) return false;

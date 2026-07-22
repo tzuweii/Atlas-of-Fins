@@ -1,4 +1,4 @@
-import { LUMINOUS_ARCHIPELAGO_ID } from "./regions.js";
+import { LUMINOUS_ARCHIPELAGO_ID, SLEEPING_TIDE_BAY_ID } from "./regions.js";
 import {
   CLARKS_ANEMONEFISH_OBSERVATION_ID, TWO_SPINED_ANGELFISH_OBSERVATION_ID
 } from "./observations.js";
@@ -13,7 +13,50 @@ export const LUMINOUS_RESEARCH_NODE_IDS = {
   angelfish: "luminous_twospined_angelfish"
 };
 
+export const SLEEPING_TIDE_RESEARCH_NODE_IDS = {
+  arrival: "sleeping_tide_arrival",
+  shore: "sleeping_tide_shore",
+  reef: "sleeping_tide_reef",
+  night: "sleeping_tide_night",
+  deep: "sleeping_tide_deep"
+};
+
 export const RESEARCH_NODES = [
+  {
+    id: SLEEPING_TIDE_RESEARCH_NODE_IDS.arrival,
+    regionId: SLEEPING_TIDE_BAY_ID,
+    name: "船屋在港燈下醒來",
+    description: "從眠潮灣展開旅程，讓第一枚海域印記落進研究冊。",
+    requirement: { type: "visited-region", regionId: SLEEPING_TIDE_BAY_ID }
+  },
+  {
+    id: SLEEPING_TIDE_RESEARCH_NODE_IDS.shore,
+    regionId: SLEEPING_TIDE_BAY_ID,
+    name: "近岸的第一道魚影",
+    description: "在近岸淺水區留下當地魚類捕獲紀錄。",
+    requirement: { type: "spot-discovery", regionId: SLEEPING_TIDE_BAY_ID, spotId: "shore" }
+  },
+  {
+    id: SLEEPING_TIDE_RESEARCH_NODE_IDS.reef,
+    regionId: SLEEPING_TIDE_BAY_ID,
+    name: "礁影有自己的住處",
+    description: "在礁石邊緣留下當地魚類捕獲紀錄。",
+    requirement: { type: "spot-discovery", regionId: SLEEPING_TIDE_BAY_ID, spotId: "reef" }
+  },
+  {
+    id: SLEEPING_TIDE_RESEARCH_NODE_IDS.night,
+    regionId: SLEEPING_TIDE_BAY_ID,
+    name: "船燈照見另一種潮路",
+    description: "在眠潮灣夜間留下捕獲紀錄。",
+    requirement: { type: "region-time-discovery", regionId: SLEEPING_TIDE_BAY_ID, timeId: "night" }
+  },
+  {
+    id: SLEEPING_TIDE_RESEARCH_NODE_IDS.deep,
+    regionId: SLEEPING_TIDE_BAY_ID,
+    name: "海灣深處仍有回聲",
+    description: "使用遠投裝備，在海灣深水區留下捕獲紀錄。",
+    requirement: { type: "spot-discovery", regionId: SLEEPING_TIDE_BAY_ID, spotId: "deep" }
+  },
   {
     id: LUMINOUS_RESEARCH_NODE_IDS.arrival,
     regionId: LUMINOUS_ARCHIPELAGO_ID,
@@ -66,12 +109,30 @@ export const RESEARCH_NODES = [
 ];
 
 export const REGION_RESEARCH = {
+  [SLEEPING_TIDE_BAY_ID]: {
+    regionId: SLEEPING_TIDE_BAY_ID,
+    name: "眠潮灣研究主路",
+    description: "從棲地、時段與天氣逐步認識海灣；發現八成魚類即可取得前往下一片海域的海圖。",
+    nodeIds: RESEARCH_NODES.filter(node => node.regionId === SLEEPING_TIDE_BAY_ID).map(node => node.id),
+    mainSpeciesGoal: 24,
+    fullSpeciesGoal: 30,
+    mainReward: {
+      id: "sleeping_tide_research_book",
+      type: "research-keepsake",
+      label: "《眠潮灣棲地研究冊》"
+    },
+    fullRewards: [
+      { id: "sleeping_tide_region_badge", type: "region-badge", label: "眠潮灣徽章" },
+      { id: "sleeping_tide_sail_pattern", type: "sail-pattern", label: "眠潮魚群船帆紋樣" }
+    ],
+    preview: "燈塔保存著一張尚未交付的灣外海圖。"
+  },
   [LUMINOUS_ARCHIPELAGO_ID]: {
     regionId: LUMINOUS_ARCHIPELAGO_ID,
     name: "琉光群島研究主路",
-    description: "這一頁會隨釣魚、換時段與安靜觀察自然亮起，不需選擇研究專案。",
-    nodeIds: RESEARCH_NODES.map(node => node.id),
-    mainSpeciesGoal: 12,
+    description: "這一頁會隨釣魚、換時段與安靜觀察自然亮起；發現八成魚類即可完成前往下一片海域的準備。",
+    nodeIds: RESEARCH_NODES.filter(node => node.regionId === LUMINOUS_ARCHIPELAGO_ID).map(node => node.id),
+    mainSpeciesGoal: 27,
     fullSpeciesGoal: 33,
     mainReward: {
       id: "luminous_research_book",

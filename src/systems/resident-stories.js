@@ -1,12 +1,38 @@
 import { RESIDENTS, residentById } from "../data/residents.js";
 import { getResidentStoryScenes, residentStorySceneById } from "../data/resident-stories.js";
-import { progressIncrement } from "./progress-events.js";
+import { isManualProgressEvent, progressIncrement } from "./progress-events.js";
 
 export function createResidentStoryState() {
   return {};
 }
 
 const cleanProgress = value => Math.max(0, Math.floor(Number(value) || 0));
+const uniqueStrings = values => [...new Set(Array.isArray(values) ? values.filter(value => typeof value === "string" && value) : [])];
+
+function normalizeObjectiveFields(scene, saved) {
+  const objective = scene?.objective;
+  if (!objective) return {};
+  if (objective.kind === "catch-contexts") {
+    const allowed = Array.isArray(objective.requiredValues) ? new Set(objective.requiredValues) : null;
+    return {
+      objectiveContextValues: uniqueStrings(saved.objectiveContextValues)
+        .filter(value => !allowed || allowed.has(value))
+        .slice(0, objective.goal)
+    };
+  }
+  if (objective.kind === "checklist") {
+    const savedParts = saved.objectivePartProgress && typeof saved.objectivePartProgress === "object"
+      ? saved.objectivePartProgress
+      : {};
+    return {
+      objectivePartProgress: Object.fromEntries((objective.parts || []).map(part => [
+        part.id,
+        Math.min(part.goal, cleanProgress(savedParts[part.id]))
+      ]))
+    };
+  }
+  return { objectiveProgress: Math.min(objective.goal, cleanProgress(saved.objectiveProgress)) };
+}
 
 export function normalizeResidentStoryState(raw) {
   const source = raw && typeof raw === "object" ? raw : {};
@@ -26,7 +52,7 @@ export function normalizeResidentStoryState(raw) {
       rewardIds,
       ...(activeSceneId ? {
         activeSceneId,
-        objectiveProgress: Math.min(nextScene.objective.goal, cleanProgress(saved.objectiveProgress)),
+        ...normalizeObjectiveFields(nextScene, saved),
         acceptedDay: Math.max(1, Math.floor(Number(saved.acceptedDay) || 1))
       } : {})
     };
@@ -36,6 +62,7 @@ export function normalizeResidentStoryState(raw) {
 
 function triggerMet(state, trigger) {
   if (!trigger) return true;
+  if (trigger.type === "tutorial-completed") return state.completedTutorial === true;
   if (trigger.type === "visited-region") return state.world?.visitedRegionIds?.includes(trigger.regionId);
   if (trigger.type === "region-species") {
     return (state.world?.regionProgress?.[trigger.regionId]?.discoveredFishIds?.length || 0) >= trigger.count;
@@ -57,9 +84,56 @@ function objectiveProgress(state, scene, entry) {
     return state.observations?.recordsById?.[objective.observationId] ? objective.goal : 0;
   }
   if (objective.kind === "region-main-research") {
-    return state.world?.regionProgress?.[objective.regionId]?.mainResearchCompletedDay ? objective.goal : 0;
+    const progress = state.world?.regionProgress?.[objective.regionId];
+    if (progress?.mainResearchCompletedDay && !(progress.discoveredFishIds?.length > 0)) return objective.goal;
+    return Math.min(objective.goal, new Set(progress?.discoveredFishIds || []).size);
+  }
+  if (objective.kind === "catch-contexts") return Math.min(objective.goal, uniqueStrings(entry?.objectiveContextValues).length);
+  if (objective.kind === "checklist") {
+    return (objective.parts || []).filter(part => cleanProgress(entry?.objectivePartProgress?.[part.id]) >= part.goal).length;
   }
   return Math.min(objective.goal, cleanProgress(entry?.objectiveProgress));
+}
+
+function objectiveDetails(state, scene, entry) {
+  const objective = scene?.objective;
+  if (!objective) return [];
+  if (Array.isArray(objective.requirements)) {
+    const completedSceneIds = new Set(state.residentStories?.[scene.residentId]?.completedSceneIds || []);
+    return objective.requirements.map(requirement => {
+      let progress = 0;
+      if (requirement.kind === "completed-scenes") {
+        progress = (requirement.sceneIds || []).filter(sceneId => completedSceneIds.has(sceneId)).length;
+      }
+      if (requirement.kind === "region-species") {
+        progress = new Set(state.world?.regionProgress?.[requirement.regionId]?.discoveredFishIds || []).size;
+      }
+      return {
+        id: requirement.id,
+        label: requirement.label,
+        progress: Math.min(requirement.goal, progress),
+        goal: requirement.goal
+      };
+    });
+  }
+  if (objective.kind === "catch-contexts" && Array.isArray(objective.steps)) {
+    const completed = new Set(uniqueStrings(entry?.objectiveContextValues));
+    return objective.steps.map(step => ({
+      id: step.value,
+      label: step.label,
+      progress: completed.has(step.value) ? 1 : 0,
+      goal: 1
+    }));
+  }
+  if (objective.kind === "checklist") {
+    return (objective.parts || []).map(part => ({
+      id: part.id,
+      label: part.label,
+      progress: Math.min(part.goal, cleanProgress(entry?.objectivePartProgress?.[part.id])),
+      goal: part.goal
+    }));
+  }
+  return [];
 }
 
 export function getResidentStoryStatus(state, residentId) {
@@ -70,8 +144,10 @@ export function getResidentStoryStatus(state, residentId) {
   const activeScene = entry.activeSceneId === nextScene?.id ? nextScene : null;
   const progress = activeScene ? objectiveProgress(state, activeScene, entry) : 0;
   const goal = activeScene?.objective?.goal || 0;
+  const details = activeScene ? objectiveDetails(state, activeScene, entry) : [];
   const canAccept = Boolean(nextScene && !activeScene && triggerMet(state, nextScene.trigger));
-  const canComplete = Boolean(activeScene && goal > 0 && progress >= goal);
+  const requirementsMet = !details.length || details.every(detail => detail.progress >= detail.goal);
+  const canComplete = Boolean(activeScene && goal > 0 && progress >= goal && requirementsMet);
   return {
     scenes,
     completedSceneIds: [...completed],
@@ -80,6 +156,7 @@ export function getResidentStoryStatus(state, residentId) {
     activeScene,
     objectiveProgress: progress,
     objectiveGoal: goal,
+    objectiveDetails: details,
     canAccept,
     canComplete,
     nextAvailable: canAccept || canComplete,
@@ -98,7 +175,7 @@ export function acceptResidentStory(state, residentId) {
       completedSceneIds: [...new Set(entry.completedSceneIds || [])],
       rewardIds: [...new Set(entry.rewardIds || [])],
       activeSceneId: scene.id,
-      objectiveProgress: 0,
+      ...normalizeObjectiveFields(scene, {}),
       acceptedDay: Math.max(1, Math.floor(Number(state.day) || 1))
     }
   };
@@ -112,14 +189,57 @@ export function applyResidentStoryProgress(state, event) {
   for (const resident of RESIDENTS) {
     const entry = nextStories[resident.id];
     const scene = residentStorySceneById(entry?.activeSceneId);
-    if (!scene || scene.objective?.kind !== "catch") continue;
-    const increment = progressIncrement(scene.objective.condition, event);
-    if (!increment) continue;
-    nextStories[resident.id] = {
-      ...entry,
-      objectiveProgress: Math.min(scene.objective.goal, cleanProgress(entry.objectiveProgress) + increment)
-    };
-    changed = true;
+    const objective = scene?.objective;
+    if (!scene || !objective) continue;
+    if (objective.kind === "catch") {
+      const increment = progressIncrement(objective.condition, event);
+      if (!increment) continue;
+      nextStories[resident.id] = {
+        ...entry,
+        objectiveProgress: Math.min(objective.goal, cleanProgress(entry.objectiveProgress) + increment)
+      };
+      changed = true;
+      continue;
+    }
+    if (objective.kind === "catch-contexts") {
+      if (!progressIncrement(objective.condition, event)) continue;
+      const value = event?.[objective.uniqueKey];
+      if (typeof value !== "string" || !value) continue;
+      if (Array.isArray(objective.requiredValues) && !objective.requiredValues.includes(value)) continue;
+      const values = uniqueStrings([...(entry.objectiveContextValues || []), value]).slice(0, objective.goal);
+      if (values.length === (entry.objectiveContextValues || []).length) continue;
+      nextStories[resident.id] = { ...entry, objectiveContextValues: values };
+      changed = true;
+      continue;
+    }
+    if (objective.kind === "preferred-weather-catch") {
+      const matches = isManualProgressEvent(event)
+        && event.type === "catch"
+        && event.regionId === objective.regionId
+        && event.fish?.preferredWeatherIds?.includes(event.weather);
+      if (!matches) continue;
+      nextStories[resident.id] = {
+        ...entry,
+        objectiveProgress: Math.min(objective.goal, cleanProgress(entry.objectiveProgress) + 1)
+      };
+      changed = true;
+      continue;
+    }
+    if (objective.kind === "checklist") {
+      const partProgress = { ...(entry.objectivePartProgress || {}) };
+      let partChanged = false;
+      for (const part of objective.parts || []) {
+        const increment = progressIncrement(part.condition, event);
+        if (!increment) continue;
+        const next = Math.min(part.goal, cleanProgress(partProgress[part.id]) + increment);
+        if (next === cleanProgress(partProgress[part.id])) continue;
+        partProgress[part.id] = next;
+        partChanged = true;
+      }
+      if (!partChanged) continue;
+      nextStories[resident.id] = { ...entry, objectivePartProgress: partProgress };
+      changed = true;
+    }
   }
   return changed ? nextStories : state.residentStories;
 }
@@ -143,6 +263,12 @@ export function completeResidentStory(state, residentId) {
       rewardIds: [...new Set([...(entry.rewardIds || []), ...(scene.reward ? [scene.reward.id] : [])])]
     }
   };
+  if (scene.reward?.type === "route-chart" && scene.reward.routeId) {
+    state.world = {
+      ...state.world,
+      unlockedRouteIds: [...new Set([...(state.world?.unlockedRouteIds || []), scene.reward.routeId])]
+    };
+  }
   return {
     ok: true,
     scene,

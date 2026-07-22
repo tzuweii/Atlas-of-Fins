@@ -1,4 +1,4 @@
-export const JOURNAL_TEMPLATE_VERSION = 2;
+export const JOURNAL_TEMPLATE_VERSION = 3;
 
 export const JOURNAL_REGION_CATEGORIES = Object.freeze([
   { id: "sleeping_tide_bay", name: "眠潮灣", chapter: 1, status: "available" },
@@ -12,6 +12,7 @@ export const JOURNAL_REGION_CATEGORIES = Object.freeze([
 export const JOURNAL_CATEGORIES = Object.freeze([
   { id: "today", name: "今日潮記", kind: "daily", description: "只保留今天，自動寫成一篇與進度無關的海上短文。" },
   { id: "rare_fish", name: "魚類圖鑑", kind: "fish", description: "第一次親手釣到稀有魚時，收錄固定的相遇頁。" },
+  { id: "sea_events", name: "特殊海況", kind: "events", description: "首次完成選填海域事件時，保存一篇不影響主線的海況紀錄。" },
   ...JOURNAL_REGION_CATEGORIES.map(region => ({
     id: region.id,
     name: region.name,
@@ -24,7 +25,7 @@ export const JOURNAL_CATEGORIES = Object.freeze([
 
 export const JOURNAL_EVENT_TEMPLATES = Object.freeze([
   { id: "rare_fish_encounter", eventType: "fish.discovered", entryType: "fish", permanent: true },
-  { id: "region_story_event", eventType: "region.event.progress", entryType: "story", permanent: true },
+  { id: "region_story_event", eventType: "region.event.progress", entryType: "event", permanent: true },
   { id: "resident_story", eventType: "resident.story.completed", entryType: "story", permanent: true }
 ]);
 
@@ -172,43 +173,98 @@ export const MAIN_STORY_JOURNAL_ENTRIES = Object.freeze([
     regionId: "sleeping_tide_bay",
     type: "story",
     order: 0,
-    unlock: { type: "initial" },
-    title: "第一章 · 船屋離開淺眠",
-    body: ["我在眠潮灣整理好第一支釣竿，也替這艘還帶著漂流痕跡的船找到了可以回來的位置。港灣沒有要求我立刻遠行，只先教我辨認潮聲、魚影與一天裡不同的光。"],
-    closing: "旅程不是從遠方開始，而是從願意看清身邊的水開始。"
+    unlock: { type: "resident-scene", sceneId: "keeper_returning_light" },
+    title: "燈塔替我記住方向",
+    body: ["離開強制引導後，我第一次自己從近岸出發，也自己沿燈塔的光回到港口。航程追蹤替我記得正在做的事，卻沒有替我決定下一竿。"],
+    closing: "真正的第一趟航程，從沒有人替我按下按鈕開始。"
   },
   {
-    id: "journal:story:sleeping_tide_bay:silver_tide",
+    id: "journal:story:sleeping_tide_bay:keeper_two_habitats",
     categoryId: "sleeping_tide_bay",
     regionId: "sleeping_tide_bay",
     type: "story",
     order: 1,
-    unlock: { type: "region-event", eventId: "silver_tide" },
-    title: "銀潮靠岸",
-    body: ["成群的銀色小魚沿潮線靠近淺灘。我跟著水面翻動的亮光調整落點，直到沙丁魚與鯷魚的方向在近岸連成一條清楚的潮路。"],
-    closing: "港灣第一次把自己的節奏，借給我讀了一小段。"
+    unlock: { type: "resident-scene", sceneId: "keeper_two_habitats" },
+    title: "礁影有自己的住處",
+    body: ["近岸與礁石的兩筆捕獲讓圖鑑裡的棲地不再只是標籤。常見與少見魚會在海域裡移動；稀有以上魚類則只會進入標示的限定釣點。"],
+    closing: "在尋找名字以前，我先學會尊重牠生活的位置。"
   },
   {
-    id: "journal:story:sleeping_tide_bay:moonlit_tide",
+    id: "journal:story:sleeping_tide_bay:keeper_catch_destinations",
     categoryId: "sleeping_tide_bay",
     regionId: "sleeping_tide_bay",
     type: "story",
     order: 2,
-    unlock: { type: "region-event", eventId: "moonlit_tide" },
-    title: "月光潮汐",
-    body: ["夜色讓礁石與深水之間的潮路浮現。小管、白帶魚與燈籠魚沿著冷光靠近，我沒有追趕，只在船燈照得到的範圍裡等牠們經過。"],
-    closing: "月亮沒有把海照亮，只替夜行的方向描了一圈細邊。"
+    unlock: { type: "resident-scene", sceneId: "keeper_catch_destinations" },
+    title: "今天的魚要去哪裡",
+    body: ["我把兩份漁獲交給市場，也替船屋留下第一份水族箱標本。無論販售或展示，圖鑑保存的相遇、尺寸與環境紀錄都沒有消失。"],
+    closing: "收藏不是把所有相遇留成同一種形狀。"
   },
   {
-    id: "journal:story:sleeping_tide_bay:rain_drift",
+    id: "journal:story:sleeping_tide_bay:keeper_four_lights",
     categoryId: "sleeping_tide_bay",
     regionId: "sleeping_tide_bay",
     type: "story",
     order: 3,
+    unlock: { type: "resident-scene", sceneId: "keeper_four_lights" },
+    title: "一天裡的四種光",
+    body: ["我在兩個不同時段留下捕獲紀錄，才明白清晨、白日、黃昏與夜晚不是四張背景，而是魚群各自生活的時間。"],
+    closing: "換一種光，海灣便把另一種日常交給我看。"
+  },
+  {
+    id: "journal:story:sleeping_tide_bay:keeper_weather_surface",
+    categoryId: "sleeping_tide_bay",
+    regionId: "sleeping_tide_bay",
+    type: "story",
+    order: 4,
+    unlock: { type: "resident-scene", sceneId: "keeper_weather_surface" },
+    title: "天氣寫在海面上",
+    body: ["我依晴雨與圖鑑偏好安排出航。天氣讓某些魚更常靠近，卻不是禁止其他相遇的門；今日特殊海況也只是選填紀錄，不會代替主線。"],
+    closing: "天氣改變水色，沒有替我決定今天一定要做什麼。"
+  },
+  {
+    id: "journal:story:sleeping_tide_bay:keeper_outer_current_chart",
+    categoryId: "sleeping_tide_bay",
+    regionId: "sleeping_tide_bay",
+    type: "story",
+    order: 5,
+    unlock: { type: "resident-scene", sceneId: "keeper_outer_current_chart" },
+    title: "灣外的暖流線",
+    body: ["眠潮灣三十種魚裡，我已認識二十四種。燈塔守望者依八成探索紀錄補完《眠潮灣外海圖》，讓船屋航圖桌第一次出現通往琉光群島的暖流線。"],
+    closing: "海圖沒有催我離開，只確保想出發時仍找得到回來的路。"
+  },
+  {
+    id: "journal:story:sleeping_tide_bay:silver_tide",
+    categoryId: "sea_events",
+    regionId: "sleeping_tide_bay",
+    type: "event",
+    order: 0,
+    unlock: { type: "region-event", eventId: "silver_tide" },
+    title: "銀潮靠岸",
+    body: ["成群銀色小魚沿潮線靠近淺灘。我順著今日特殊海況留下三筆捕獲；這段紀錄沒有推動主線，只保存海灣偶爾改變的日常。"],
+    closing: "選擇參與的潮聲，也值得在海況冊留下一頁。"
+  },
+  {
+    id: "journal:story:sleeping_tide_bay:moonlit_tide",
+    categoryId: "sea_events",
+    regionId: "sleeping_tide_bay",
+    type: "event",
+    order: 1,
+    unlock: { type: "region-event", eventId: "moonlit_tide" },
+    title: "月光潮汐",
+    body: ["夜色讓礁石與深水之間的潮路浮現。這是當日選填的特殊海況，不完成也不會阻擋任何故事；我只在願意時沿冷光留下紀錄。"],
+    closing: "月亮替夜行方向描邊，沒有替旅程排定期限。"
+  },
+  {
+    id: "journal:story:sleeping_tide_bay:rain_drift",
+    categoryId: "sea_events",
+    regionId: "sleeping_tide_bay",
+    type: "event",
+    order: 2,
     unlock: { type: "region-event", eventId: "rain_drift" },
     title: "雨後漂流",
-    body: ["細雨把海草、碎貝與浮木推向礁石。藏在漂流帶裡的魚也一起靠岸，使我第一次明白，天氣不是覆蓋在海面上的背景，而是會改變每一次相遇的路。"],
-    closing: "雨停以前，礁石替遠處漂來的生命留了一處短暫港口。"
+    body: ["細雨把海草、碎貝與浮木推向礁石，藏在漂流帶裡的魚也跟著靠岸。這是特殊海況的獨立紀錄，不與第一章主線共用進度。"],
+    closing: "雨停以前，礁石替漂來的生命留了一處短暫港口。"
   },
   {
     id: "journal:story:luminous_archipelago:chengye_drifting_observer",
@@ -281,6 +337,7 @@ export const MAIN_STORY_JOURNAL_ENTRIES = Object.freeze([
 export const JOURNAL_ENTRY_TYPE_LABELS = Object.freeze({
   today: "今日潮記",
   fish: "稀有初遇",
+  event: "特殊海況",
   story: "主線潮記"
 });
 

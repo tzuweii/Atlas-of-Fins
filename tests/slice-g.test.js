@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   CHENGYE_ID, CLARKS_ANEMONEFISH_OBSERVATION_ID, FISH, LUMINOUS_ARCHIPELAGO_ID,
   LUMINOUS_RESEARCH_NODE_IDS, OBSERVATION_SUBJECTS, RESEARCH_NODES, STARLIGHT_OBSERVATION_CAPE_ID,
-  TWO_SPINED_ANGELFISH_OBSERVATION_ID, WONDERS, getFishHabitat, getRegionFish
+  SLEEPING_TIDE_BAY_ID, TWO_SPINED_ANGELFISH_OBSERVATION_ID, WONDERS, getFishHabitat, getRegionFish
 } from "../src/data.js";
 import {
   acceptResidentStory, completeResidentStory, createDeveloperState, createInitialState, developerDockRegion,
@@ -25,7 +25,8 @@ test("Slice G defines two sourced observation fish and two hidden-until-found wo
     && subject.pityVisits >= 1
     && /^https:\/\/www\.fishbase\.se\//.test(subject.ecologySource.url)));
   assert.ok(WONDERS.every(wonder => wonder.type === "wonder" && wonder.chance > 0));
-  assert.equal(RESEARCH_NODES.length, 7);
+  assert.equal(RESEARCH_NODES.filter(node => node.regionId === SLEEPING_TIDE_BAY_ID).length, 5);
+  assert.equal(RESEARCH_NODES.filter(node => node.regionId === LUMINOUS_ARCHIPELAGO_ID).length, 7);
 });
 
 test("formal observations auto-record, remember misses, and guarantee the twospined angelfish", () => {
@@ -78,21 +79,21 @@ test("wonders do not alter formal completion and never require a hidden slot", (
   assert.equal(Object.keys(state.observations.wonderRecordsById).length, 1);
 });
 
-test("luminous research completes its story at twelve species and full collection at thirty-three", () => {
+test("luminous research completes its story at twenty-seven species and full collection at thirty-three", () => {
   const state = createInitialState();
   const pool = getRegionFish(FISH, LUMINOUS_ARCHIPELAGO_ID);
   state.world.currentRegionId = LUMINOUS_ARCHIPELAGO_ID;
   state.world.visitedRegionIds.push(LUMINOUS_ARCHIPELAGO_ID);
   state.world.docking = { status: "docked", regionId: LUMINOUS_ARCHIPELAGO_ID };
   state.world.regionProgress[LUMINOUS_ARCHIPELAGO_ID] = {
-    discoveredFishIds: pool.slice(0, 12).map(fish => fish.id),
+    discoveredFishIds: pool.slice(0, 27).map(fish => fish.id),
     completedResearchIds: [],
     mainResearchCompletedDay: null,
     fullResearchCompletedDay: null,
     researchRewardIds: [],
     firstArrivedAt: "2026-07-17T00:00:00.000Z"
   };
-  for (const fish of pool.slice(0, 12)) {
+  for (const fish of pool.slice(0, 27)) {
     const habitat = getFishHabitat(fish, LUMINOUS_ARCHIPELAGO_ID);
     state.discovered[fish.id] = { count: 1, spots: [...habitat.spotIds], times: [...fish.preferredTimeIds] };
   }
@@ -103,7 +104,7 @@ test("luminous research completes its story at twelve species and full collectio
   assert.equal(getRegionResearchStatus(state, LUMINOUS_ARCHIPELAGO_ID).fullComplete, false);
   assert.equal(evaluateResearchProgress(state, LUMINOUS_ARCHIPELAGO_ID).rewards.length, 0);
 
-  for (const fish of pool.slice(12)) {
+  for (const fish of pool.slice(27)) {
     const habitat = getFishHabitat(fish, LUMINOUS_ARCHIPELAGO_ID);
     state.world.regionProgress[LUMINOUS_ARCHIPELAGO_ID].discoveredFishIds.push(fish.id);
     state.discovered[fish.id] = { count: 1, spots: [...habitat.spotIds], times: [...fish.preferredTimeIds] };

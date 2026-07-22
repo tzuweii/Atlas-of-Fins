@@ -52,6 +52,7 @@ test("new games and migrated saves always receive a safe chart view", () => {
 
 test("available chart routes create a timed journey without mutating the input world", () => {
   const world = createInitialState().world;
+  world.unlockedRouteIds = [SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID];
   const before = structuredClone(world);
   const result = requestChartRoute(world, SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID, "2026-01-01T00:00:00.000Z");
   assert.equal(result.ok, true);

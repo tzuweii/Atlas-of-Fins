@@ -12,6 +12,7 @@ import {
   recordCatch, sellCatches, settleAutoFishing, shipInterior, stopAutoFishing, switchActiveShip
 } from "../src/core.js";
 import { RECENT_GAME_EVENT_LIMIT } from "../src/systems/game-events.js";
+import { grantChapterOneRoute } from "./story-route-helper.js";
 
 const BASE_TIME = Date.parse("2026-07-18T00:00:00.000Z");
 const iso = milliseconds => new Date(BASE_TIME + milliseconds).toISOString();
@@ -45,7 +46,7 @@ function catchAndSell(state, fish, regionId, index) {
   sellCatches(state, [caught.uid]);
 }
 
-test("a conservative normal-play economy reaches 20/50 Tideglow and all Slice E purchases without reward claims", () => {
+test("a conservative economy hides Tideglow in chapter 1 and reaches both ship thresholds in chapter 2", () => {
   const state = createInitialState();
   const paidRodCost = RODS.reduce((sum, rod) => sum + rod.price, 0);
   const bread = BAITS.find(bait => bait.id === "bread");
@@ -58,28 +59,41 @@ test("a conservative normal-play economy reaches 20/50 Tideglow and all Slice E 
   state.baitAmounts.bread += breadPacks * bread.amount;
 
   const bayFish = FISH.filter(fish => fish.habitats.some(habitat => habitat.regionId === SLEEPING_TIDE_BAY_ID));
-  bayFish.slice(0, 20).forEach((fish, index) => catchAndSell(state, fish, SLEEPING_TIDE_BAY_ID, index));
-  assert.equal(state.tideglow.total, 20);
-  assert.equal(state.money, 5_862);
-  assert.equal(buyShip(state, "tidewhisper_residence", iso(30_000)).ok, true);
-  assert.equal(state.money, 4_062);
+  bayFish.forEach((fish, index) => catchAndSell(state, fish, SLEEPING_TIDE_BAY_ID, index));
+  assert.equal(state.tideglow.enabled, false);
+  assert.equal(state.tideglow.total, 0);
+  assert.equal(state.money, 10_519);
+  assert.equal(buyShip(state, "tidewhisper_residence", iso(30_000)).reason, "chapter-locked");
 
-  bayFish.slice(20).forEach((fish, index) => catchAndSell(state, fish, SLEEPING_TIDE_BAY_ID, index + 20));
-  assert.equal(state.tideglow.total, 30);
-  assert.equal(state.money, 8_719);
-  assert.equal(buyAutoFishingEquipment(state, iso(60_000)).ok, true);
-  assert.equal(state.money, 7_219);
-
+  grantChapterOneRoute(state);
   const departedAt = BASE_TIME + 100_000;
   assert.equal(beginRouteTravel(state, SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID, departedAt).ok, true);
   const duration = state.world.travel.durationMs;
   assert.equal(progressTravel(state, departedAt + duration + 1).arrived, true);
   assert.equal(dockAtDestination(state, departedAt + duration + 2).ok, true);
-  assert.equal(state.tideglow.total, 37);
+  assert.equal(state.tideglow.enabled, true);
+  assert.equal(state.tideglow.total, 7);
 
   const luminousFish = FISH.filter(fish => fish.habitats.some(habitat => habitat.regionId === LUMINOUS_ARCHIPELAGO_ID));
-  luminousFish.forEach((fish, index) => catchAndSell(state, fish, LUMINOUS_ARCHIPELAGO_ID, index + 30));
-  assert.equal(state.tideglow.total, 78);
+  let luminousIndex = 0;
+  while (state.tideglow.total < 20 && luminousIndex < luminousFish.length) {
+    catchAndSell(state, luminousFish[luminousIndex], LUMINOUS_ARCHIPELAGO_ID, luminousIndex + 30);
+    luminousIndex += 1;
+  }
+  assert.ok(state.tideglow.total >= 20);
+  assert.equal(buyShip(state, "tidewhisper_residence", iso(150_000)).ok, true);
+  assert.equal(buyAutoFishingEquipment(state, iso(160_000)).ok, true);
+
+  luminousFish.slice(luminousIndex).forEach((fish, index) => {
+    catchAndSell(state, fish, LUMINOUS_ARCHIPELAGO_ID, index + luminousIndex + 30);
+  });
+  assert.equal(state.tideglow.total, 48);
+  dispatchGameEvent(state, {
+    type: "observation.recorded",
+    source: "manual",
+    refs: { observationId: "clarks_anemonefish" }
+  }, { consumerIds: ["tideglow"] });
+  assert.equal(state.tideglow.total, 51);
   assert.equal(state.money, 22_429);
   assert.equal(buyShip(state, "voyager_study", iso(200_000)).ok, true);
   assert.equal(state.money, 18_229);
@@ -103,6 +117,7 @@ test("ship furniture keeps fixed +15/+30 percent prices and the complete catalog
 
 test("the starter ship can complete every implemented route while later ships only shorten time gently", () => {
   const starter = createInitialState();
+  grantChapterOneRoute(starter);
   for (const route of ROUTES.filter(entry => entry.status === "available")) {
     assert.ok([route.fromRegionId, route.toRegionId].includes(starter.world.currentRegionId));
     const result = beginRouteTravel(starter, route.id, BASE_TIME);
@@ -134,6 +149,7 @@ test("the rack benchmark is exactly half of the relaxed thirty-catch manual hour
 
 test("five hundred normalized event inputs compact while Tideglow and fixed journal pages deduplicate", () => {
   const state = createInitialState();
+  state.tideglow.enabled = true;
   const rare = FISH.find(fish => fish.rarity === "rare");
   const habitat = rare.habitats.find(entry => entry.regionId === SLEEPING_TIDE_BAY_ID);
   recordCatch(state, economicCatch(rare, habitat, 0));
@@ -146,11 +162,11 @@ test("five hundred normalized event inputs compact while Tideglow and fixed jour
     }, { consumerIds: ["tideglow"] });
     assert.equal(result.complete, true);
   }
-  assert.equal(state.gameEvents.nextSequence, 501);
+  assert.equal(state.gameEvents.nextSequence, 503);
   assert.equal(state.gameEvents.pending.length, 0);
   assert.equal(state.gameEvents.recent.length, RECENT_GAME_EVENT_LIMIT);
-  assert.equal(state.tideglow.total, 1);
-  assert.equal(Object.keys(state.tideglow.ledgerBySourceId).length, 1);
+  assert.equal(state.tideglow.total, 5);
+  assert.equal(Object.keys(state.tideglow.ledgerBySourceId).length, 3);
   assert.equal(getJournalEntries(state, "rare_fish").filter(entry => entry.fishId === rare.id).length, 1);
   assert.equal(state.journal.unreadEntryIds.filter(id => id === `journal:fish:${rare.id}`).length, 1);
   assert.equal(Object.keys(state.journal.fishEncounterLineById).length, 1);
@@ -159,7 +175,17 @@ test("five hundred normalized event inputs compact while Tideglow and fixed jour
 function autoStressState() {
   const state = createInitialState();
   state.money = 10_000;
-  state.tideglow.total = 20;
+  state.tideglow = {
+    ...state.tideglow,
+    enabled: true,
+    total: 20,
+    ledgerBySourceId: {
+      "stress:chapter-2": {
+        sourceId: "stress:chapter-2", eventId: "stress:chapter-2", eventType: "test",
+        label: "第二章壓測基準", points: 20, awardedAt: iso(0), refs: {}
+      }
+    }
+  };
   buyShip(state, "tidewhisper_residence", iso(0));
   const fish = FISH.find(entry => entry.id === "sardine");
   const caught = economicCatch(fish, fish.habitats.find(habitat => habitat.regionId === SLEEPING_TIDE_BAY_ID), 0);

@@ -40,6 +40,7 @@ test("new ships begin with fixed structures but no free replaceable furniture", 
   const state = createInitialState();
   assert.deepEqual(shipInterior(state).ownedFurnitureIds, ["sleeping_bag"]);
   state.money = 5000;
+  state.tideglow.enabled = true;
   state.tideglow.total = 20;
   const purchase = buyShip(state, "tidewhisper_residence");
   assert.equal(purchase.ok, true);
@@ -51,6 +52,7 @@ test("new ships begin with fixed structures but no free replaceable furniture", 
 test("active ship catalog purchases and placement remain isolated per ship", () => {
   const state = createInitialState();
   state.money = 5000;
+  state.tideglow.enabled = true;
   state.tideglow.total = 20;
   buyShip(state, "tidewhisper_residence");
   const before = state.money;
@@ -68,6 +70,7 @@ test("active ship catalog purchases and placement remain isolated per ship", () 
 test("same-version Slice B saves normalize all owned interiors without inventing furniture", () => {
   const alpha2 = createInitialState();
   alpha2.money = 5000;
+  alpha2.tideglow.enabled = true;
   alpha2.tideglow.total = 20;
   buyShip(alpha2, "tidewhisper_residence");
   delete alpha2.ships.interiorVersion;

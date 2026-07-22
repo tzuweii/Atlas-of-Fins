@@ -12,6 +12,7 @@ import {
   normalizeTextScale, normalizeUiScale
 } from "../src/systems/accessibility.js";
 import { createPortableSave, parsePortableSave } from "../src/persistence/portable-save.js";
+import { grantChapterOneRoute } from "./story-route-helper.js";
 
 test("Slice H display settings provide three text sizes and independent UI scaling", () => {
   assert.deepEqual(TEXT_SCALE_OPTIONS.map(option => option.id), ["small", "standard", "large"]);
@@ -62,6 +63,7 @@ test("portable saves round-trip current and legacy state without crossing save m
 
 test("two hundred and forty serialized voyages preserve regional research context", () => {
   let state = createInitialState();
+  grantChapterOneRoute(state);
   let now = Date.parse("2026-07-17T00:00:00.000Z");
   let luminousFirstArrival = null;
 

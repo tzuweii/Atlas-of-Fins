@@ -102,7 +102,7 @@ export function validateContentCatalog(content = {}) {
   };
 
   const validateProgressCondition = (collection, item, condition, path = "condition") => {
-    if (!condition || !["catch", "sell"].includes(condition.eventType)) {
+    if (!condition || !["catch", "sell", "aquarium"].includes(condition.eventType)) {
       addError("invalid-type", collection, item?.id, `${collection}[${item?.id || "missing-id"}].${path}.eventType`, `進度事件類型「${String(condition?.eventType)}」不受支援`);
       return;
     }
@@ -129,8 +129,11 @@ export function validateContentCatalog(content = {}) {
     asArray(condition.sizeTiers).forEach((id, index) => {
       if (!SIZE_TARGETS.has(id)) addError("invalid-target", collection, item?.id, `${collection}[${item?.id || "missing-id"}].${path}.sizeTiers[${index}]`, `尺寸條件「${String(id)}」不受支援`);
     });
-    if (condition.eventType === "sell" && condition.metric !== "amount") {
-      addError("invalid-target", collection, item?.id, `${collection}[${item?.id || "missing-id"}].${path}.metric`, "販售進度必須使用 amount");
+    if (condition.eventType === "sell" && !["amount", "count"].includes(condition.metric)) {
+      addError("invalid-target", collection, item?.id, `${collection}[${item?.id || "missing-id"}].${path}.metric`, "販售進度必須使用 amount 或 count");
+    }
+    if (condition.eventType === "aquarium" && condition.metric !== "count") {
+      addError("invalid-target", collection, item?.id, `${collection}[${item?.id || "missing-id"}].${path}.metric`, "水族箱進度必須使用 count");
     }
   };
 
@@ -369,6 +372,9 @@ export function validateContentCatalog(content = {}) {
     if (!(Number(route?.travelSegments) >= 1)) {
       addError("invalid-segments", "routes", route?.id, `routes[${route?.id || "missing-id"}].travelSegments`, "航線至少需要一個航段");
     }
+    if (route?.unlock?.type === "resident-story") {
+      requireReference("routes", route, "unlock.sceneId", route.unlock.sceneId, ids.residentStoryScenes, "居民故事場景");
+    }
   }
   for (const resident of collections.residents) {
     requireReference("residents", resident, "regionId", resident?.regionId, ids.regions, "區域");
@@ -445,7 +451,9 @@ export function validateContentCatalog(content = {}) {
       }
     }
     const objective = scene?.objective;
-    if (!objective || !["catch", "observation", "region-main-research"].includes(objective.kind)) {
+    if (!objective || ![
+      "catch", "catch-contexts", "checklist", "observation", "preferred-weather-catch", "region-main-research"
+    ].includes(objective.kind)) {
       addError("invalid-type", "residentStoryScenes", scene?.id, `residentStoryScenes[${scene?.id || "missing-id"}].objective.kind`, "主線需要受支援的手動任務類型");
       continue;
     }
@@ -454,12 +462,69 @@ export function validateContentCatalog(content = {}) {
       || !(Number(objective.goal) > 0)) {
       addError("missing-objective", "residentStoryScenes", scene?.id, `residentStoryScenes[${scene?.id || "missing-id"}].objective`, "主線任務需要標題、說明與大於零的目標數量");
     }
-    if (objective.kind === "catch") validateProgressCondition("residentStoryScenes", scene, objective.condition, "objective.condition");
+    if (["catch", "catch-contexts"].includes(objective.kind)) {
+      validateProgressCondition("residentStoryScenes", scene, objective.condition, "objective.condition");
+    }
+    if (objective.kind === "catch-contexts") {
+      if (typeof objective.uniqueKey !== "string" || !objective.uniqueKey.trim()) {
+        addError("missing-objective", "residentStoryScenes", scene?.id, `residentStoryScenes[${scene?.id || "missing-id"}].objective.uniqueKey`, "多情境捕獲任務需要唯一情境欄位");
+      }
+    }
+    if (objective.kind === "checklist") {
+      if (asArray(objective.parts).length !== objective.goal) {
+        addError("invalid-goal", "residentStoryScenes", scene?.id, `residentStoryScenes[${scene?.id || "missing-id"}].objective.parts`, "清單主線的總目標需等於清單項目數");
+      }
+      asArray(objective.parts).forEach((part, index) => {
+        if (typeof part?.id !== "string" || typeof part?.label !== "string" || !(Number(part?.goal) > 0)) {
+          addError("missing-objective", "residentStoryScenes", scene?.id, `residentStoryScenes[${scene?.id || "missing-id"}].objective.parts[${index}]`, "清單項目需要 ID、標籤與正數目標");
+        }
+        validateProgressCondition("residentStoryScenes", scene, part?.condition, `objective.parts[${index}].condition`);
+      });
+    }
+    if (objective.kind === "preferred-weather-catch") {
+      requireReference("residentStoryScenes", scene, "objective.regionId", objective.regionId, ids.regions, "區域");
+    }
     if (objective.kind === "observation") {
       requireReference("residentStoryScenes", scene, "objective.observationId", objective.observationId, ids.observations, "正式觀察");
     }
     if (objective.kind === "region-main-research") {
       requireReference("residentStoryScenes", scene, "objective.regionId", objective.regionId, ids.regions, "區域");
+      const regionFishCount = collections.fish.filter(fish => asArray(fish?.habitats)
+        .some(habitat => habitat?.regionId === objective.regionId)).length;
+      const requiredGoal = Math.ceil(regionFishCount * 0.8);
+      if (regionFishCount > 0 && objective.goal !== requiredGoal) {
+        addError(
+          "invalid-goal",
+          "residentStoryScenes",
+          scene?.id,
+          `residentStoryScenes[${scene?.id || "missing-id"}].objective.goal`,
+          `區域主研究必須完成八成魚類：${regionFishCount} 種需達 ${requiredGoal} 種`
+        );
+      }
+      asArray(objective.requirements).forEach((requirement, index) => {
+        const path = `residentStoryScenes[${scene?.id || "missing-id"}].objective.requirements[${index}]`;
+        if (typeof requirement?.id !== "string" || typeof requirement?.label !== "string" || !(Number(requirement?.goal) > 0)) {
+          addError("missing-objective", "residentStoryScenes", scene?.id, path, "主線條件需要 ID、標籤與正數目標");
+        }
+        if (requirement?.kind === "completed-scenes") {
+          asArray(requirement.sceneIds).forEach((sceneId, sceneIndex) => {
+            requireReference("residentStoryScenes", scene, `objective.requirements[${index}].sceneIds[${sceneIndex}]`, sceneId, ids.residentStoryScenes, "居民故事場景");
+          });
+        } else if (requirement?.kind === "region-species") {
+          requireReference("residentStoryScenes", scene, `objective.requirements[${index}].regionId`, requirement.regionId, ids.regions, "區域");
+          const requirementFishCount = collections.fish.filter(fish => asArray(fish?.habitats)
+            .some(habitat => habitat?.regionId === requirement.regionId)).length;
+          const requirementGoal = Math.ceil(requirementFishCount * 0.8);
+          if (requirement.goal !== requirementGoal || requirement.total !== requirementFishCount) {
+            addError("invalid-goal", "residentStoryScenes", scene?.id, path, `八成探索條件必須顯示 ${requirementGoal}／${requirementFishCount}`);
+          }
+        } else {
+          addError("invalid-type", "residentStoryScenes", scene?.id, `${path}.kind`, "不支援的主線條件類型");
+        }
+      });
+    }
+    if (scene?.reward?.type === "route-chart") {
+      requireReference("residentStoryScenes", scene, "reward.routeId", scene.reward.routeId, ids.routes, "航線");
     }
   }
   for (const point of collections.chartRegions) {
@@ -567,7 +632,7 @@ export function validateContentCatalog(content = {}) {
     }
   }
 
-  const categoryKinds = new Set(["daily", "fish", "story"]);
+  const categoryKinds = new Set(["daily", "events", "fish", "story"]);
   for (const category of collections.journalCategories) {
     if (!categoryKinds.has(category?.kind)) {
       addError("invalid-type", "journalCategories", category?.id, `journalCategories[${category?.id || "missing-id"}].kind`, "日誌分類必須為 daily、fish 或 story");
@@ -594,7 +659,7 @@ export function validateContentCatalog(content = {}) {
       }
       rareFishEntryIds.add(entry?.fishId);
     }
-    if (entry?.type === "story" && entry?.unlock?.type === "region-event") {
+    if (entry?.type === "event" && entry?.unlock?.type === "region-event") {
       requireReference("journalEntries", entry, "unlock.eventId", entry.unlock.eventId, ids.events, "區域事件");
     }
     if (entry?.type === "story" && entry?.unlock?.type === "resident-scene") {

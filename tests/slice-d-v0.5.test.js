@@ -31,12 +31,14 @@ const caught = (fishId, overrides = {}) => ({
   }
 });
 
-test("journal catalogs fix eight categories, current rare encounters, and two completed sea chapters", () => {
-  assert.equal(JOURNAL_CATEGORIES.length, 8);
-  assert.deepEqual(JOURNAL_CATEGORIES.slice(0, 2).map(category => category.id), ["today", "rare_fish"]);
+test("journal catalogs separate special sea conditions from six main-story chapters", () => {
+  assert.equal(JOURNAL_CATEGORIES.length, 9);
+  assert.deepEqual(JOURNAL_CATEGORIES.slice(0, 3).map(category => category.id), ["today", "rare_fish", "sea_events"]);
   assert.equal(JOURNAL_CATEGORIES.filter(category => category.kind === "story").length, 6);
+  assert.equal(JOURNAL_CATEGORIES.filter(category => category.kind === "events").length, 1);
   assert.equal(RARE_FISH_JOURNAL_ENTRIES.length, FISH.filter(fish => fish.rarity === "rare").length);
-  assert.equal(MAIN_STORY_JOURNAL_ENTRIES.filter(entry => entry.categoryId === "sleeping_tide_bay").length, 4);
+  assert.equal(MAIN_STORY_JOURNAL_ENTRIES.filter(entry => entry.categoryId === "sleeping_tide_bay").length, 6);
+  assert.equal(MAIN_STORY_JOURNAL_ENTRIES.filter(entry => entry.categoryId === "sea_events").length, 3);
   assert.equal(MAIN_STORY_JOURNAL_ENTRIES.filter(entry => entry.categoryId === "luminous_archipelago").length, 6);
   assert.equal(DAILY_TIDE_ESSAYS.length, 12);
   assert.equal(JOURNAL_EVENT_TEMPLATES.length, 3);
@@ -95,25 +97,25 @@ test("automatic, offline, and migration sources never invent rare encounter hist
   assert.equal(journal.unreadEntryIds.includes(`journal:fish:${rare.id}`), false);
 });
 
-test("initial categories expose only today's essay and the first Sleeping Tide story page", () => {
+test("initial categories expose today's essay while story and optional sea records wait for real completion", () => {
   const state = createInitialState();
   const categories = Object.fromEntries(getJournalCategories(state).map(category => [category.id, category]));
   assert.equal(categories.today.unlockedCount, 1);
   assert.equal(categories.rare_fish.unlockedCount, 0);
-  assert.deepEqual([categories.sleeping_tide_bay.unlockedCount, categories.sleeping_tide_bay.totalCount], [1, 4]);
+  assert.deepEqual([categories.sea_events.unlockedCount, categories.sea_events.totalCount], [0, 3]);
+  assert.deepEqual([categories.sleeping_tide_bay.unlockedCount, categories.sleeping_tide_bay.totalCount], [0, 6]);
   assert.deepEqual([categories.luminous_archipelago.unlockedCount, categories.luminous_archipelago.totalCount], [0, 6]);
   assert.equal(categories.mist_cape_cold_current.totalCount, 0);
 });
 
-test("completed regional events unlock only their predefined sea story page", () => {
+test("completed regional events unlock only their predefined optional sea-condition page", () => {
   const state = createInitialState();
   state.bayEventHistory.silver_tide = { completions: 1, firstCompletedAt: "2026-07-18T01:00:00.000Z", lastCompletedDay: 1 };
   state.journal = syncJournalUnlocks(state);
-  const pages = getJournalEntries(state, "sleeping_tide_bay");
-  assert.deepEqual(pages.map(page => page.id), [
-    "journal:story:sleeping_tide_bay:opening",
+  assert.deepEqual(getJournalEntries(state, "sea_events").map(page => page.id), [
     "journal:story:sleeping_tide_bay:silver_tide"
   ]);
+  assert.equal(getJournalEntries(state, "sleeping_tide_bay").length, 0);
   assert.equal(getJournalEntries(state, "luminous_archipelago").length, 0);
 });
 
@@ -132,6 +134,11 @@ test("completed Chengye scenes appear in Luminous chapter order", () => {
 
 test("reading a fixed page clears unread state without affecting today's automatic page", () => {
   const state = createInitialState();
+  state.residentStories.lighthouse_keeper = {
+    completedSceneIds: ["keeper_returning_light"],
+    rewardIds: []
+  };
+  state.journal = syncJournalUnlocks(state);
   const opening = getJournalEntries(state, "sleeping_tide_bay")[0];
   assert.equal(getJournalUnreadCount(state), 1);
   state.journal = markJournalEntriesRead(state.journal, [opening.id]);

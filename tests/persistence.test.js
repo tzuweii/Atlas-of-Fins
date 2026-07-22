@@ -145,7 +145,7 @@ test("Slice D v4 state is backed up before Slice E travel history normalization"
   assert.equal(result.preserveBackupOnWrite, true);
   assert.deepEqual(result.state.travelSettings, { developerDurationScale: 1 });
   assert.deepEqual(result.state.world.completedRouteIds, []);
-  assert.deepEqual(result.state.world.unlockedRouteIds, ["sleeping_tide_to_luminous_archipelago"]);
+  assert.deepEqual(result.state.world.unlockedRouteIds, []);
   assert.equal(result.state.money, 555);
 });
 

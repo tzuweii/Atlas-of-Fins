@@ -8,12 +8,13 @@ import {
 import {
   SAVE_VERSION, STARTER_SHIP_ID, TEMP_SAVE_KEY, acceptResidentStory, beginRouteTravel,
   completeResidentStory, createDeveloperState, createInitialState, developerDockRegion, developerResetObservations,
-  dispatchGameEvent, dockAtDestination, migrateState, observeAtSpot, progressTravel, recordCatch, updateQuestProgress
+  dispatchGameEvent, dockAtDestination, isCurrentSaveSchema, migrateState, observeAtSpot, progressTravel, recordCatch, updateQuestProgress
 } from "../src/core.js";
 import { writeStoredState } from "../src/persistence/migrations.js";
 import {
   RECENT_GAME_EVENT_LIMIT, consumeGameEvent, createGameEventState, enqueueGameEvent
 } from "../src/systems/game-events.js";
+import { grantChapterOneRoute } from "./story-route-helper.js";
 
 const fixture = name => JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8"));
 
@@ -73,8 +74,33 @@ test("event IDs deduplicate and acknowledged history remains compact and capped"
   assert.equal(duplicate.state.nextSequence, state.nextSequence);
 });
 
+test("chapter 1 suppresses Tideglow until the first chapter 2 arrival", () => {
+  const state = createInitialState();
+  const discovery = dispatchGameEvent(state, {
+    type: "fish.discovered", source: "manual", refs: { fishId: "sardine" }
+  }, { consumerIds: ["tideglow"] });
+  assert.equal(discovery.results.tideglow.reason, "not-enabled");
+  assert.equal(state.tideglow.enabled, false);
+  assert.equal(state.tideglow.total, 0);
+  assert.deepEqual(state.tideglow.ledgerBySourceId, {});
+
+  dispatchGameEvent(state, {
+    type: "region.arrived", source: "manual", refs: { regionId: "sleeping_tide_bay" }
+  }, { consumerIds: ["tideglow"] });
+  assert.equal(state.tideglow.enabled, false);
+  assert.equal(state.tideglow.total, 0);
+
+  const arrival = dispatchGameEvent(state, {
+    type: "region.arrived", source: "manual", refs: { regionId: LUMINOUS_ARCHIPELAGO_ID }
+  }, { consumerIds: ["tideglow"] });
+  assert.equal(arrival.results.tideglow.awarded, true);
+  assert.equal(state.tideglow.enabled, true);
+  assert.equal(state.tideglow.total, 5);
+});
+
 test("all six Tideglow sources award once while automatic and migration sources award nothing", () => {
   const state = createInitialState();
+  state.tideglow.enabled = true;
   const refsBySource = {
     fish_discovery: { fishId: "sardine" },
     region_arrival: { regionId: "luminous_archipelago" },
@@ -99,7 +125,7 @@ test("all six Tideglow sources award once while automatic and migration sources 
   assert.equal(state.tideglow.total, 17);
 });
 
-test("a real first manual catch emits one discovery fact and repeat catches do not re-award", () => {
+test("a real first chapter catch records discovery facts without exposing Tideglow", () => {
   const state = createInitialState();
   const caught = {
     uid: "slice-a-sardine",
@@ -116,13 +142,15 @@ test("a real first manual catch emits one discovery fact and repeat catches do n
   const second = recordCatch(state, { ...structuredClone(caught), uid: "slice-a-sardine-2" });
   assert.equal(first.isNew, true);
   assert.equal(second.isNew, false);
-  assert.equal(state.tideglow.total, 1);
+  assert.equal(state.tideglow.total, 0);
+  assert.deepEqual(state.tideglow.ledgerBySourceId, {});
   assert.ok(state.gameEvents.recent.some(event => event.type === "fish.caught"));
   assert.equal(state.gameEvents.recent.filter(event => event.type === "fish.discovered").length, 1);
 });
 
 test("first docking, formal observation, research node, and resident story share real Tideglow facts", () => {
   const voyage = createInitialState();
+  grantChapterOneRoute(voyage);
   const startedAt = Date.parse("2026-07-18T00:00:00.000Z");
   const departure = beginRouteTravel(voyage, SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID, startedAt);
   progressTravel(voyage, startedAt + departure.durationMs + 1);
@@ -171,6 +199,24 @@ test("four immutable v4 fixtures migrate to the v5 shell without retroactive rew
   const migrated = migrateState(normal);
   assert.deepEqual(migrated.ships.interiorsByShipId[STARTER_SHIP_ID].ownedFurnitureIds, normal.ownedFurniture);
   assert.equal(migrated.ships.interiorsByShipId[STARTER_SHIP_ID].placedFurniture.light, "lantern");
+});
+
+test("a same-version chapter 2 save cannot remain stuck behind a disabled Tideglow flag", () => {
+  const state = createInitialState();
+  grantChapterOneRoute(state);
+  const startedAt = Date.parse("2026-07-18T00:00:00.000Z");
+  const departure = beginRouteTravel(state, SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID, startedAt);
+  progressTravel(state, startedAt + departure.durationMs + 1);
+  dockAtDestination(state, startedAt + departure.durationMs + 2);
+  state.tideglow = {
+    enabled: false, seenIntro: false, total: 0, ledgerBySourceId: {}, developerAdjustment: 0
+  };
+
+  assert.equal(isCurrentSaveSchema(state), false);
+  const migrated = migrateState(structuredClone(state));
+  assert.equal(migrated.tideglow.enabled, true);
+  assert.equal(migrated.tideglow.seenIntro, false);
+  assert.equal(migrated.tideglow.total, 0);
 });
 
 test("staged save writes validate before replacement and roll back a failed primary write", () => {

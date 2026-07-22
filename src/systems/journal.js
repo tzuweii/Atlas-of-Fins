@@ -29,7 +29,7 @@ export function createJournalState() {
     templateVersion: JOURNAL_TEMPLATE_VERSION,
     fishEncounterLineById: {},
     readEntryIds: [],
-    unreadEntryIds: [openingEntryId],
+    unreadEntryIds: [],
     pendingNoticeEntryIds: []
   };
 }
@@ -43,8 +43,7 @@ function migratedEntryId(entry) {
   }
   if (typeof entry.sourceId === "string" && entry.sourceId.startsWith("resident-story:")) {
     const sceneId = entry.sourceId.split(":").at(-1);
-    const candidate = `journal:story:luminous_archipelago:${sceneId}`;
-    return fixedEntryIds.has(candidate) ? candidate : null;
+    return MAIN_STORY_JOURNAL_ENTRIES.find(candidate => candidate.unlock?.sceneId === sceneId)?.id || null;
   }
   if (entry.id === "journal:intro") return openingEntryId;
   return null;
@@ -82,7 +81,6 @@ export function normalizeJournalState(raw) {
     if (oldUnread.has(entry.id)) unreadEntryIds.push(id);
     else readEntryIds.push(id);
   }
-  if (!readEntryIds.includes(openingEntryId) && !unreadEntryIds.includes(openingEntryId)) unreadEntryIds.push(openingEntryId);
   return {
     ...base,
     fishEncounterLineById: Object.fromEntries(Object.entries(isObject(source.fishEncounterLineById) ? source.fishEncounterLineById : {})
@@ -158,7 +156,12 @@ function fixedEntryView(entry, state) {
     };
   }
   const category = JOURNAL_CATEGORIES.find(candidate => candidate.id === entry.categoryId);
-  return { ...entry, meta: `${category?.name || "海域"} · 主線第 ${category?.chapter || "—"} 章` };
+  return {
+    ...entry,
+    meta: entry.type === "event"
+      ? `${category?.name || "特殊海況"} · 選填、不影響主線`
+      : `${category?.name || "海域"} · 主線第 ${category?.chapter || "—"} 章`
+  };
 }
 
 export function getJournalEntries(state, categoryId = "today") {
@@ -188,7 +191,7 @@ export function getJournalCategories(state) {
     const entries = getJournalEntries(state, category.id);
     const total = category.id === "rare_fish"
       ? RARE_FISH_JOURNAL_ENTRIES.length
-      : category.kind === "story"
+      : ["story", "events"].includes(category.kind)
         ? MAIN_STORY_JOURNAL_ENTRIES.filter(entry => entry.categoryId === category.id).length
         : 1;
     return {
