@@ -578,15 +578,16 @@ await waitFor(`(() => {
 })()`, 5000);
 await waitFor(`(() => {
   const fish = document.querySelector('.fish-shadow');
-  const probe = fish?.getAnimations().find(animation => animation.animationName === 'fishProbeFromLeft');
-  return probe?.currentTime >= 650;
+  const probe = fish?.getAnimations().find(animation => /fish.*ProbeFromLeft/.test(animation.animationName));
+  const duration = Number(probe?.effect?.getTiming().duration) || 0;
+  return probe?.currentTime >= Math.max(250, duration * .7);
 })()`, 1000);
 const probeExitMouth = await evaluate(`(() => {
   const mouth = document.querySelector('.fish-mouth').getBoundingClientRect();
   return { x: mouth.left + mouth.width / 2, y: mouth.top + mouth.height / 2 };
 })()`);
-await waitFor(`document.querySelector('#game-shell').dataset.fishingPhase === 'approaching'`, 1500);
-const crossEntry = await evaluate(`(() => {
+await waitFor(`document.querySelector('.fishing-stage')?.dataset.fishCue === 'retreat'`, 1500);
+const retreatEntry = await evaluate(`(() => {
   const stage = document.querySelector('.fishing-stage');
   const mouth = document.querySelector('.fish-mouth').getBoundingClientRect();
   return {
@@ -595,19 +596,20 @@ const crossEntry = await evaluate(`(() => {
     mouth: { x: mouth.left + mouth.width / 2, y: mouth.top + mouth.height / 2 }
   };
 })()`);
-assert.equal(crossEntry.side, 'right');
-assert.match(crossEntry.animation, /fishCrossToRight/);
-assert.ok(Math.hypot(crossEntry.mouth.x - probeExitMouth.x, crossEntry.mouth.y - probeExitMouth.y) < 8, 'probe hands off to the opposite-side turn without teleporting');
+assert.equal(retreatEntry.side, 'left');
+assert.match(retreatEntry.animation, /fishRetreatLeft/);
+assert.ok(Math.hypot(retreatEntry.mouth.x - probeExitMouth.x, retreatEntry.mouth.y - probeExitMouth.y) < 8, 'probe hands off to the retreat without teleporting');
 await waitFor(`(() => {
-  const fish = document.querySelector('.fish-shadow');
-  return fish?.getAnimations().some(animation => animation.animationName === 'fishCrossToRight' && animation.playState === 'finished');
+  const stage = document.querySelector('.fishing-stage');
+  return stage?.dataset.fishCue === 'reapproach'
+    && getComputedStyle(document.querySelector('.fish-shadow')).animationName.includes('fishReapproachLeft');
 })()`, 1400);
-const rightSideProbeOffset = await evaluate(`(() => {
+const reapproachOffset = await evaluate(`(() => {
   const mouth = document.querySelector('.fish-mouth').getBoundingClientRect();
   const bait = document.querySelector('.fishing-bait').getBoundingClientRect();
   return mouth.left + mouth.width / 2 - bait.left - bait.width / 2;
 })()`);
-assert.ok(rightSideProbeOffset > 18, `fish crosses to the opposite side (${rightSideProbeOffset}px)`);
+assert.ok(reapproachOffset < -18, `fish retreats and reapproaches from its original side (${reapproachOffset}px)`);
 await command("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
 await wait(180);
 const narrowRigAlignment = await evaluate(`(() => {
@@ -637,8 +639,8 @@ await waitFor(`(() => {
   const mouth = document.querySelector('.fish-mouth')?.getBoundingClientRect();
   const bait = document.querySelector('.fishing-bait')?.getBoundingClientRect();
   return mouth && bait
-    && document.querySelector('.fishing-stage').dataset.fishSide === 'right'
-    && getComputedStyle(document.querySelector('.fish-shadow')).animationName.includes('fishBiteFromRight')
+    && document.querySelector('.fishing-stage').dataset.fishSide === 'left'
+    && getComputedStyle(document.querySelector('.fish-shadow')).animationName.includes('fishBiteFromLeft')
     && Math.hypot(mouth.left + mouth.width / 2 - bait.left - bait.width / 2, mouth.top + mouth.height / 2 - bait.top - bait.height / 2) < 6;
 })()`, 1000);
 const biteArtAlignment = await evaluate(`(() => {

@@ -1,3 +1,4 @@
+import { createFishingBitePlan } from './systems/fishing-bite-sequence.js';
 import {
   ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, AUTO_FISHING_EQUIPMENT, BAITS, BAY_EVENTS, CHART_REGION_POINTS, CHART_ROUTE_PATHS,
   CHENGYE_ID, COMMISSION_TEMPLATES, CONTENT_VALIDATION, DAILY_GOAL_TEMPLATES, FISH, FURNITURE,
@@ -78,7 +79,8 @@ let shipTransitionTimer = null;
 let fishing = {
   phase: "idle", fish: null, caught: null, context: null, timer: null, raf: null,
   held: false, tension: .38, progress: 0, danger: 0, last: 0,
-  nibbleIndex: 0, falseNibbles: 0, failureReason: null, captureChance: null
+  nibbleIndex: 0, falseNibbles: 0, bitePlan: null, cueIndex: 0, cue: null, fishSide: "left",
+  failureReason: null, captureChance: null
 };
 let fishingRigFrame = null;
 let tutorialFocusFrame = null;
@@ -184,7 +186,8 @@ function skipTutorial() {
   Object.assign(fishing, {
     phase: "idle", fish: null, caught: null, context: null,
     held: false, tension: .38, progress: 0, danger: 0, last: 0,
-    nibbleIndex: 0, falseNibbles: 0, failureReason: null, captureChance: null
+    nibbleIndex: 0, falseNibbles: 0, bitePlan: null, cueIndex: 0, cue: null, fishSide: "left",
+    failureReason: null, captureChance: null
   });
   modalRoot.innerHTML = "";
   completeTutorial(state);
@@ -1111,21 +1114,24 @@ function showResidentDialogue(residentId, deliveredDialogue = null) {
 }
 
 function fishingFishSide(phase = fishing.phase) {
-  if (phase === "nibbling") return fishing.nibbleIndex % 2 === 1 ? "left" : "right";
-  return fishing.nibbleIndex % 2 === 1 ? "right" : "left";
+  return fishing.cue?.side || fishing.fishSide || (phase === "nibbling" ? "left" : "right");
 }
 
 function syncFishingFishMotion(stage, phase = fishing.phase) {
   if (!stage) return;
   stage.dataset.fishSide = fishingFishSide(phase);
-  stage.dataset.fishMotion = phase === "approaching" && fishing.nibbleIndex === 0 ? "initial" : "cross";
+  const cueType = fishing.cue?.type || (phase === "approaching" ? "initial" : phase);
+  stage.dataset.fishCue = cueType;
+  stage.dataset.fishMotion = cueType === "initial" ? "initial" : cueType;
+  stage.style.setProperty("--cue-duration", `${Math.max(180, fishing.cue?.durationMs || 780)}ms`);
 }
 
 function renderFishingStage() {
   if (["approaching", "nibbling", "biting"].includes(fishing.phase)) {
     const fishSide = fishingFishSide();
-    const fishMotion = fishing.phase === "approaching" && fishing.nibbleIndex === 0 ? "initial" : "cross";
-    return `<div class="fishing-stage is-${fishing.phase}" data-fish-side="${fishSide}" data-fish-motion="${fishMotion}"><div class="fish-shadow" aria-hidden="true"><span class="fishing-fish-body fish-shadow-body"><i class="fishing-fish-fin"></i><b class="fishing-fish-mouth fish-mouth"></b></span></div><svg class="fishing-line-cue" aria-hidden="true"><path></path></svg><div class="waiting-bobber" aria-hidden="true"><div class="bobber"></div><span class="fishing-bait"><i></i></span><span class="probe-ripples"><i></i><b></b></span><i class="bite-splash"></i></div><div class="bite-alert" role="status" aria-live="assertive"><strong aria-hidden="true">!</strong><span class="visually-hidden">真正吞餌，現在起竿</span></div></div>`;
+    const cueType = fishing.cue?.type || (fishing.phase === "approaching" ? "initial" : fishing.phase);
+    const cueDuration = Math.max(180, fishing.cue?.durationMs || 780);
+    return `<div class="fishing-stage is-${fishing.phase}" data-fish-side="${fishSide}" data-fish-motion="${cueType === "initial" ? "initial" : cueType}" data-fish-cue="${cueType}" style="--cue-duration:${cueDuration}ms"><div class="fish-shadow" aria-hidden="true"><span class="fishing-fish-body fish-shadow-body"><i class="fishing-fish-fin"></i><b class="fishing-fish-mouth fish-mouth"></b></span></div><svg class="fishing-line-cue" aria-hidden="true"><path></path></svg><div class="waiting-bobber" aria-hidden="true"><div class="bobber"></div><span class="fishing-bait"><i></i></span><span class="probe-ripples"><i></i><b></b></span><i class="bite-splash"></i></div><div class="bite-alert" role="status" aria-live="assertive"><strong aria-hidden="true">!</strong><span class="visually-hidden">真正吞餌，現在起竿</span></div></div>`;
   }
   if (fishing.phase === "failed") {
     const early = fishing.failureReason === "early";
@@ -1212,11 +1218,19 @@ function castLine() {
   if (teaching) advanceTutorial(2, 3, { persist: false });
   fishing.phase = "approaching"; fishing.fish = chooseFish(state, teaching ? () => 0 : Math.random); fishing.context = currentCatchContext(); fishing.progress = 0; fishing.tension = .36; fishing.danger = 0;
   fishing.nibbleIndex = 0;
-  fishing.falseNibbles = fishing.fish ? (({steady:1,sprint:2,endurance:2,sway:2,rare:3})[fishing.fish.behavior] || 1) : 2;
+  const bait = baitById(state.equippedBait);
+  fishing.bitePlan = createFishingBitePlan({ fish: fishing.fish, bait });
+  fishing.cueIndex = 0;
+  fishing.cue = {
+    type: "initial",
+    side: fishing.bitePlan.initialSide,
+    durationMs: fishing.bitePlan.initialDelayMs
+  };
+  fishing.fishSide = fishing.bitePlan.initialSide;
+  fishing.falseNibbles = fishing.bitePlan.probeCount;
   fishing.failureReason = null; fishing.captureChance = null;
   sound.play("cast"); saveGame(); renderFishing(); updateTutorial();
-  const bait = baitById(state.equippedBait);
-  fishing.timer = setTimeout(advanceBiteSequence, 2400 + Math.random()*1800*bait.bite);
+  fishing.timer = setTimeout(advanceBiteSequence, fishing.bitePlan.initialDelayMs);
 }
 
 function updateFishingCuePhase(phase) {
@@ -1240,18 +1254,19 @@ function updateFishingCuePhase(phase) {
 
 function advanceBiteSequence() {
   if (!["approaching", "nibbling"].includes(fishing.phase)) return;
-  if (fishing.nibbleIndex < fishing.falseNibbles) {
-    fishing.nibbleIndex += 1;
-    updateFishingCuePhase("nibbling");
-    sound.play("nibble");
-    fishing.timer = setTimeout(() => {
-      if (fishing.phase !== "nibbling") return;
-      updateFishingCuePhase("approaching");
-      fishing.timer = setTimeout(advanceBiteSequence, 1500 + Math.random()*1100);
-    }, 780);
+  const cue = fishing.bitePlan?.cues[fishing.cueIndex];
+  if (cue) {
+    fishing.cueIndex += 1;
+    fishing.cue = cue;
+    fishing.fishSide = cue.side;
+    const isProbe = cue.type.startsWith("probe-");
+    if (isProbe) fishing.nibbleIndex += 1;
+    updateFishingCuePhase(isProbe ? "nibbling" : "approaching");
+    if (isProbe) sound.play("nibble");
+    fishing.timer = setTimeout(advanceBiteSequence, cue.durationMs);
     return;
   }
-  if (!fishing.fish) {
+  if (!fishing.fish || fishing.bitePlan?.terminal === "departed") {
     fishing.failureReason = "departed";
     fishing.phase = "departed";
     sound.play("fail");
@@ -1260,6 +1275,7 @@ function advanceBiteSequence() {
     updateTutorial();
     return;
   }
+  fishing.cue = { type: "bite", side: fishing.fishSide, durationMs: 320 };
   updateFishingCuePhase("biting");
   sound.play("hook");
   fishing.timer = tutorialActive() && state.tutorialStep === 4
@@ -1362,7 +1378,7 @@ function completeCatch() {
 
 function resetFishing() {
   clearFishing();
-  Object.assign(fishing,{phase:"idle",fish:null,caught:null,context:null,tension:.38,progress:0,danger:0,last:0,nibbleIndex:0,falseNibbles:0,failureReason:null,captureChance:null});
+  Object.assign(fishing,{phase:"idle",fish:null,caught:null,context:null,tension:.38,progress:0,danger:0,last:0,nibbleIndex:0,falseNibbles:0,bitePlan:null,cueIndex:0,cue:null,fishSide:"left",failureReason:null,captureChance:null});
   if (tutorialActive() && state.tutorialStep === 5) setTutorialStep(2, { persist: false });
   saveGame();
   renderFishing();
