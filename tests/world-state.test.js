@@ -16,10 +16,13 @@ import {
 
 test("sleeping tide bay packages all legacy spots, fish habitats, and bay events", () => {
   const sleepingTide = REGIONS.find(region => region.id === SLEEPING_TIDE_BAY_ID);
+  const fishingSpots = getRegionFishingSpots(SLEEPING_TIDE_BAY_ID);
   assert.equal(sleepingTide.status, "available");
   assert.deepEqual(sleepingTide.spotIds, ["shore", "reef", "deep"]);
   assert.equal(getRegionSpots(SLEEPING_TIDE_BAY_ID).length, 3);
   assert.equal(getRegionSpots(SLEEPING_TIDE_BAY_ID).every(spot => spot.regionId === SLEEPING_TIDE_BAY_ID), true);
+  assert.equal(new Set(fishingSpots.map(spot => spot.sceneVariant)).size, 3);
+  assert.equal(fishingSpots.every(spot => typeof spot.sceneVariant === "string" && spot.sceneVariant.length > 0), true);
   assert.equal(getRegionFish(FISH, SLEEPING_TIDE_BAY_ID).length, 30);
   assert.equal(FISH.slice(0, 30).every(fish => getFishHabitat(fish, SLEEPING_TIDE_BAY_ID)), true);
   assert.equal(BAY_EVENTS.filter(event => event.regionId === SLEEPING_TIDE_BAY_ID).length, 3);
@@ -27,10 +30,13 @@ test("sleeping tide bay packages all legacy spots, fish habitats, and bay events
 
 test("Slice F completes luminous fishing content while preserving the Slice E route", () => {
   const luminous = REGIONS.find(region => region.id === LUMINOUS_ARCHIPELAGO_ID);
+  const fishingSpots = getRegionFishingSpots(LUMINOUS_ARCHIPELAGO_ID);
   assert.equal(luminous.status, "available");
   assert.equal(luminous.contentStatus, "complete");
   assert.deepEqual(luminous.spotIds, ["windrest_shallows", "prism_coral_garden", "warm_current_channel", "starlight_observation_cape"]);
   assert.equal(getRegionFishingSpots(LUMINOUS_ARCHIPELAGO_ID).length, 3);
+  assert.equal(new Set(fishingSpots.map(spot => spot.sceneVariant)).size, 3);
+  assert.equal(new Set(REGION_SPOTS.filter(spot => (spot.activityType || "fishing") === "fishing").map(spot => spot.sceneVariant)).size, 6);
   assert.equal(getRegionObservationSpots(LUMINOUS_ARCHIPELAGO_ID).length, 1);
   assert.equal(getRegionFish(FISH, LUMINOUS_ARCHIPELAGO_ID).length, 33);
   assert.equal(getRegionFish(FISH, LUMINOUS_ARCHIPELAGO_ID).every(fish => fish.habitats.length === 1), true);

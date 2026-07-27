@@ -549,13 +549,21 @@ function syncWorld() {
     .some(progress => progress.researchRewardIds?.includes("luminous_sail_pattern"));
   $("#sail-emblem").textContent = luminousSail ? "✧" : state.completedMilestones.includes(30) ? "✺" : state.completedMilestones.includes(20) ? "✦" : "◌";
   $(".brand-mini small").textContent = activeSaveMode === "developer" ? `開發者模式 · ${state.equippedTitle}` : state.equippedTitle;
-  const spot = SPOTS.find(item => item.id === state.selectedSpot && item.regionId === state.world?.currentRegionId);
+  const selectedSpot = SPOTS.find(item => item.id === state.selectedSpot && item.regionId === state.world?.currentRegionId);
+  const spot = selectedSpot || (isDockedAt(state.world?.currentRegionId)
+    ? getRegionFishingSpots(state.world.currentRegionId)[0]
+    : null);
   const bayEvent = isDockedAt(state.world?.currentRegionId) ? getActiveBayEvent(state) : null;
   app.dataset.bayEvent = bayEvent?.id || "";
   const travelStatus = getTravelStatus(state.world);
   const offshoreRegion = state.world?.docking?.status === "offshore" ? regionById(state.world.docking.regionId) : null;
   const currentRegion = regionById(state.world?.currentRegionId);
-  $("#world-scene").setAttribute("aria-label", `${regionById(sceneRegionId)?.name || "海上"}景色`);
+  const sceneVariant = travelStatus ? "voyage" : offshoreRegion ? "offshore" : spot?.sceneVariant || "shore";
+  app.dataset.fishingScene = sceneVariant;
+  worldScene.dataset.sceneVariant = sceneVariant;
+  worldScene.setAttribute("aria-label", spot && !travelStatus && !offshoreRegion
+    ? `${currentRegion?.name || "海上"}・${spot.name}景色`
+    : `${regionById(sceneRegionId)?.name || "海上"}景色`);
   const sceneTitle = travelStatus
     ? `航向${regionById(travelStatus.travel.toRegionId)?.name || "遠方海域"}`
     : offshoreRegion ? `${offshoreRegion.name}外海` : spot?.name || currentRegion?.portName || "船屋甲板";

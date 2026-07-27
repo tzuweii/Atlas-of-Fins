@@ -1,0 +1,479 @@
+/* Project-native fishing backdrops: each scene keeps its scenery in separate CSS layers. */
+.spot-scenery {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.spot-landmark {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transform: translateY(8px) scale(1.015);
+  transform-origin: 50% 56%;
+  transition: opacity .58s ease, transform .9s ease;
+  will-change: opacity, transform;
+}
+
+.spot-landmark > span,
+.spot-landmark > i {
+  position: absolute;
+  display: block;
+  font-style: normal;
+}
+
+.far-island,
+.lighthouse,
+.buoy,
+.sea-layer {
+  transition: opacity .58s ease, transform .9s ease, background .8s ease;
+}
+
+.app[data-fishing-scene="shore"] .shore-landmark,
+.app[data-fishing-scene="reef"] .reef-landmark,
+.app[data-fishing-scene="deep"] .deep-landmark,
+.app[data-fishing-scene="luminous_shallows"] .luminous-shallows-landmark,
+.app[data-fishing-scene="luminous_coral"] .luminous-coral-landmark,
+.app[data-fishing-scene="luminous_channel"] .luminous-channel-landmark {
+  opacity: 1;
+  transform: none;
+}
+
+/* 眠潮灣・近岸淺水區 — sandy shelf, marker posts, pale ripples. */
+.shore-landmark::before {
+  content: "";
+  position: absolute;
+  left: -7%;
+  bottom: 39%;
+  width: 45%;
+  height: 7%;
+  border-radius: 0 70% 42% 0;
+  background: linear-gradient(180deg, #cab887, #a8956c);
+  box-shadow: 0 -4px 0 rgba(236, 222, 177, .45), 0 8px 18px rgba(29, 75, 77, .16);
+  transform: skewX(-12deg);
+}
+
+.shore-landmark::after {
+  content: "";
+  position: absolute;
+  left: 8%;
+  bottom: 43%;
+  width: 4px;
+  height: 28px;
+  border-radius: 3px 3px 0 0;
+  background: #665844;
+  box-shadow: 32px 5px 0 -1px #72624b, 65px 1px 0 -1px #5f5445, 102px 8px 0 -1px #7d694c;
+  transform: rotate(-3deg);
+}
+
+.shore-landmark > span {
+  inset: 56% 0 0;
+  background:
+    radial-gradient(ellipse at 12% 16%, rgba(238, 232, 184, .28) 0 8%, transparent 9%),
+    radial-gradient(ellipse at 30% 29%, rgba(224, 226, 181, .18) 0 6%, transparent 7%),
+    linear-gradient(105deg, rgba(164, 198, 179, .16), transparent 42%);
+}
+
+.shore-landmark > span::before {
+  content: "";
+  position: absolute;
+  left: 16%;
+  top: 22%;
+  width: 45px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(239, 235, 201, .2);
+  box-shadow: 76px 19px 0 -2px rgba(239, 235, 201, .15), 142px -5px 0 -3px rgba(239, 235, 201, .14);
+}
+
+.shore-landmark > i {
+  left: 27%;
+  bottom: 42%;
+  width: 3px;
+  height: 18px;
+  border-radius: 50%;
+  background: #536d5b;
+  box-shadow: 8px 4px 0 #617560, 16px -2px 0 #4f6855, 23px 6px 0 #6b795e;
+  transform: rotate(8deg);
+}
+
+/* 眠潮灣・礁石邊緣 — exposed rock shelf, kelp and broken foam. */
+.reef-landmark::before {
+  content: "";
+  position: absolute;
+  right: -4%;
+  bottom: 37%;
+  width: 42%;
+  height: 17%;
+  clip-path: polygon(0 100%, 7% 66%, 18% 60%, 26% 28%, 38% 48%, 48% 12%, 59% 42%, 72% 25%, 81% 55%, 93% 43%, 100% 100%);
+  background: linear-gradient(155deg, #5a6f67, #334f50 72%);
+  box-shadow: inset 0 8px rgba(141, 158, 127, .18), 0 -4px 0 rgba(222, 232, 207, .15);
+}
+
+.reef-landmark::after {
+  content: "";
+  position: absolute;
+  left: 6%;
+  bottom: 44%;
+  width: 72px;
+  height: 27px;
+  border-radius: 62% 48% 20% 16%;
+  background: #435a57;
+  box-shadow: 110px 14px 0 -7px #526661, 190px -2px 0 -11px #3b5252;
+  transform: rotate(-4deg);
+}
+
+.reef-landmark > span {
+  inset: 52% 0 0;
+  background:
+    radial-gradient(ellipse at 78% 28%, rgba(47, 83, 72, .34) 0 11%, transparent 12%),
+    radial-gradient(ellipse at 61% 56%, rgba(67, 100, 80, .3) 0 9%, transparent 10%),
+    radial-gradient(ellipse at 28% 76%, rgba(48, 87, 77, .2) 0 8%, transparent 9%);
+}
+
+.reef-landmark > span::after {
+  content: "";
+  position: absolute;
+  right: 7%;
+  top: 9%;
+  width: 86px;
+  height: 9px;
+  border: 2px solid rgba(237, 244, 222, .42);
+  border-color: rgba(237, 244, 222, .42) transparent transparent;
+  border-radius: 50%;
+  box-shadow: -125px 30px 0 -1px rgba(231, 241, 219, .2);
+}
+
+.reef-landmark > i {
+  right: 14%;
+  bottom: 36%;
+  width: 5px;
+  height: 31px;
+  border-radius: 80% 10%;
+  background: #526f58;
+  box-shadow: 12px 7px 0 #6f805b, 23px -3px 0 #425f50, 34px 9px 0 #718060;
+  transform: rotate(12deg);
+}
+
+/* 眠潮灣・海灣深水區 — open horizon and long, dark current lanes. */
+.deep-landmark::before {
+  content: "";
+  position: absolute;
+  left: 5%;
+  right: 5%;
+  bottom: 43%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(211, 224, 213, .28) 18% 28%, transparent 39% 61%, rgba(211, 224, 213, .2) 74% 84%, transparent);
+}
+
+.deep-landmark::after {
+  content: "";
+  position: absolute;
+  left: 18%;
+  bottom: 31%;
+  width: 7px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(234, 244, 230, .55);
+  box-shadow:
+    160px 37px 0 -1px rgba(234, 244, 230, .46),
+    335px -14px 0 rgba(234, 244, 230, .42),
+    510px 53px 0 -1px rgba(234, 244, 230, .35),
+    720px 8px 0 rgba(234, 244, 230, .38);
+}
+
+.deep-landmark > span {
+  inset: 56% -18% -8%;
+  background: repeating-linear-gradient(164deg, transparent 0 52px, rgba(15, 64, 81, .22) 54px 58px, transparent 60px 112px);
+  transform: translateX(-3%);
+  animation: deepCurrentDrift 13s linear infinite;
+}
+
+.deep-landmark > span::before,
+.deep-landmark > span::after {
+  content: "";
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  height: 24%;
+  border-top: 2px solid rgba(201, 226, 218, .15);
+  border-radius: 50%;
+}
+
+.deep-landmark > span::before { top: 22%; transform: rotate(-2deg); }
+.deep-landmark > span::after { top: 58%; left: 31%; right: -3%; transform: rotate(3deg); }
+
+.deep-landmark > i {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 42%;
+  background: linear-gradient(110deg, transparent 8%, rgba(8, 44, 65, .12) 30%, transparent 47%, rgba(6, 39, 60, .16) 72%, transparent 88%);
+}
+
+/* 琉光群島・風棲淺灘 — warm sand cays, one wind-bent palm and clear-water glints. */
+.luminous-shallows-landmark::before {
+  content: "";
+  position: absolute;
+  right: -3%;
+  bottom: 39%;
+  width: 42%;
+  height: 8%;
+  border-radius: 70% 0 0 44%;
+  background: linear-gradient(180deg, #e4cb8c, #bfa56e);
+  box-shadow: 0 -5px 0 rgba(255, 236, 179, .32), 0 11px 20px rgba(44, 101, 94, .16);
+  transform: skewX(12deg);
+}
+
+.luminous-shallows-landmark::after {
+  content: "";
+  position: absolute;
+  left: -4%;
+  bottom: 40%;
+  width: 25%;
+  height: 5%;
+  border-radius: 0 70% 42% 0;
+  background: #d4bc80;
+  box-shadow: 0 -3px 0 rgba(255, 239, 190, .28);
+}
+
+.luminous-shallows-landmark > span {
+  right: 14%;
+  bottom: 44%;
+  width: 8px;
+  height: 54px;
+  border-radius: 50% 50% 10% 10%;
+  background: #71583c;
+  box-shadow: inset -2px 0 rgba(236, 202, 122, .2);
+  transform: rotate(8deg);
+}
+
+.luminous-shallows-landmark > span::before {
+  content: "";
+  position: absolute;
+  left: -30px;
+  top: -12px;
+  width: 70px;
+  height: 38px;
+  background: #527b59;
+  clip-path: polygon(50% 48%, 0 12%, 38% 37%, 31% 0, 53% 38%, 78% 0, 66% 39%, 100% 17%, 69% 52%, 92% 82%, 61% 61%, 53% 100%, 47% 62%, 11% 88%, 36% 54%);
+}
+
+.luminous-shallows-landmark > span::after {
+  content: "";
+  position: absolute;
+  left: -98px;
+  top: 39px;
+  width: 42px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(245, 236, 189, .34);
+  box-shadow: -73px 24px 0 -1px rgba(245, 236, 189, .22), 78px 27px 0 -1px rgba(245, 236, 189, .27);
+}
+
+.luminous-shallows-landmark > i {
+  inset: 56% 0 0;
+  background:
+    radial-gradient(circle at 12% 28%, rgba(255, 244, 179, .3) 0 2px, transparent 3px),
+    radial-gradient(circle at 46% 62%, rgba(255, 244, 179, .27) 0 2px, transparent 3px),
+    radial-gradient(circle at 74% 19%, rgba(255, 244, 179, .25) 0 2px, transparent 3px),
+    linear-gradient(105deg, rgba(147, 217, 194, .14), transparent 48%);
+  background-size: 90px 52px, 130px 70px, 110px 62px, auto;
+}
+
+/* 琉光群島・稜光珊瑚庭 — coral silhouettes and prismatic light below the surface. */
+.luminous-coral-landmark::before {
+  content: "";
+  position: absolute;
+  inset: 56% 0 0;
+  background:
+    radial-gradient(ellipse at 17% 61%, rgba(109, 71, 104, .36) 0 12%, transparent 13%),
+    radial-gradient(ellipse at 42% 69%, rgba(211, 126, 93, .3) 0 10%, transparent 11%),
+    radial-gradient(ellipse at 76% 64%, rgba(93, 126, 115, .38) 0 13%, transparent 14%),
+    linear-gradient(180deg, rgba(116, 205, 190, .08), rgba(31, 101, 105, .22));
+}
+
+.luminous-coral-landmark::after {
+  content: "";
+  position: absolute;
+  left: 14%;
+  right: 10%;
+  top: 56%;
+  height: 40%;
+  background: linear-gradient(105deg, transparent 8%, rgba(255, 218, 150, .12) 9% 14%, transparent 15% 34%, rgba(199, 224, 221, .12) 35% 40%, transparent 41% 61%, rgba(214, 183, 225, .12) 62% 67%, transparent 68%);
+  clip-path: polygon(0 0, 100% 0, 88% 100%, 12% 100%);
+}
+
+.luminous-coral-landmark > span {
+  z-index: 1;
+  left: 12%;
+  bottom: 13%;
+  width: 9px;
+  height: 90px;
+  border-radius: 8px 8px 0 0;
+  background: #966a73;
+  box-shadow:
+    24px 18px 0 -1px #bb786d,
+    48px -7px 0 -2px #6f8276,
+    255px 13px 0 #bb806b,
+    282px -12px 0 -2px #84718d;
+  filter: drop-shadow(0 -3px 5px rgba(235, 194, 154, .16));
+  transform: rotate(-5deg);
+}
+
+.luminous-coral-landmark > span::before,
+.luminous-coral-landmark > span::after {
+  content: "";
+  position: absolute;
+  border-radius: 70% 10%;
+  background: inherit;
+}
+
+.luminous-coral-landmark > span::before { left: -16px; top: 18px; width: 28px; height: 9px; transform: rotate(38deg); }
+.luminous-coral-landmark > span::after { left: 4px; top: 35px; width: 31px; height: 8px; transform: rotate(-33deg); }
+
+.luminous-coral-landmark > i {
+  right: 11%;
+  bottom: 11%;
+  width: 82px;
+  height: 90px;
+  border: 7px double rgba(218, 142, 111, .52);
+  border-bottom: 0;
+  border-radius: 68% 42% 0 0;
+  clip-path: polygon(0 100%, 8% 28%, 24% 66%, 35% 8%, 48% 63%, 65% 0, 72% 64%, 92% 31%, 100% 100%);
+}
+
+/* 琉光群島・暖流藍渠 — steep island gates frame a fast blue channel. */
+.luminous-channel-landmark::before,
+.luminous-channel-landmark::after {
+  content: "";
+  position: absolute;
+  bottom: 39%;
+  width: 27%;
+  height: 31%;
+  background: linear-gradient(145deg, #3f755f, #265d59 70%);
+  box-shadow: inset 0 10px rgba(116, 158, 101, .16), 0 7px 18px rgba(16, 63, 66, .2);
+}
+
+.luminous-channel-landmark::before {
+  left: -3%;
+  clip-path: polygon(0 0, 56% 7%, 72% 31%, 84% 40%, 73% 61%, 100% 100%, 0 100%);
+}
+
+.luminous-channel-landmark::after {
+  right: -3%;
+  clip-path: polygon(42% 0, 100% 9%, 100% 100%, 0 100%, 25% 65%, 17% 43%, 31% 30%);
+}
+
+.luminous-channel-landmark > span {
+  left: 17%;
+  right: 17%;
+  top: 56%;
+  bottom: -8%;
+  background: repeating-linear-gradient(164deg, transparent 0 38px, rgba(139, 220, 206, .16) 40px 43px, transparent 45px 82px);
+  clip-path: polygon(12% 0, 88% 0, 100% 100%, 0 100%);
+  animation: channelCurrentDrift 8s linear infinite;
+}
+
+.luminous-channel-landmark > span::before {
+  content: "";
+  position: absolute;
+  left: 18%;
+  right: 9%;
+  top: 24%;
+  height: 24%;
+  border-top: 2px solid rgba(225, 247, 222, .24);
+  border-radius: 50%;
+  box-shadow: 70px 57px 0 -1px rgba(225, 247, 222, .16);
+}
+
+.luminous-channel-landmark > i {
+  right: 22%;
+  bottom: 42%;
+  width: 28px;
+  height: 51px;
+  background: #315f58;
+  clip-path: polygon(0 100%, 16% 51%, 33% 42%, 42% 0, 58% 0, 68% 45%, 85% 58%, 100% 100%);
+  box-shadow: 0 -5px rgba(121, 158, 103, .12);
+}
+
+/* Shared props support each location without defining every location. */
+.app[data-fishing-scene="shore"] .sea-layer { background: linear-gradient(180deg, rgba(204, 224, 197, .05), rgba(44, 112, 119, .24)); }
+.app[data-fishing-scene="reef"] .sea-layer { background: linear-gradient(180deg, rgba(87, 139, 121, .09), rgba(20, 75, 87, .34)); }
+.app[data-fishing-scene="deep"] .sea-layer { background: linear-gradient(180deg, rgba(35, 91, 112, .08), rgba(4, 38, 63, .48)); }
+.app[data-fishing-scene="luminous_shallows"] .sea-layer { background: linear-gradient(180deg, rgba(192, 234, 205, .07), rgba(31, 117, 121, .25)); }
+.app[data-fishing-scene="luminous_coral"] .sea-layer { background: linear-gradient(180deg, rgba(143, 222, 207, .1), rgba(48, 94, 113, .32)); }
+.app[data-fishing-scene="luminous_channel"] .sea-layer { background: linear-gradient(180deg, rgba(62, 154, 154, .05), rgba(6, 57, 83, .46)); }
+
+.app[data-fishing-scene="reef"] .buoy { right: 31%; top: 15%; transform: scale(.82); }
+.app[data-fishing-scene="deep"] .buoy { right: 8%; opacity: .32; transform: scale(.7); }
+.app[data-fishing-scene="luminous_shallows"] .buoy { right: 11%; top: 13%; transform: scale(.78); }
+.app[data-fishing-scene="luminous_coral"] .buoy { opacity: 0; }
+.app[data-fishing-scene="luminous_channel"] .buoy { right: 46%; top: 10%; transform: scale(.68); }
+
+.app[data-fishing-scene="deep"] .lighthouse { opacity: 0; }
+.app[data-fishing-scene="reef"] .lighthouse { opacity: .58; transform: scale(.82); transform-origin: bottom; }
+.app[data-fishing-scene="deep"] .far-island { opacity: .2; transform: scaleY(.55); transform-origin: bottom; }
+.app[data-fishing-scene="reef"] .island-two { opacity: .9; transform: scaleY(1.2); transform-origin: bottom; }
+.app[data-fishing-scene="luminous_coral"] .far-island { opacity: .42; transform: scaleY(.76); transform-origin: bottom; }
+.app[data-fishing-scene="luminous_channel"] .far-island { opacity: .18; }
+
+.app[data-fishing-scene="deep"] .wave-lines {
+  opacity: .28;
+  background: repeating-radial-gradient(ellipse at 50% 0, transparent 0 48px, rgba(207, 230, 221, .16) 50px 52px, transparent 54px 102px);
+}
+
+.app[data-fishing-scene="reef"] .wave-lines {
+  background: repeating-radial-gradient(ellipse at 68% 0, transparent 0 22px, rgba(232, 243, 220, .24) 23px 26px, transparent 27px 52px);
+}
+
+.app[data-fishing-scene="luminous_shallows"] .wave-lines {
+  background: repeating-radial-gradient(ellipse at 32% 0, transparent 0 25px, rgba(245, 241, 197, .24) 26px 28px, transparent 29px 58px);
+}
+
+.app[data-fishing-scene="luminous_coral"] .wave-lines {
+  opacity: .42;
+  background: repeating-radial-gradient(ellipse at 48% 0, transparent 0 32px, rgba(226, 244, 222, .18) 33px 35px, transparent 36px 68px);
+}
+
+.app[data-fishing-scene="luminous_channel"] .wave-lines {
+  opacity: .32;
+  background: repeating-linear-gradient(164deg, transparent 0 43px, rgba(212, 240, 224, .16) 45px 47px, transparent 49px 89px);
+}
+
+.app[data-time="night"] .spot-landmark { filter: brightness(.64) saturate(.78); }
+.app[data-time="night"][data-fishing-scene="luminous_coral"] .luminous-coral-landmark { filter: brightness(.82) saturate(.92); }
+.app[data-time="dusk"] .spot-landmark { filter: saturate(.88); }
+
+@keyframes deepCurrentDrift {
+  from { transform: translateX(-3%); }
+  to { transform: translateX(5%); }
+}
+
+@keyframes channelCurrentDrift {
+  from { background-position: 0 0; }
+  to { background-position: 96px 0; }
+}
+
+@media (max-width: 580px) {
+  .shore-landmark::before { width: 52%; }
+  .shore-landmark::after { left: 3%; transform: scale(.78) rotate(-3deg); transform-origin: bottom left; }
+  .reef-landmark::before { width: 49%; }
+  .reef-landmark::after { left: 2%; transform: scale(.72) rotate(-4deg); transform-origin: bottom left; }
+  .luminous-shallows-landmark > span { right: 9%; transform: scale(.82) rotate(8deg); transform-origin: bottom; }
+  .luminous-coral-landmark > span { left: 4%; transform: scale(.75) rotate(-5deg); transform-origin: bottom left; }
+  .luminous-channel-landmark::before,
+  .luminous-channel-landmark::after { width: 32%; height: 27%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spot-landmark,
+  .far-island,
+  .lighthouse,
+  .buoy,
+  .sea-layer { transition: none; }
+  .deep-landmark > span,
+  .luminous-channel-landmark > span { animation: none; }
+}
