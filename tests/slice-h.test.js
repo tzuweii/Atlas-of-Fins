@@ -8,8 +8,8 @@ import {
   migrateState, progressTravel
 } from "../src/core.js";
 import {
-  TEXT_SCALE_OPTIONS, UI_SCALE_OPTIONS, normalizeDisplaySettings,
-  normalizeTextScale, normalizeUiScale
+  DEFAULT_SOUND_VOLUME, TEXT_SCALE_OPTIONS, UI_SCALE_OPTIONS, normalizeDisplaySettings,
+  normalizeSoundVolume, normalizeTextScale, normalizeUiScale
 } from "../src/systems/accessibility.js";
 import { createPortableSave, parsePortableSave } from "../src/persistence/portable-save.js";
 import { grantChapterOneRoute } from "./story-route-helper.js";
@@ -19,8 +19,13 @@ test("Slice H display settings provide three text sizes and independent UI scali
   assert.deepEqual(UI_SCALE_OPTIONS.map(option => option.id), ["compact", "standard", "large"]);
   assert.equal(normalizeTextScale("unknown"), "standard");
   assert.equal(normalizeUiScale(2), "standard");
-  assert.deepEqual(normalizeDisplaySettings({ sound: false, reducedMotion: true, textScale: "large", uiScale: "compact" }), {
+  assert.equal(normalizeSoundVolume(undefined), DEFAULT_SOUND_VOLUME);
+  assert.equal(normalizeSoundVolume("65"), 65);
+  assert.equal(normalizeSoundVolume(140), 100);
+  assert.equal(normalizeSoundVolume(-20), 0);
+  assert.deepEqual(normalizeDisplaySettings({ sound: false, soundVolume: 65, reducedMotion: true, textScale: "large", uiScale: "compact" }), {
     sound: false,
+    soundVolume: 65,
     reducedMotion: false,
     textScale: "large",
     uiScale: "compact"

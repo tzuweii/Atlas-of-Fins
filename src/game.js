@@ -40,7 +40,7 @@ import {
 import { loadStoredState, writeStoredState } from "./persistence/migrations.js";
 import { createPortableSave, parsePortableSave } from "./persistence/portable-save.js";
 import {
-  TEXT_SCALE_OPTIONS, UI_SCALE_OPTIONS, displayScaleValue, normalizeDisplaySettings
+  TEXT_SCALE_OPTIONS, UI_SCALE_OPTIONS, displayScaleValue, normalizeDisplaySettings, normalizeSoundVolume
 } from "./systems/accessibility.js";
 import {
   TUTORIAL_TOTAL_STEPS, TUTORIAL_VERSION, completeTutorial, tutorialIsActive
@@ -104,10 +104,26 @@ const TUTORIAL_COPY = [
 ];
 
 class Sound {
-  constructor() { this.context = null; this.ambientTimer = null; }
+  constructor() { this.context = null; this.masterGain = null; this.ambientTimer = null; }
+  outputLevel() {
+    // The original synth mix was intentionally quiet. Full volume now reaches twice
+    // that level, while the 80% default remains comfortably below clipping.
+    return normalizeSoundVolume(state.settings.soundVolume) / 50;
+  }
+  syncVolume() {
+    if (!this.context || !this.masterGain) return;
+    const now = this.context.currentTime;
+    this.masterGain.gain.cancelScheduledValues(now);
+    this.masterGain.gain.setTargetAtTime(state.settings.sound ? this.outputLevel() : 0, now, .015);
+  }
   ensure() {
     if (!state.settings.sound) return null;
     this.context ||= new (window.AudioContext || window.webkitAudioContext)();
+    if (!this.masterGain) {
+      this.masterGain = this.context.createGain();
+      this.masterGain.gain.value = this.outputLevel();
+      this.masterGain.connect(this.context.destination);
+    }
     if (this.context.state === "suspended") this.context.resume();
     return this.context;
   }
@@ -118,7 +134,7 @@ class Sound {
     gain.gain.setValueAtTime(0, ctx.currentTime + delay);
     gain.gain.linearRampToValueAtTime(volume, ctx.currentTime + delay + .01);
     gain.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + delay + duration);
-    osc.connect(gain).connect(ctx.destination); osc.start(ctx.currentTime + delay); osc.stop(ctx.currentTime + delay + duration + .02);
+    osc.connect(gain).connect(this.masterGain); osc.start(ctx.currentTime + delay); osc.stop(ctx.currentTime + delay + duration + .02);
   }
   play(name) {
     if (name === "cast") { this.tone(310,.12,"sine",.035); this.tone(520,.16,"sine",.025,.08); }
@@ -1857,7 +1873,8 @@ function settingsChoices(options, selectedId, action) {
 
 function showSettings() {
   const saveTools = gameIsActive() ? `<section class="settings-save-tools"><span class="section-label">本機存檔備份</span><p>匯出內容只會顯示在這台裝置上；匯入前，現有主要存檔會先保留到備份槽。</p><div class="developer-control-actions"><button class="soft-button" data-action="show-save-export">匯出目前航程</button><button class="soft-button" data-action="show-save-import">匯入同模式航程</button></div></section>` : "";
-  modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal settings-modal"><span class="section-label">資訊無障礙</span><h2>聲音與顯示</h2><p class="modal-copy">文字與介面可分開調整。遊戲預設動態保持柔和，沒有高頻閃爍或快速鏡頭晃動。</p><div class="settings-row"><span><b>操作與捕獲音效</b><small>由瀏覽器即時合成</small></span><button class="toggle ${state.settings.sound?"is-on":""}" data-action="toggle-sound" role="switch" aria-checked="${state.settings.sound}" aria-label="操作與捕獲音效"><i></i></button></div><div class="settings-group"><span><b>文字大小</b><small>只放大標題、說明與按鈕文字</small></span>${settingsChoices(TEXT_SCALE_OPTIONS,state.settings.textScale,"set-text-scale")}</div><div class="settings-group"><span><b>介面縮放</b><small>調整卡片、按鈕與操作區域的整體尺寸</small></span>${settingsChoices(UI_SCALE_OPTIONS,state.settings.uiScale,"set-ui-scale")}</div>${saveTools}<div class="modal-actions"><button class="soft-button" data-action="close-modal">關閉</button></div></div></div>`;
+  const soundVolume = normalizeSoundVolume(state.settings.soundVolume);
+  modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal settings-modal"><span class="section-label">資訊無障礙</span><h2>聲音與顯示</h2><p class="modal-copy">聲音、文字與介面可分開調整。遊戲預設動態保持柔和，沒有高頻閃爍或快速鏡頭晃動。</p><div class="settings-row"><span><b>遊戲聲音</b><small>操作、捕獲音效與環境旋律</small></span><button class="toggle ${state.settings.sound?"is-on":""}" data-action="toggle-sound" role="switch" aria-checked="${state.settings.sound}" aria-label="遊戲聲音"><i></i></button></div><div class="settings-group settings-volume-group"><div class="settings-volume-heading"><span><b>總音量</b><small id="sound-volume-description">拖曳時會立即調整所有遊戲聲音</small></span><output id="sound-volume-output" for="sound-volume">${soundVolume}%</output></div><div class="settings-volume-control"><span aria-hidden="true">0</span><input id="sound-volume" type="range" min="0" max="100" step="5" value="${soundVolume}" style="--range-progress:${soundVolume}%" data-action="set-sound-volume" aria-label="總音量" aria-describedby="sound-volume-description sound-volume-output" aria-valuetext="${soundVolume}%"><span aria-hidden="true">100</span></div></div><div class="settings-group"><span><b>文字大小</b><small>只放大標題、說明與按鈕文字</small></span>${settingsChoices(TEXT_SCALE_OPTIONS,state.settings.textScale,"set-text-scale")}</div><div class="settings-group"><span><b>介面縮放</b><small>調整卡片、按鈕與操作區域的整體尺寸</small></span>${settingsChoices(UI_SCALE_OPTIONS,state.settings.uiScale,"set-ui-scale")}</div>${saveTools}<div class="modal-actions"><button class="soft-button" data-action="close-modal">關閉</button></div></div></div>`;
 }
 
 function showPortableExport() {
@@ -2303,7 +2320,7 @@ document.addEventListener("click", event => {
   if(action==="set-ui-scale"){
     state.settings.uiScale=id;persistDisplaySettings();showSettings();toast(`介面縮放已調整為「${UI_SCALE_OPTIONS.find(option=>option.id===id)?.label||"標準"}」`);
   }
-  if(action==="toggle-sound"){state.settings.sound=!state.settings.sound;persistDisplaySettings();showSettings();syncWorld();if(state.settings.sound){sound.play("coin");sound.startAmbient();}else sound.stopAmbient();}
+  if(action==="toggle-sound"){state.settings.sound=!state.settings.sound;persistDisplaySettings();sound.syncVolume();showSettings();syncWorld();if(state.settings.sound){sound.play("coin");sound.startAmbient();}else sound.stopAmbient();}
   if(action==="close-modal"){
     if(tutorialActive()&&state.tutorialStep===1){state.tutorialStep=2;saveGame();}
     modalRoot.innerHTML="";updateTutorial();setTimeout(flushJournalNotices,0);
@@ -2326,6 +2343,24 @@ document.addEventListener("submit",event=>{
 document.addEventListener("change",event=>{
   if(event.target.dataset.action==="equip-rod"){state.equippedRod=event.target.value;saveGame();renderFishing();if($(".fishing-setup-modal"))showFishingSetup();}
   if(event.target.dataset.action==="equip-bait"){state.equippedBait=event.target.value;saveGame();renderFishing();if($(".fishing-setup-modal"))showFishingSetup();}
+  if(event.target.dataset.action==="set-sound-volume"){
+    state.settings.soundVolume=normalizeSoundVolume(event.target.value);
+    persistDisplaySettings();
+    sound.syncVolume();
+    if(state.settings.sound&&state.settings.soundVolume>0)sound.play("coin");
+  }
+});
+
+document.addEventListener("input",event=>{
+  if(event.target.dataset.action!=="set-sound-volume")return;
+  const volume=normalizeSoundVolume(event.target.value);
+  state.settings.soundVolume=volume;
+  event.target.value=String(volume);
+  event.target.setAttribute("aria-valuetext",`${volume}%`);
+  event.target.style.setProperty("--range-progress",`${volume}%`);
+  const output=$("#sound-volume-output");
+  if(output)output.textContent=`${volume}%`;
+  sound.syncVolume();
 });
 
 document.addEventListener("keydown",event=>{

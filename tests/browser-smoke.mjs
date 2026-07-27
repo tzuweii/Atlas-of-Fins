@@ -100,12 +100,13 @@ await wait(350);
 await waitFor(`document.readyState === "complete"`);
 await evaluate(`localStorage.clear()`);
 assert.equal(await evaluate("document.title"), "Atlas of Fins｜鰭之圖鑑");
-assert.equal(await evaluate("document.querySelector('#app').dataset.uiRevision"), "20260723-fish-body-unified");
-assert.equal(await evaluate("document.querySelector('link[rel=\"stylesheet\"]').href.endsWith('styles.css?rev=20260723-fish-body-unified')"), true);
-assert.equal(await evaluate("document.querySelector('script[type=\"module\"]').src.endsWith('src/game.js?rev=20260723-fish-body-unified')"), true);
+assert.equal(await evaluate("document.querySelector('#app').dataset.uiRevision"), "20260727-sound-volume");
+assert.equal(await evaluate("document.querySelector('link[rel=\"stylesheet\"]').href.endsWith('styles.css?rev=20260727-sound-volume')"), true);
+assert.equal(await evaluate("document.querySelector('script[type=\"module\"]').src.endsWith('src/game.js?rev=20260727-sound-volume')"), true);
 
 await clickCenter("#title-settings-button");
-assert.match(await evaluate("document.querySelector('.settings-modal').innerText"), /聲音與顯示[\s\S]*文字大小[\s\S]*介面縮放/);
+assert.match(await evaluate("document.querySelector('.settings-modal').innerText"), /聲音與顯示[\s\S]*總音量[\s\S]*文字大小[\s\S]*介面縮放/);
+assert.equal(await evaluate("document.querySelector('#sound-volume').value"), "80");
 assert.equal(await evaluate("document.querySelector('.settings-save-tools') === null"), true);
 await click('[data-action="set-text-scale"][data-id="large"]');
 assert.equal(await evaluate("document.querySelector('#app').dataset.textScale"), "large");
@@ -232,8 +233,15 @@ assert.ok(largeHeadingSize > standardHeadingSize);
 await click('[data-action="set-ui-scale"][data-id="large"]');
 assert.equal(await evaluate("document.querySelector('#app').dataset.uiScale"), "large");
 assert.equal(await evaluate("document.querySelector('#app').getBoundingClientRect().width <= window.innerWidth + 1"), true);
+await evaluate(`(() => {
+  const slider = document.querySelector('#sound-volume');
+  slider.value = '65';
+  slider.dispatchEvent(new Event('input', { bubbles: true }));
+  slider.dispatchEvent(new Event('change', { bubbles: true }));
+})()`);
+assert.equal(await evaluate("document.querySelector('#sound-volume-output').textContent"), "65%");
 assert.deepEqual(await evaluate("JSON.parse(localStorage.getItem('atlas-of-fins.preferences'))"), {
-  sound: true, reducedMotion: false, textScale: "large", uiScale: "large"
+  sound: true, soundVolume: 65, reducedMotion: false, textScale: "large", uiScale: "large"
 });
 await click('[data-action="show-save-export"]');
 const developerExport = await evaluate("document.querySelector('#save-export-text').value");
