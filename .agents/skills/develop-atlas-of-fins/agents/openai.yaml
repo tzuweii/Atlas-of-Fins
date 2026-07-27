@@ -1,0 +1,4 @@
+interface:
+  display_name: "Atlas of Fins 開發"
+  short_description: "以海域＋章節為主、工程 Slice 為例外的安全開發工作流"
+  default_prompt: "使用 $develop-atlas-of-fins 先判斷這是 design rule、海域＋章節內容包或共用引擎改動，再依風險實作、驗證並只同步單一權威文件；不要自動開始下一版本或建立 Slice。"
