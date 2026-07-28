@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   AUTO_FISHING_EQUIPMENT, BAITS, FISH, FURNITURE, LUMINOUS_ARCHIPELAGO_ID, RARITY,
-  RODS, ROUTES, SHIPS, SHIP_FURNITURE, SLEEPING_TIDE_BAY_ID,
+  RESIDENT_STORY_SCENES, RODS, ROUTES, SHIPS, SHIP_FURNITURE, SLEEPING_TIDE_BAY_ID,
   SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID
 } from "../src/data.js";
 import {
@@ -118,8 +118,16 @@ test("ship furniture keeps fixed +15/+30 percent prices and the complete catalog
 test("the starter ship can complete every implemented route while later ships only shorten time gently", () => {
   const starter = createInitialState();
   grantChapterOneRoute(starter);
+  starter.world.unlockedRouteIds = ROUTES.filter(entry => entry.status === "available").map(route => route.id);
   for (const route of ROUTES.filter(entry => entry.status === "available")) {
-    assert.ok([route.fromRegionId, route.toRegionId].includes(starter.world.currentRegionId));
+    const scene = RESIDENT_STORY_SCENES.find(entry => entry.id === route.unlock.sceneId);
+    starter.residentStories[scene.residentId] ||= { completedSceneIds: [], rewardIds: [] };
+    starter.residentStories[scene.residentId].completedSceneIds.push(scene.id);
+  }
+  for (const route of ROUTES.filter(entry => entry.status === "available")) {
+    starter.world.currentRegionId = route.fromRegionId;
+    starter.world.docking = { status: "docked", regionId: route.fromRegionId };
+    starter.world.travel = null;
     const result = beginRouteTravel(starter, route.id, BASE_TIME);
     assert.equal(result.ok, true);
     assert.equal(starter.world.travel.shipId, "drifting_home");

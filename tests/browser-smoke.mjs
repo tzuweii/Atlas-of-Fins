@@ -147,13 +147,13 @@ assert.equal(await evaluate("document.querySelectorAll('.tracker-item.is-daily.i
 assert.match(await evaluate("document.querySelector('#task-tracker').innerText"), /每日目標 · (進行中|可領取|已領取)/);
 assert.equal(await evaluate("document.querySelector('#developer-tools-button').hidden"), false);
 await click("#developer-tools-button");
-assert.match(await evaluate("document.querySelector('.developer-modal').innerText"), /v0.5 Slice E 整合控制[\s\S]*每日小目標[\s\S]*居民今日提案[\s\S]*正式航線[\s\S]*琉光群島內容[\s\S]*觀察、研究與澄野[\s\S]*潮光與事件帳本[\s\S]*船別家具與燈光[\s\S]*潮聲日誌[\s\S]*靜潮自動釣架[\s\S]*整合與存檔/);
+assert.match(await evaluate("document.querySelector('.developer-modal').innerText"), /海域內容整合控制[\s\S]*每日小目標[\s\S]*居民今日提案[\s\S]*正式航線[\s\S]*區域內容定位[\s\S]*觀察、研究與區域主線[\s\S]*潮光與事件帳本[\s\S]*船別家具與燈光[\s\S]*潮聲日誌[\s\S]*靜潮自動釣架[\s\S]*整合與存檔/);
 assert.equal(await evaluate("document.querySelectorAll('#developer-daily-template option').length"), 5);
-assert.equal(await evaluate("document.querySelectorAll('#developer-commission-template option').length"), 13);
+assert.equal(await evaluate("document.querySelectorAll('#developer-commission-template option').length"), 18);
 assert.equal(await evaluate("document.querySelectorAll('#developer-travel-scale option').length"), 3);
-assert.equal(await evaluate("document.querySelectorAll('#developer-region option').length"), 2);
+assert.equal(await evaluate("document.querySelectorAll('#developer-region option').length"), 3);
 assert.equal(await evaluate("document.querySelectorAll('#developer-region-event option').length"), 3);
-assert.equal(await evaluate("document.querySelectorAll('#developer-observation-subject option').length"), 2);
+assert.equal(await evaluate("document.querySelectorAll('#developer-observation-subject option').length"), 4);
 assert.equal(await evaluate("document.querySelectorAll('#developer-tideglow-source option').length"), 6);
 assert.equal(await evaluate("document.querySelector('#developer-journal-event') === null"), true);
 assert.equal(await evaluate("Boolean(document.querySelector('[data-action=\"developer-check-journal\"]'))"), true);
@@ -217,7 +217,7 @@ assert.equal(await evaluate("document.querySelectorAll('.logbook-tree-group').le
 assert.equal(await evaluate("document.querySelectorAll('.logbook-tree-group.is-expanded').length"), 1);
 assert.equal(await evaluate("document.querySelector('.logbook-layout').firstElementChild.classList.contains('logbook-sidebar')"), true);
 await click('[data-action="logbook-category"][data-id="rare_fish"]');
-assert.equal(await evaluate("document.querySelectorAll('[data-action=\"select-logbook-entry\"]').length"), 9);
+assert.equal(await evaluate("document.querySelectorAll('[data-action=\"select-logbook-entry\"]').length"), 14);
 assert.equal(await evaluate("document.querySelector('.logbook-tree-group.is-expanded [data-action=\"logbook-category\"]').dataset.id"), "rare_fish");
 assert.equal(exceptions.length, 0, `Journal category click has no browser exception: ${exceptions.join(", ")}`);
 await click('[data-action="logbook-category"][data-id="mist_cape_cold_current"]');
@@ -352,7 +352,7 @@ await click('[data-view="fishing"]');
 assert.equal(await evaluate("document.querySelectorAll('.tracker-item.is-story').length"), 1);
 assert.equal(await evaluate("document.querySelectorAll('.tracker-item.is-daily').length"), 3);
 await click('[data-view="journal"]');
-assert.equal(await evaluate("document.querySelectorAll('.fish-region-filters .filter-chip').length"), 3);
+assert.equal(await evaluate("document.querySelectorAll('.fish-region-filters .filter-chip').length"), 4);
 assert.equal(await evaluate("Boolean(document.querySelector('[data-action=\"journal-filter\"][data-id=\"common\"], [data-action=\"journal-filter\"][data-id=\"uncommon\"], [data-action=\"journal-filter\"][data-id=\"rare\"]'))"), false);
 await click('[data-action="journal-filter"][data-id="luminous_archipelago"]');
 assert.equal(await evaluate("document.querySelectorAll('.fish-card').length"), 33);
@@ -368,10 +368,44 @@ await click('[data-action="developer-reset-route"]');
 assert.match(await evaluate("document.querySelector('.developer-modal').innerText"), /目前安全停泊/);
 assert.deepEqual(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.dev-save")).world.completedRouteIds`), []);
 await click('[data-action="close-modal"]');
+await click("#developer-tools-button");
+await evaluate(`document.querySelector('#developer-region').value = 'mist_cape_cold_current'`);
+await click('[data-action="developer-dock-region"]');
+assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.dev-save")).world.currentRegionId`), "mist_cape_cold_current");
+assert.equal(await evaluate("document.querySelectorAll('#developer-region-event option').length"), 3);
+await click('[data-action="developer-complete-research"]');
+assert.match(await evaluate("document.querySelector('.developer-modal').innerText"), /霧岬寒流水道[\s\S]*研究 34\/34[\s\S]*霧禾 0\/6/);
+await click('[data-action="close-modal"]');
+await click('[data-view="fishing"]');
+assert.equal(await evaluate("document.querySelector('#app').dataset.region"), "mist_cape_cold_current");
+assert.equal(await evaluate("document.querySelector('#app').dataset.fishingScene"), "mist_fogfront");
+assert.match(await evaluate("document.querySelector('#world-scene').getAttribute('aria-label')"), /霧岬寒流水道・霧線陸棚景色/);
+await click('[data-action="show-fishing-setup"]');
+assert.match(await evaluate("document.querySelector('.fishing-setup-modal').innerText"), /霧線陸棚[\s\S]*低語海藻林[\s\S]*藍寒深槽/);
+assert.equal(await evaluate("document.querySelectorAll('.spot-card').length"), 3);
+await click('[data-action="spot"][data-id="whispering_kelp_forest"]');
+assert.equal(await evaluate("document.querySelector('#app').dataset.fishingScene"), "mist_kelp_forest");
+await click('[data-action="spot"][data-id="bluecold_trench"]');
+assert.equal(await evaluate("document.querySelector('#app').dataset.fishingScene"), "mist_cold_trench");
+await click('[data-action="spot"][data-id="fogfront_shelf"]');
+assert.equal(await evaluate("document.querySelectorAll('.observation-preview').length"), 1);
+assert.match(await evaluate("document.querySelector('.observation-preview').innerText"), /特殊觀察點 · 0 \/ 2/);
+assert.match(await evaluate("document.querySelector('.research-card').innerText"), /霧岬雙流研究主路[\s\S]*34 \/ 34[\s\S]*區域完整/);
+await click('[data-action="close-modal"]');
+await click('[data-view="residents"]');
+assert.equal(await evaluate("document.querySelectorAll('.resident-card').length"), 1);
+assert.match(await evaluate("document.querySelector('[data-resident=\wuhe\]').innerText"), /霧禾[\s\S]*海域主線 · 新章節[\s\S]*先聽見鐘，才看見港/);
+await command("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+assert.equal(await evaluate("document.documentElement.scrollWidth <= window.innerWidth"), true);
+await command("Emulation.clearDeviceMetricsOverride");
 await click('[data-view="journal"]');
+await click('[data-action="journal-filter"][data-id="mist_cape_cold_current"]');
+assert.equal(await evaluate("document.querySelectorAll('.fish-card').length"), 34);
+await click('[data-action="select-fish"][data-id="basking_shark"]');
+assert.match(await evaluate("document.querySelector('.fish-detail').innerText"), /象鮫[\s\S]*史詩[\s\S]*霧岬寒流水道印章[\s\S]*FishBase 物種摘要/);
 await click('[data-action="journal-filter"][data-id="all"]');
-assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /探索進度[\s\S]*63 \/ 63/);
-assert.equal(await evaluate("document.querySelectorAll('.fish-card').length"), 63);
+assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /探索進度[\s\S]*97 \/ 97/);
+assert.equal(await evaluate("document.querySelectorAll('.fish-card').length"), 97);
 assert.equal(await evaluate("document.querySelectorAll('.fish-card.is-unknown').length"), 0);
 const rarityPalette = await evaluate(`(() => ({
   common: getComputedStyle(document.querySelector('.fish-card.rarity-common')).backgroundImage,
@@ -403,6 +437,7 @@ assert.equal(await evaluate("document.querySelector('#continue-button').disabled
 
 const legacyDeveloperSpecies = await evaluate(`(() => {
   const addedFishIds = ["horse_mackerel", "threadfin_bream", "goatfish", "threeline_grunt", "yellow_boxfish", "needlefish", "red_seabream", "malabar_grouper", "mirror_butterflyfish", "greater_amberjack", "bluegreen_chromis", "pennant_coralfish", "orangespine_unicornfish", "moorish_idol", "yellowtail_fusilier", "bigeye_scad", "longface_emperor", "peacock_grouper", "yellowstripe_goatfish", "bluespotted_cornetfish", "giant_trevally", "convict_surgeonfish", "blacktip_fusilier", "goldband_fusilier", "bluestripe_snapper", "thumbprint_emperor", "blackbarred_halfbeak", "threadfin_butterflyfish", "yellowfin_goatfish", "redtooth_triggerfish", "pinecone_soldierfish", "goldlined_rabbitfish", "palette_surgeonfish", "ornate_butterflyfish", "regal_angelfish", "clown_triggerfish", "longfin_batfish", "harlequin_sweetlips", "giant_moray", "bluespine_unicornfish", "chinese_trumpetfish", "dogtooth_tuna", "scrawled_filefish"];
+  addedFishIds.push("pacific_herring", "capelin", "pacific_sand_lance", "pacific_jack_mackerel", "surf_smelt", "walleye_pollock", "pacific_cod", "rock_greenling", "kelp_greenling", "kelp_perch", "opaleye", "senorita_wrasse", "tubesnout", "pacific_tomcod", "shiner_perch", "halfmoon", "lingcod", "cabezon", "wolf_eel", "china_rockfish", "kelp_rockfish", "pacific_bonito", "sablefish", "pacific_halibut", "spotted_ratfish", "buffalo_sculpin", "painted_greenling", "blacksmith", "california_sheephead", "giant_sea_bass", "yelloweye_rockfish", "bluntnose_sixgill_shark", "ocean_sunfish", "basking_shark");
   const save = JSON.parse(localStorage.getItem("atlas-of-fins.dev-save"));
   for (const fishId of addedFishIds) delete save.discovered[fishId];
   save.catchInventory = save.catchInventory.filter(caught => !addedFishIds.includes(caught.fishId));
@@ -420,13 +455,13 @@ await click("#developer-mode-button");
 await evaluate(`document.querySelector('#developer-password').value = 'atlas-dev'; document.querySelector('#developer-login-form').requestSubmit()`);
 await waitFor(`!document.querySelector("#game-shell").classList.contains("is-hidden")`);
 await click('[data-view="journal"]');
-assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /探索進度[\s\S]*63 \/ 63/);
+assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /探索進度[\s\S]*97 \/ 97/);
 assert.equal(await evaluate("document.querySelector('[data-id=\"greater_amberjack\"] b').innerText"), "紅甘");
 await click("#menu-button");
 await click('[data-action="to-title"]');
 await waitFor(`!document.querySelector("#title-screen").classList.contains("is-hidden")`);
 const upgradedDeveloperSave = await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.dev-save"))`);
-assert.equal(Object.keys(upgradedDeveloperSave.discovered).length, 63);
+assert.equal(Object.keys(upgradedDeveloperSave.discovered).length, 97);
 assert.ok(upgradedDeveloperSave.catchInventory.some(caught => caught.fishId === "greater_amberjack"));
 assert.ok(upgradedDeveloperSave.catchInventory.some(caught => caught.fishId === "giant_trevally"));
 assert.ok(upgradedDeveloperSave.completedMilestones.includes(30));
@@ -889,13 +924,13 @@ assert.equal(await evaluate("document.querySelector('.nav-button.is-active').dat
 const chartText = await evaluate("document.querySelector('#content-panel').innerText");
 assert.match(chartText, /古海圖/);
 assert.match(chartText, /眠潮灣[\s\S]*船隻目前停泊/);
-assert.match(chartText, /霧後海域[\s\S]*等待取得灣外海圖/);
-assert.match(chartText, /完成眠潮灣主線與八成魚類探索後開放/);
+assert.match(chartText, /霧後海域[\s\S]*等待當地居民交付自然線索/);
+assert.match(chartText, /完成眠潮灣第六節主線後開放/);
 assert.doesNotMatch(chartText, /琉光群島|航線已開放|可航行/);
-assert.equal(await evaluate("document.querySelectorAll('.chart-region-node').length"), 2);
+assert.equal(await evaluate("document.querySelectorAll('.chart-region-node').length"), 3);
 assert.equal(await evaluate("document.querySelectorAll('.chart-route-card').length"), 1);
 assert.equal(await evaluate("document.querySelector('[data-action=\"prepare-chart-route\"]').disabled"), true);
-assert.match(await evaluate("document.querySelector('[data-action=\"prepare-chart-route\"]').innerText"), /尚未取得海圖/);
+assert.match(await evaluate("document.querySelector('[data-action=\"prepare-chart-route\"]').innerText"), /尚未取得航線圖/);
 assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.save")).world.travel`), null);
 
 await evaluate(`document.querySelector('#chart-viewport').dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: -100 }))`);
@@ -1195,7 +1230,7 @@ await click('[data-resident="lighthouse_keeper"] [data-action="talk-resident"]')
 assert.match(await evaluate("document.querySelector('.modal').innerText"), /燈塔守望者[\s\S]*記著回來的方向/);
 await click('[data-action="close-modal"]');
 await click('[data-view="journal"]');
-assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /探索進度[\s\S]*1 \/ 63/);
+assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /探索進度[\s\S]*1 \/ 97/);
 assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /初次相遇[\s\S]*初次：/);
 assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /閃光紀錄 2 次/);
 const firstCaughtFishId = await evaluate(`Object.keys(JSON.parse(localStorage.getItem("atlas-of-fins.save")).discovered)[0]`);
@@ -1624,7 +1659,7 @@ if (process.env.SCREENSHOT) {
 console.log(JSON.stringify({
   title: "ok",
   fishing: "caught",
-  journal: `${Object.keys(saved.discovered).length}/63`,
+  journal: `${Object.keys(saved.discovered).length}/97`,
   sold: saved.totalSold,
   time: saved.timeIndex,
   tutorial: saved.completedTutorial,

@@ -1,5 +1,9 @@
-import { LUMINOUS_ARCHIPELAGO_ID, SLEEPING_TIDE_BAY_ID } from "./regions.js";
-import { SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID } from "./routes.js";
+import {
+  LUMINOUS_ARCHIPELAGO_ID, MIST_CAPE_COLD_CURRENT_ID, SLEEPING_TIDE_BAY_ID
+} from "./regions.js";
+import {
+  LUMINOUS_TO_MIST_CAPE_ROUTE_ID, SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID
+} from "./routes.js";
 
 export const CHART_LAYOUT = Object.freeze({
   id: "world-chart-v1",
@@ -25,6 +29,14 @@ export const CHART_REGION_POINTS = Object.freeze([
     y: 35,
     marker: "mist",
     note: "海圖仍覆著測繪迷霧"
+  }),
+  Object.freeze({
+    id: MIST_CAPE_COLD_CURRENT_ID,
+    regionId: MIST_CAPE_COLD_CURRENT_ID,
+    x: 52,
+    y: 10,
+    marker: "cape",
+    note: "暖流北折後抵達的冷霧岬角"
   })
 ]);
 
@@ -35,6 +47,13 @@ export const CHART_ROUTE_PATHS = Object.freeze([
     controlX: 50,
     controlY: 45,
     note: "相鄰暖流航線預告"
+  }),
+  Object.freeze({
+    id: LUMINOUS_TO_MIST_CAPE_ROUTE_ID,
+    routeId: LUMINOUS_TO_MIST_CAPE_ROUTE_ID,
+    controlX: 72,
+    controlY: 16,
+    note: "暖水與寒流相遇的潮界航線"
   })
 ]);
 

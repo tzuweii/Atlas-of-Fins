@@ -1,8 +1,11 @@
-import { LUMINOUS_ARCHIPELAGO_ID, SLEEPING_TIDE_BAY_ID } from "./regions.js";
+import {
+  LUMINOUS_ARCHIPELAGO_ID, MIST_CAPE_COLD_CURRENT_ID, SLEEPING_TIDE_BAY_ID
+} from "./regions.js";
 
 export const LIGHTHOUSE_KEEPER_ID = "lighthouse_keeper";
 export const FISH_MARKET_OWNER_ID = "fish_market_owner";
 export const CHENGYE_ID = "chengye";
+export const WUHE_ID = "wuhe";
 
 export const RESIDENTS = [
   {
@@ -52,6 +55,23 @@ export const RESIDENTS = [
       active: "不用為了數字改變航程。海會在你照常生活時，把答案慢慢送來。",
       ready: "這些紀錄有魚，也有水色。坐下吧，我們一起把頁角壓平。",
       farewell: "慢慢走。群島的光總會在另一個時段重新排好。"
+    }
+  },
+  {
+    id: WUHE_ID,
+    name: "霧禾",
+    role: "照看霧鐘並記錄冷暖水界線的潮界觀測員",
+    regionId: MIST_CAPE_COLD_CURRENT_ID,
+    portLocationId: "mistbell_temperature_shed",
+    portLocationName: "聽霧港溫度棚",
+    icon: "◌",
+    appearance: "灰藍短披肩、黃銅霧鐘槌與兩支不同顏色的水溫筒",
+    dialogue: {
+      greeting: "鐘聲今天繞得很低。霧不急著散，我們也不用急著把每條線看清。",
+      offer: "若正好經過那片水，替我摸摸魚群停在哪一側就好。別為了記錄改變整天的路。",
+      active: "先照自己的節奏走。潮界會移動，錯過一刻不代表錯過整片海。",
+      ready: "你帶回來的不是答案，是兩邊都還在好好生活的證明。來，把溫度線疊上去。",
+      farewell: "聽見下一次鐘聲再回頭也行。霧裡的港口一直在原處。"
     }
   }
 ];

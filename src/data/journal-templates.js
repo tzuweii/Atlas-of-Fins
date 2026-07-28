@@ -3,7 +3,7 @@ export const JOURNAL_TEMPLATE_VERSION = 3;
 export const JOURNAL_REGION_CATEGORIES = Object.freeze([
   { id: "sleeping_tide_bay", name: "眠潮灣", chapter: 1, status: "available" },
   { id: "luminous_archipelago", name: "琉光群島", chapter: 2, status: "available" },
-  { id: "mist_cape_cold_current", name: "霧岬寒流水道", chapter: 3, status: "planned" },
+  { id: "mist_cape_cold_current", name: "霧岬寒流水道", chapter: 3, status: "available" },
   { id: "monsoon_archipelago", name: "季風群島", chapter: 4, status: "planned" },
   { id: "graycrown_stone_coast", name: "灰冠石岸", chapter: 5, status: "planned" },
   { id: "starice_southern_sea", name: "星冰南方海", chapter: 6, status: "planned" }
@@ -157,7 +157,12 @@ export const RARE_FISH_JOURNAL_ENTRIES = Object.freeze([
   { fishId: "bluespotted_cornetfish", title: "暖流裡的一支長笛", body: ["藍斑煙管魚細長得近乎一條水中的線，尾端絲狀延伸順著暖流擺動。牠靠近時沒有驚動魚群，像一段尚未吹響的旋律穿過藍渠。"], closing: "水流替牠保留了聲音之前的安靜。" },
   { fishId: "giant_trevally", title: "浪忽然向前一步", body: ["浪人鰺從暖流深處穩穩逼近，短促加速讓船邊的水同時改變方向。牠獨自穿過礁坡與水道，身後沒有隊伍，只有逐漸平復的波紋。"], closing: "有些身影不留下路標，海水本身就是牠的足跡。" },
   { fishId: "dogtooth_tuna", title: "藍渠深處的銀色力量", body: ["裸狐鰹從暖流深處抬升時，厚實身形幾乎沒有多餘擺動。牠只在轉向的一瞬間拉出一道沉重弧線，讓魚線、船身與整片藍渠一起記住那股力量。"], closing: "真正迅速的身影，總把大部分速度留在看不見的水裡。" },
-  { fishId: "scrawled_filefish", title: "雨水寫過的魚身", body: ["長尾革單棘魨穿過珊瑚庭外的雨幕，青灰魚身浮出一行行藍色曲線。那些紋路不像地圖指向某處，更像海在牠身上留下還沒說完的筆記。"], closing: "雨停之後，潮水仍把那一頁緩慢帶向外海。" }
+  { fishId: "scrawled_filefish", title: "雨水寫過的魚身", body: ["長尾革單棘魨穿過珊瑚庭外的雨幕，青灰魚身浮出一行行藍色曲線。那些紋路不像地圖指向某處，更像海在牠身上留下還沒說完的筆記。"], closing: "雨停之後，潮水仍把那一頁緩慢帶向外海。" },
+  { fishId: "giant_sea_bass", title: "海藻林讓開了一條寬路", body: ["巨堅鱗鱸從偏暖的林緣慢慢現身。灰黑身體沒有急著衝刺，海藻葉片卻依序向兩側傾斜，替牠讓出一條有重量的路。"], closing: "巨大的相遇不必喧鬧，整座林已替牠說明了尺度。" },
+  { fishId: "yelloweye_rockfish", title: "深礁先亮起一雙黃眼", body: ["冷雨下的海藻林幾乎失去顏色，黃眼平鮋卻從深礁陰影裡交出一雙明亮眼睛。橙紅身軀只停留片刻，又回到長久使用的住處。"], closing: "活得很久的魚，總把大部分故事留在原來的礁石。" },
+  { fishId: "bluntnose_sixgill_shark", title: "六道鰓裂掠過藍寒深槽", body: ["灰六鰓鯊沿槽壁抬升，寬厚背影幾乎與深水同色。牠轉身時，六道鰓裂逐一穿過船燈，像深海把一段古老呼吸交到較淺的夜裡。"], closing: "深槽沒有把年代說完，只讓一個輪廓安靜經過。" },
+  { fishId: "ocean_sunfish", title: "霧線外的一枚灰月", body: ["翻車魨側躺在晴日表層，高而扁的身體被暖光照成一枚灰色月亮。牠停在冷暖水交界，讓原本看不見的溫度鋒面有了寬度。"], closing: "月亮不只掛在天空，也會在兩種水相遇時短暫漂浮。" },
+  { fishId: "basking_shark", title: "潮界張開一座安靜的門", body: ["象鮫張口穿過富含浮游生物的潮界。巨大的身體沒有追逐魚群，只讓冷暖水與微小生命一起流過鰓耙；第一尾史詩魚因此像一座緩慢移動的門。"], closing: "海把最龐大的身形，用來收集最微小的食物。" }
 ].map((entry, order) => ({
   ...entry,
   id: `journal:fish:${entry.fishId}`,
@@ -331,6 +336,72 @@ export const MAIN_STORY_JOURNAL_ENTRIES = Object.freeze([
     title: "留在海裡的收藏",
     body: ["完成群島的主要研究後，澄野把手繪黑潮生態圖交給我。圖上的暖流沒有結束，而是向一片冷霧伸去；那條未完成的線，已經替下一段航程留下方向。"],
     closing: "一章結束時，真正重要的線索往往仍指向海圖之外。"
+  },
+  {
+    id: "journal:story:mist_cape_cold_current:wuhe_bell_before_harbor",
+    categoryId: "mist_cape_cold_current",
+    regionId: "mist_cape_cold_current",
+    type: "story",
+    order: 0,
+    unlock: { type: "resident-scene", sceneId: "wuhe_bell_before_harbor" },
+    title: "先聽見鐘，才看見港",
+    body: ["澄野手繪圖上的暖流進入冷霧後，我先聽見霧鐘，才看見聽霧港。兩筆陸棚捕獲分別從冷暖水側而來，替灰藍海面畫出第一道看不見的潮界。"],
+    closing: "霧沒有拿走方向，只讓水溫與鐘聲先替岸線說話。"
+  },
+  {
+    id: "journal:story:mist_cape_cold_current:wuhe_two_buckets_of_sea",
+    categoryId: "mist_cape_cold_current",
+    regionId: "mist_cape_cold_current",
+    type: "story",
+    order: 1,
+    unlock: { type: "resident-scene", sceneId: "wuhe_two_buckets_of_sea" },
+    title: "兩桶都是霧岬的海",
+    body: ["我分別在霧線陸棚與低語海藻林留下捕獲。陸棚魚線被潮界橫向推開，林下魚線則在葉片背後放鬆；比較沒有選出更好的水，只讓差異有了位置。"],
+    closing: "同一片海可以同時容納兩種溫度、許多速度與更多住處。"
+  },
+  {
+    id: "journal:story:mist_cape_cold_current:wuhe_holdfast_current",
+    categoryId: "mist_cape_cold_current",
+    regionId: "mist_cape_cold_current",
+    type: "story",
+    order: 2,
+    unlock: { type: "resident-scene", sceneId: "wuhe_holdfast_current" },
+    title: "吸盤記住的流速",
+    body: ["太平洋刺圓鰭魚用腹部吸盤留在海藻根部。牠沒有逆流遠游，只在浪後換了一次附著位置；那個小動作讓林下最安穩的一層水被正式記錄。"],
+    closing: "留在原處也不是靜止，而是一種很細緻的航行。"
+  },
+  {
+    id: "journal:story:mist_cape_cold_current:wuhe_bluecold_sounding",
+    categoryId: "mist_cape_cold_current",
+    regionId: "mist_cape_cold_current",
+    type: "story",
+    order: 3,
+    unlock: { type: "resident-scene", sceneId: "wuhe_bluecold_sounding" },
+    title: "深槽收好最慢的寒流",
+    body: ["藍寒深槽的兩筆捕獲帶著漫長而穩定的拉力。表層潮界一天能移動幾次，深槽冷水卻慢得多；同一場霧，對不同深度的魚有完全不同的意義。"],
+    closing: "一片海不必只有一個速度，慢水也有自己的日常。"
+  },
+  {
+    id: "journal:story:mist_cape_cold_current:wuhe_kelp_line_moves",
+    categoryId: "mist_cape_cold_current",
+    regionId: "mist_cape_cold_current",
+    type: "story",
+    order: 4,
+    unlock: { type: "resident-scene", sceneId: "wuhe_kelp_line_moves" },
+    title: "一段會游動的葉柄",
+    body: ["海藻海龍離開一根莖，穿過短短開水，再直立於另一層葉片。牠只移動了一小段，卻把冷暖水在林中的交換位置完整連起來。"],
+    closing: "準確寫下『今天在這裡』，比假裝界線永遠不動更可靠。"
+  },
+  {
+    id: "journal:story:mist_cape_cold_current:wuhe_seasonal_section",
+    categoryId: "mist_cape_cold_current",
+    regionId: "mist_cape_cold_current",
+    type: "story",
+    order: 5,
+    unlock: { type: "resident-scene", sceneId: "wuhe_seasonal_section" },
+    title: "會換季的雙流剖面",
+    body: ["完成二十八種霧岬魚類的八成主研究後，霧禾把《霧岬雙流溫度剖面圖》裝進船屋航圖桌。多年舊頁顯示寒流會隨季節與長風收放，下一片海的群島正由那些風安排生活。"],
+    closing: "看懂兩種水如何相遇後，我開始留意讓整片海換季的風。"
   }
 ]);
 

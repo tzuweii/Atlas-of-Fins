@@ -1,6 +1,9 @@
-import { LUMINOUS_ARCHIPELAGO_ID, SLEEPING_TIDE_BAY_ID } from "./regions.js";
+import {
+  LUMINOUS_ARCHIPELAGO_ID, MIST_CAPE_COLD_CURRENT_ID, SLEEPING_TIDE_BAY_ID
+} from "./regions.js";
 
 export const SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID = "sleeping_tide_to_luminous_archipelago";
+export const LUMINOUS_TO_MIST_CAPE_ROUTE_ID = "luminous_archipelago_to_mist_cape";
 
 export const ROUTES = [
   {
@@ -16,6 +19,22 @@ export const ROUTES = [
       color: "coral_blue",
       silhouetteFishIds: [],
       musicPreviewId: null
+    },
+    status: "available"
+  },
+  {
+    id: LUMINOUS_TO_MIST_CAPE_ROUTE_ID,
+    fromRegionId: LUMINOUS_ARCHIPELAGO_ID,
+    toRegionId: MIST_CAPE_COLD_CURRENT_ID,
+    name: "霧岬潮界航線",
+    currentTags: ["warm_current", "cold_current", "thermal_front"],
+    unlock: { type: "resident-story", sceneId: "chengye_current_map" },
+    distanceClass: "medium",
+    travelSegments: 4,
+    preview: {
+      color: "mist_teal",
+      silhouetteFishIds: ["basking_shark"],
+      musicPreviewId: "mistbell_strings"
     },
     status: "available"
   }

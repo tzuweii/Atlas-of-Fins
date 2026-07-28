@@ -1,5 +1,6 @@
 export const SLEEPING_TIDE_BAY_ID = "sleeping_tide_bay";
 export const LUMINOUS_ARCHIPELAGO_ID = "luminous_archipelago";
+export const MIST_CAPE_COLD_CURRENT_ID = "mist_cape_cold_current";
 
 export const REGION_SPOTS = [
   {
@@ -92,6 +93,60 @@ export const REGION_SPOTS = [
     habitatTags: ["tropical", "observation", "tide-pool"],
     activityType: "observation",
     contentStatus: "complete"
+  },
+  {
+    id: "fogfront_shelf",
+    regionId: MIST_CAPE_COLD_CURRENT_ID,
+    name: "霧線陸棚",
+    icon: "≋",
+    description: "冷霧貼著陸棚緩慢移動，暖水魚群與冷水魚群在看不見的界線兩側轉身。",
+    hint: "冷暖流交界 · 史詩魚可能出現",
+    difficulty: 2,
+    unlock: { type: "default" },
+    sceneVariant: "mist_fogfront",
+    habitatTags: ["temperate", "continental-shelf", "current-front", "fog"],
+    activityType: "fishing"
+  },
+  {
+    id: "whispering_kelp_forest",
+    regionId: MIST_CAPE_COLD_CURRENT_ID,
+    name: "低語海藻林",
+    icon: "♒",
+    description: "高大海藻從岩底伸向微光，葉片把冷流拆成一層層安靜的背流面。",
+    hint: "海藻林住民與岩礁魚",
+    difficulty: 2,
+    unlock: { type: "default" },
+    sceneVariant: "mist_kelp_forest",
+    habitatTags: ["temperate", "kelp", "reef", "cold-current"],
+    activityType: "fishing"
+  },
+  {
+    id: "bluecold_trench",
+    regionId: MIST_CAPE_COLD_CURRENT_ID,
+    name: "藍寒深槽",
+    icon: "◍",
+    description: "岬角外的深槽收攏低溫水團，船燈下的藍色比霧更深也更慢。",
+    hint: "需強化遠投竿 · 深水冷流魚",
+    difficulty: 3,
+    requires: "farcast",
+    unlock: { type: "rod", rodId: "farcast" },
+    sceneVariant: "mist_cold_trench",
+    habitatTags: ["temperate", "offshore", "cold-current", "deep"],
+    activityType: "fishing"
+  },
+  {
+    id: "mistbell_overlook",
+    regionId: MIST_CAPE_COLD_CURRENT_ID,
+    name: "霧鐘觀測崖",
+    icon: "◌",
+    description: "霧鐘下方的岩崖俯看海藻林冠，適合不拋竿地等待小魚自己露出位置。",
+    hint: "安靜觀察 · 聽鐘辨位",
+    difficulty: 0,
+    unlock: { type: "default" },
+    sceneVariant: "mist_observation",
+    habitatTags: ["temperate", "observation", "kelp", "fog"],
+    activityType: "observation",
+    contentStatus: "complete"
   }
 ];
 
@@ -131,7 +186,29 @@ export const REGIONS = [
     palette: "luminous_archipelago",
     musicId: "windglass_current",
     ambientId: "coral_wind_chimes",
+    arrivalCopy: "風棲港的繫纜柱從暖色海面裡靠近，這次停泊已安靜記進航程。",
+    firstArrivalCopy: "暖色海面在風棲港外展開，澄野正把一只漂流觀測器從淺灘帶回岸邊。",
     journalPoolId: "luminous_archipelago",
+    contentStatus: "complete",
+    status: "available"
+  },
+  {
+    id: MIST_CAPE_COLD_CURRENT_ID,
+    name: "霧岬寒流水道",
+    portName: "聽霧港",
+    currentProfile: "cold_warm_current_convergence_kelp",
+    climateTags: ["temperate", "cold-current", "fog", "kelp"],
+    spotIds: ["fogfront_shelf", "whispering_kelp_forest", "bluecold_trench", "mistbell_overlook"],
+    fishingSpotIds: ["fogfront_shelf", "whispering_kelp_forest", "bluecold_trench"],
+    observationSpotIds: ["mistbell_overlook"],
+    residentIds: ["wuhe"],
+    unlock: { type: "route", routeId: "luminous_archipelago_to_mist_cape" },
+    palette: "mist_cape",
+    musicId: "mistbell_strings",
+    ambientId: "fog_bell_kelp_rustle",
+    arrivalCopy: "灰藍岬影從冷霧裡慢慢靠近，霧鐘低響一聲，聽霧港的繫纜柱才在船首前顯出位置。",
+    firstArrivalCopy: "溫度棚旁，一位披灰藍短披肩的觀測員正把紅線與藍線水溫筒並排掛好。霧禾先敲了一次鐘，再向你的船點頭。",
+    journalPoolId: "mist_cape_cold_current",
     contentStatus: "complete",
     status: "available"
   }

@@ -4,6 +4,8 @@ import {
   CLARKS_ANEMONEFISH_OBSERVATION_ID, TWO_SPINED_ANGELFISH_OBSERVATION_ID
 } from "./observations.js";
 import { SLEEPING_TIDE_STORY_SCENES } from "./sleeping-tide-story.js";
+import { MIST_CAPE_STORY_SCENES } from "./mist-cape-story.js";
+import { LUMINOUS_TO_MIST_CAPE_ROUTE_ID } from "./routes.js";
 
 const catchTask = (title, description, spotId, goal) => ({
   kind: "catch",
@@ -180,8 +182,9 @@ export const RESIDENT_STORY_SCENES = [
     },
     reward: {
       id: "chengye_handdrawn_current_map",
-      type: "resident-keepsake",
-      label: "澄野的手繪黑潮生態圖"
+      type: "route-chart",
+      routeId: LUMINOUS_TO_MIST_CAPE_ROUTE_ID,
+      label: "澄野的手繪黑潮生態圖與霧岬潮界航線"
     },
     completion: [
       { speaker: "旁白", text: "最後一筆資料被放回研究冊時，二十七種魚不再是分散的收藏。牠們沿著淺灘、礁影與深水重新排列，勾出一條穿過群島又向北延伸的暖流。" },
@@ -190,7 +193,8 @@ export const RESIDENT_STORY_SCENES = [
       { speaker: "澄野", text: "這張圖給你。暖流再往前會擦過一片冷霧，水色會突然變薄，魚群也會換一種排列方式。那不是謎題，只是下一片海正在發生的事。" },
       { speaker: "澄野", text: "哪天想出發，就沿著我沒畫完的那條線走吧。記得替空白保留位置——你已經知道，看見一片海不必急著把它帶走。" }
     ]
-  }
+  },
+  ...MIST_CAPE_STORY_SCENES
 ];
 
 export function getResidentStoryScenes(residentId) {

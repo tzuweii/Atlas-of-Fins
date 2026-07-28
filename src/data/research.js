@@ -1,6 +1,9 @@
-import { LUMINOUS_ARCHIPELAGO_ID, SLEEPING_TIDE_BAY_ID } from "./regions.js";
 import {
-  CLARKS_ANEMONEFISH_OBSERVATION_ID, TWO_SPINED_ANGELFISH_OBSERVATION_ID
+  LUMINOUS_ARCHIPELAGO_ID, MIST_CAPE_COLD_CURRENT_ID, SLEEPING_TIDE_BAY_ID
+} from "./regions.js";
+import {
+  CLARKS_ANEMONEFISH_OBSERVATION_ID, KELP_PIPEFISH_OBSERVATION_ID,
+  PACIFIC_SPINY_LUMPSUCKER_OBSERVATION_ID, TWO_SPINED_ANGELFISH_OBSERVATION_ID
 } from "./observations.js";
 
 export const LUMINOUS_RESEARCH_NODE_IDS = {
@@ -19,6 +22,16 @@ export const SLEEPING_TIDE_RESEARCH_NODE_IDS = {
   reef: "sleeping_tide_reef",
   night: "sleeping_tide_night",
   deep: "sleeping_tide_deep"
+};
+
+export const MIST_CAPE_RESEARCH_NODE_IDS = {
+  arrival: "mist_cape_arrival",
+  fogfront: "mist_cape_fogfront_shelf",
+  kelp: "mist_cape_kelp_forest",
+  trench: "mist_cape_cold_trench",
+  night: "mist_cape_night_current",
+  lumpsucker: "mist_cape_spiny_lumpsucker",
+  pipefish: "mist_cape_kelp_pipefish"
 };
 
 export const RESEARCH_NODES = [
@@ -105,6 +118,55 @@ export const RESEARCH_NODES = [
     name: "礁影裡的紫橙微光",
     description: "讓雙棘甲尻魚自然游進觀察簿。",
     requirement: { type: "observation", observationId: TWO_SPINED_ANGELFISH_OBSERVATION_ID }
+  },
+  {
+    id: MIST_CAPE_RESEARCH_NODE_IDS.arrival,
+    regionId: MIST_CAPE_COLD_CURRENT_ID,
+    name: "霧鐘先替港口報上名字",
+    description: "抵達聽霧港，讓冷暖雙色的第三枚海域印記落進研究冊。",
+    requirement: { type: "visited-region", regionId: MIST_CAPE_COLD_CURRENT_ID }
+  },
+  {
+    id: MIST_CAPE_RESEARCH_NODE_IDS.fogfront,
+    regionId: MIST_CAPE_COLD_CURRENT_ID,
+    name: "魚群替看不見的潮界轉身",
+    description: "在霧線陸棚記錄一種沿冷暖水交界活動的魚。",
+    requirement: { type: "spot-discovery", regionId: MIST_CAPE_COLD_CURRENT_ID, spotId: "fogfront_shelf" }
+  },
+  {
+    id: MIST_CAPE_RESEARCH_NODE_IDS.kelp,
+    regionId: MIST_CAPE_COLD_CURRENT_ID,
+    name: "海藻把冷流分成許多房間",
+    description: "在低語海藻林記錄一種利用林冠、莖或岩底的魚。",
+    requirement: { type: "spot-discovery", regionId: MIST_CAPE_COLD_CURRENT_ID, spotId: "whispering_kelp_forest" }
+  },
+  {
+    id: MIST_CAPE_RESEARCH_NODE_IDS.trench,
+    regionId: MIST_CAPE_COLD_CURRENT_ID,
+    name: "深槽收好最慢的一層寒流",
+    description: "使用遠投裝備，在藍寒深槽留下冷水魚紀錄。",
+    requirement: { type: "spot-discovery", regionId: MIST_CAPE_COLD_CURRENT_ID, spotId: "bluecold_trench" }
+  },
+  {
+    id: MIST_CAPE_RESEARCH_NODE_IDS.night,
+    regionId: MIST_CAPE_COLD_CURRENT_ID,
+    name: "夜霧裡還有另一條等溫線",
+    description: "在霧岬寒流水道的夜間留下捕獲紀錄。",
+    requirement: { type: "region-time-discovery", regionId: MIST_CAPE_COLD_CURRENT_ID, timeId: "night" }
+  },
+  {
+    id: MIST_CAPE_RESEARCH_NODE_IDS.lumpsucker,
+    regionId: MIST_CAPE_COLD_CURRENT_ID,
+    name: "吸盤記住海藻根部的流速",
+    description: "在霧鐘觀測崖記錄太平洋刺圓鰭魚。",
+    requirement: { type: "observation", observationId: PACIFIC_SPINY_LUMPSUCKER_OBSERVATION_ID }
+  },
+  {
+    id: MIST_CAPE_RESEARCH_NODE_IDS.pipefish,
+    regionId: MIST_CAPE_COLD_CURRENT_ID,
+    name: "一段葉柄游過兩層水",
+    description: "讓海藻海龍自然游進潮界觀察簿。",
+    requirement: { type: "observation", observationId: KELP_PIPEFISH_OBSERVATION_ID }
   }
 ];
 
@@ -144,6 +206,24 @@ export const REGION_RESEARCH = {
       { id: "luminous_sail_pattern", type: "sail-pattern", label: "琉光魚群船帆紋樣" }
     ],
     preview: "遠方的霧後，是一條向較冷水色彎去的潮路。"
+  },
+  [MIST_CAPE_COLD_CURRENT_ID]: {
+    regionId: MIST_CAPE_COLD_CURRENT_ID,
+    name: "霧岬雙流研究主路",
+    description: "從霧線、海藻林、深槽與正式觀察辨認冷暖水如何共同安排生命；發現八成魚類即可完成本章主研究。",
+    nodeIds: RESEARCH_NODES.filter(node => node.regionId === MIST_CAPE_COLD_CURRENT_ID).map(node => node.id),
+    mainSpeciesGoal: 28,
+    fullSpeciesGoal: 34,
+    mainReward: {
+      id: "mist_cape_temperature_fieldbook",
+      type: "research-keepsake",
+      label: "《霧岬潮界觀測冊》"
+    },
+    fullRewards: [
+      { id: "mist_cape_region_badge", type: "region-badge", label: "霧岬寒流水道徽章" },
+      { id: "mist_cape_sail_pattern", type: "sail-pattern", label: "霧岬雙流船帆紋樣" }
+    ],
+    preview: "霧禾的舊溫度頁顯示：寒流的季節擺動，與遠方風向一起改變。"
   }
 };
 

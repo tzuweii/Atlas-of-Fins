@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  DAILY_TIDE_ESSAYS, FISH, JOURNAL_CATEGORIES, JOURNAL_EVENT_TEMPLATES,
+  DAILY_TIDE_ESSAYS, FISH, HIGH_TIER_RARITIES, JOURNAL_CATEGORIES, JOURNAL_EVENT_TEMPLATES,
   MAIN_STORY_JOURNAL_ENTRIES, RARE_FISH_JOURNAL_ENTRIES
 } from "../src/data.js";
 import {
@@ -36,10 +36,11 @@ test("journal catalogs separate special sea conditions from six main-story chapt
   assert.deepEqual(JOURNAL_CATEGORIES.slice(0, 3).map(category => category.id), ["today", "rare_fish", "sea_events"]);
   assert.equal(JOURNAL_CATEGORIES.filter(category => category.kind === "story").length, 6);
   assert.equal(JOURNAL_CATEGORIES.filter(category => category.kind === "events").length, 1);
-  assert.equal(RARE_FISH_JOURNAL_ENTRIES.length, FISH.filter(fish => fish.rarity === "rare").length);
+  assert.equal(RARE_FISH_JOURNAL_ENTRIES.length, FISH.filter(fish => HIGH_TIER_RARITIES.includes(fish.rarity)).length);
   assert.equal(MAIN_STORY_JOURNAL_ENTRIES.filter(entry => entry.categoryId === "sleeping_tide_bay").length, 6);
   assert.equal(MAIN_STORY_JOURNAL_ENTRIES.filter(entry => entry.categoryId === "sea_events").length, 3);
   assert.equal(MAIN_STORY_JOURNAL_ENTRIES.filter(entry => entry.categoryId === "luminous_archipelago").length, 6);
+  assert.equal(MAIN_STORY_JOURNAL_ENTRIES.filter(entry => entry.categoryId === "mist_cape_cold_current").length, 6);
   assert.equal(DAILY_TIDE_ESSAYS.length, 12);
   assert.equal(JOURNAL_EVENT_TEMPLATES.length, 3);
 });
@@ -105,7 +106,7 @@ test("initial categories expose today's essay while story and optional sea recor
   assert.deepEqual([categories.sea_events.unlockedCount, categories.sea_events.totalCount], [0, 3]);
   assert.deepEqual([categories.sleeping_tide_bay.unlockedCount, categories.sleeping_tide_bay.totalCount], [0, 6]);
   assert.deepEqual([categories.luminous_archipelago.unlockedCount, categories.luminous_archipelago.totalCount], [0, 6]);
-  assert.equal(categories.mist_cape_cold_current.totalCount, 0);
+  assert.deepEqual([categories.mist_cape_cold_current.unlockedCount, categories.mist_cape_cold_current.totalCount], [0, 6]);
 });
 
 test("completed regional events unlock only their predefined optional sea-condition page", () => {

@@ -13,18 +13,20 @@ import { recordObservationSubject } from "../src/systems/observations.js";
 import { evaluateResearchProgress } from "../src/systems/research.js";
 import { recordRegionalDiscovery } from "../src/systems/world-state.js";
 
-test("Slice G defines two sourced observation fish and two hidden-until-found wonders", () => {
-  assert.equal(OBSERVATION_SUBJECTS.length, 2);
-  assert.equal(WONDERS.length, 2);
-  assert.deepEqual(OBSERVATION_SUBJECTS.map(subject => subject.id), [
+test("Slice G keeps the two sourced Luminous observation fish and hidden wonders", () => {
+  const luminousSubjects = OBSERVATION_SUBJECTS.filter(subject => subject.regionId === LUMINOUS_ARCHIPELAGO_ID);
+  const luminousWonders = WONDERS.filter(wonder => wonder.regionId === LUMINOUS_ARCHIPELAGO_ID);
+  assert.equal(luminousSubjects.length, 2);
+  assert.equal(luminousWonders.length, 2);
+  assert.deepEqual(luminousSubjects.map(subject => subject.id), [
     CLARKS_ANEMONEFISH_OBSERVATION_ID,
     TWO_SPINED_ANGELFISH_OBSERVATION_ID
   ]);
-  assert.ok(OBSERVATION_SUBJECTS.every(subject => subject.spotId === STARLIGHT_OBSERVATION_CAPE_ID
+  assert.ok(luminousSubjects.every(subject => subject.spotId === STARLIGHT_OBSERVATION_CAPE_ID
     && subject.type === "catalog-fish"
     && subject.pityVisits >= 1
     && /^https:\/\/www\.fishbase\.se\//.test(subject.ecologySource.url)));
-  assert.ok(WONDERS.every(wonder => wonder.type === "wonder" && wonder.chance > 0));
+  assert.ok(luminousWonders.every(wonder => wonder.type === "wonder" && wonder.chance > 0));
   assert.equal(RESEARCH_NODES.filter(node => node.regionId === SLEEPING_TIDE_BAY_ID).length, 5);
   assert.equal(RESEARCH_NODES.filter(node => node.regionId === LUMINOUS_ARCHIPELAGO_ID).length, 7);
 });

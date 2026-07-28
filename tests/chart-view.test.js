@@ -12,8 +12,8 @@ import {
 test("programmatic chart data shares the content validation boundary", () => {
   assert.equal(CHART_LAYOUT.visualMode, "programmatic-css");
   assert.equal(CHART_LAYOUT.artStatus, "deferred");
-  assert.equal(CHART_REGION_POINTS.length, 2);
-  assert.equal(CHART_ROUTE_PATHS.length, 1);
+  assert.equal(CHART_REGION_POINTS.length, 3);
+  assert.equal(CHART_ROUTE_PATHS.length, 2);
   assert.equal(CONTENT_VALIDATION.ok, true);
   for (const point of CHART_REGION_POINTS) {
     assert.ok(point.x >= 0 && point.x <= 100);

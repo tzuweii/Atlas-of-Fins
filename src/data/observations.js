@@ -1,8 +1,11 @@
-import { LUMINOUS_ARCHIPELAGO_ID } from "./regions.js";
+import { LUMINOUS_ARCHIPELAGO_ID, MIST_CAPE_COLD_CURRENT_ID } from "./regions.js";
 
 export const STARLIGHT_OBSERVATION_CAPE_ID = "starlight_observation_cape";
 export const CLARKS_ANEMONEFISH_OBSERVATION_ID = "clarks_anemonefish";
 export const TWO_SPINED_ANGELFISH_OBSERVATION_ID = "twospined_angelfish";
+export const MISTBELL_OVERLOOK_ID = "mistbell_overlook";
+export const PACIFIC_SPINY_LUMPSUCKER_OBSERVATION_ID = "pacific_spiny_lumpsucker";
+export const KELP_PIPEFISH_OBSERVATION_ID = "kelp_pipefish";
 
 export const OBSERVATION_SUBJECTS = [
   {
@@ -51,6 +54,55 @@ export const OBSERVATION_SUBJECTS = [
       label: "FishBase 物種摘要",
       url: "https://www.fishbase.se/summary/Centropyge-bispinosa.html"
     }
+  },
+  {
+    id: PACIFIC_SPINY_LUMPSUCKER_OBSERVATION_ID,
+    type: "catalog-fish",
+    regionId: MIST_CAPE_COLD_CURRENT_ID,
+    spotId: MISTBELL_OVERLOOK_ID,
+    name: "太平洋刺圓鰭魚",
+    english: "Pacific spiny lumpsucker",
+    scientific: "Eumicrotremus orbis",
+    icon: "●",
+    colors: ["#8aa179", "#d47c55", "#5c6670"],
+    timeIds: ["dawn", "day"],
+    weatherIds: ["sunny", "rain"],
+    baseChance: 0.52,
+    pityVisits: 2,
+    short: "圓小身體用腹部吸盤貼在海藻與岩面，冷流推過時只輕輕擺動魚鰭。",
+    detail: "太平洋刺獅子魚生活在北太平洋冷水沿岸，腹鰭形成吸盤，能附著在岩石與海藻上。看見牠停穩的位置，比追著牠移動更能讀懂林中的流速。",
+    hint: "清晨或白天，留意海藻根部那些沒有被冷流帶走的圓形小影。",
+    missHint: "海藻葉片已經轉向，根部仍很安靜。換一個明亮時段再來，吸附的小魚不會永遠藏住。",
+    ecologySource: {
+      label: "FishBase 物種摘要",
+      url: "https://www.fishbase.se/summary/Eumicrotremus-orbis.html",
+      checkedAt: "2026-07-28"
+    }
+  },
+  {
+    id: KELP_PIPEFISH_OBSERVATION_ID,
+    type: "catalog-fish",
+    regionId: MIST_CAPE_COLD_CURRENT_ID,
+    spotId: MISTBELL_OVERLOOK_ID,
+    name: "海藻海龍",
+    english: "Kelp pipefish",
+    scientific: "Syngnathus californiensis",
+    icon: "⌇",
+    colors: ["#9da868", "#63755e", "#d3c89a"],
+    timeIds: ["day", "dusk"],
+    weatherIds: ["sunny", "rain"],
+    requiresObservationIds: [PACIFIC_SPINY_LUMPSUCKER_OBSERVATION_ID],
+    baseChance: 0.3,
+    pityVisits: 3,
+    short: "細長身影順著海藻莖保持直立，葉片換邊時才慢慢游向另一層水。",
+    detail: "海藻海龍在海藻床與近岸植被間活動，以管狀吻吸取小型甲殼類。牠會利用細長輪廓融入葉片，讓冷暖水帶的微小移動變得可見。",
+    hint: "白日至黃昏，觀察海藻莖與開水交界；有一段看似葉柄的細影會自己換位置。",
+    missHint: "剛才有一根細莖逆著葉片移動了一點。等待下一次水色交替，牠會留下更完整的輪廓。",
+    ecologySource: {
+      label: "FishBase 物種摘要",
+      url: "https://www.fishbase.se/summary/Syngnathus-californiensis.html",
+      checkedAt: "2026-07-28"
+    }
   }
 ];
 
@@ -80,6 +132,32 @@ export const WONDERS = [
     chance: 0.28,
     description: "幾道半透明身影在礁盤外交換微弱色斑，像有人把星光一句一句傳過夜海。",
     photoCaption: "快門沒有聲音，只有幾盞小燈在黑水裡彼此回答。"
+  },
+  {
+    id: "sea_otter_kelp_raft",
+    type: "wonder",
+    regionId: MIST_CAPE_COLD_CURRENT_ID,
+    spotId: MISTBELL_OVERLOOK_ID,
+    name: "海獺的林冠小筏",
+    icon: "♒",
+    timeIds: ["dawn", "day"],
+    weatherIds: ["sunny"],
+    chance: 0.2,
+    description: "一隻海獺把自己纏進海藻林冠，仰躺著隨小浪升降，沒有被霧推離休息的位置。",
+    photoCaption: "海藻不是繩索，而是一張讓休息也能留在旅程裡的小筏。"
+  },
+  {
+    id: "gray_whale_fog_breath",
+    type: "wonder",
+    regionId: MIST_CAPE_COLD_CURRENT_ID,
+    spotId: MISTBELL_OVERLOOK_ID,
+    name: "灰鯨穿霧的一口氣",
+    icon: "⌁",
+    timeIds: ["dawn", "dusk"],
+    weatherIds: ["sunny", "rain"],
+    chance: 0.18,
+    description: "遠處先傳來低低的呼吸聲，一縷白氣才從霧後升起，沿著岬角慢慢向北移動。",
+    photoCaption: "沒有追上去；鐘聲與下一口呼吸已替牠標出安全的方向。"
   }
 ];
 

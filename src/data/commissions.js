@@ -1,5 +1,7 @@
-import { CHENGYE_ID, FISH_MARKET_OWNER_ID, LIGHTHOUSE_KEEPER_ID } from "./residents.js";
-import { LUMINOUS_ARCHIPELAGO_ID, SLEEPING_TIDE_BAY_ID } from "./regions.js";
+import { CHENGYE_ID, FISH_MARKET_OWNER_ID, LIGHTHOUSE_KEEPER_ID, WUHE_ID } from "./residents.js";
+import {
+  LUMINOUS_ARCHIPELAGO_ID, MIST_CAPE_COLD_CURRENT_ID, SLEEPING_TIDE_BAY_ID
+} from "./regions.js";
 
 const coins = amount => ({ type: "coins", amount, label: `${amount} 金幣` });
 const bait = (baitId, amount, label) => ({ type: "bait", baitId, amount, label });
@@ -134,6 +136,56 @@ export const COMMISSION_TEMPLATES = [
     condition: { eventType: "catch", regionIds: [LUMINOUS_ARCHIPELAGO_ID], timeIds: ["night"] },
     reward: bait("glow", 2, "發光魚餌 2 份"),
     completionDialogue: "夜裡不是只有稀有的東西才會發亮。這些普通剪影已經說了很多。"
+  },
+  {
+    id: "wuhe_fogfront_turns",
+    residentId: WUHE_ID,
+    title: "霧線轉身記號",
+    description: "在霧線陸棚記錄 2 條魚，替今天的潮界補上轉身位置。",
+    goal: 2,
+    condition: { eventType: "catch", regionIds: [MIST_CAPE_COLD_CURRENT_ID], spotIds: ["fogfront_shelf"] },
+    reward: coins(105),
+    completionDialogue: "兩筆位置已經夠清楚了。界線今天在這裡，明天可以放心換地方。"
+  },
+  {
+    id: "wuhe_kelp_backflow",
+    residentId: WUHE_ID,
+    title: "林下背流",
+    description: "在低語海藻林記錄 2 條魚，看看葉片背後哪一層水最安穩。",
+    goal: 2,
+    condition: { eventType: "catch", regionIds: [MIST_CAPE_COLD_CURRENT_ID], spotIds: ["whispering_kelp_forest"] },
+    reward: bait("shrimp", 3, "小蝦 3 份"),
+    completionDialogue: "原來今天林下的慢水更靠近岩根。謝謝你沒有為了數字多擾動葉片。"
+  },
+  {
+    id: "wuhe_cold_current_common",
+    residentId: WUHE_ID,
+    title: "寒流的尋常住民",
+    description: "在霧岬記錄 3 條常見魚，替雙流剖面補上日常底色。",
+    goal: 3,
+    condition: { eventType: "catch", regionIds: [MIST_CAPE_COLD_CURRENT_ID], rarityIds: ["common"] },
+    reward: coins(100),
+    completionDialogue: "醒目的訪客會離開，尋常魚群才把今天的水溫好好留了下來。"
+  },
+  {
+    id: "wuhe_bluecold_sounding",
+    residentId: WUHE_ID,
+    title: "深槽測深",
+    description: "在藍寒深槽記錄 2 條魚，確認最慢的冷水層仍在原來深度。",
+    goal: 2,
+    condition: { eventType: "catch", regionIds: [MIST_CAPE_COLD_CURRENT_ID], spotIds: ["bluecold_trench"] },
+    reward: coins(125),
+    completionDialogue: "深槽仍慢慢呼吸。這兩筆不需要更大，已經足以讓藍線站穩。"
+  },
+  {
+    id: "wuhe_mist_night",
+    residentId: WUHE_ID,
+    title: "夜霧的第二條線",
+    description: "在霧岬夜間記錄 2 條魚，不必等待任何稀有或史詩身影。",
+    goal: 2,
+    condition: { eventType: "catch", regionIds: [MIST_CAPE_COLD_CURRENT_ID], timeIds: ["night"] },
+    reward: bait("glow", 2, "發光魚餌 2 份"),
+    completionDialogue: "船燈只照見很近的水，兩筆普通夜影已經把第二條線說清楚了。"
   }
 ];
 

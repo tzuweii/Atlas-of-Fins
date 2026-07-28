@@ -28,6 +28,12 @@ function tierTotal(table, rarity, field = "finalRate") {
   return table.entries.filter(entry => entry.fish.rarity === rarity).reduce((sum, entry) => sum + entry[field], 0);
 }
 
+function highTierTotal(table, field = "finalRate") {
+  return table.entries
+    .filter(entry => !["common", "uncommon"].includes(entry.fish.rarity))
+    .reduce((sum, entry) => sum + entry[field], 0);
+}
+
 test("fixed top-level budgets and capture rates match the approved architecture", () => {
   near(Object.values(BASE_APPEARANCE_BUDGETS).reduce((sum, value) => sum + value, 0), 1);
   assert.deepEqual(BASE_APPEARANCE_BUDGETS, { common: .6, uncommon: .3, highTier: .06, noBite: .04 });
@@ -67,7 +73,7 @@ test("common and uncommon fish are region-shared while high-tier fish stay spot-
     assert.deepEqual(new Set(table.entries.map(entry => entry.fish.id)), new Set(expected.map(fish => fish.id)), spot.id);
     near(tierTotal(table, "common", "baseRate"), .6);
     near(tierTotal(table, "uncommon", "baseRate"), .3);
-    near(tierTotal(table, "rare", "baseRate"), .06);
+    near(highTierTotal(table, "baseRate"), .06);
     near(table.baseTotal, .96);
     near(table.noBiteRate, .04);
   }
@@ -80,7 +86,10 @@ test("common and uncommon fish are region-shared while high-tier fish stay spot-
     deep: 3,
     windrest_shallows: 1,
     prism_coral_garden: 1,
-    warm_current_channel: 2
+    warm_current_channel: 2,
+    fogfront_shelf: 1,
+    whispering_kelp_forest: 2,
+    bluecold_trench: 1
   });
 });
 
@@ -111,7 +120,7 @@ test("rod, bait, time, weather, and event bonuses preserve the fixed total budge
       near(table.noBiteRate, .04);
       near(tierTotal(table, "common"), BASE_APPEARANCE_BUDGETS.common - (highTier - BASE_APPEARANCE_BUDGETS.highTier));
       near(tierTotal(table, "uncommon"), .3);
-      near(tierTotal(table, "rare"), highTier);
+      near(highTierTotal(table), highTier);
     }
   }
 });

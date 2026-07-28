@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  LUMINOUS_ARCHIPELAGO_ID, ROUTES, SLEEPING_TIDE_BAY_ID,
+  LUMINOUS_ARCHIPELAGO_ID, MIST_CAPE_COLD_CURRENT_ID, ROUTES, SLEEPING_TIDE_BAY_ID,
   SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID
 } from "../src/data.js";
 import {
@@ -142,7 +142,8 @@ test("developer controls scale, arrive, and reset only the implemented route sta
   assert.equal(state.world.currentRegionId, SLEEPING_TIDE_BAY_ID);
   assert.equal(state.world.travel, null);
   assert.deepEqual(state.world.completedRouteIds, []);
-  assert.deepEqual(state.world.unlockedRouteIds, [ROUTE_ID]);
+  assert.deepEqual(state.world.unlockedRouteIds, ROUTES.map(route => route.id));
+  assert.equal(state.world.regionProgress[MIST_CAPE_COLD_CURRENT_ID].discoveredFishIds.length, 34);
 
   const normal = createInitialState();
   assert.equal(developerSetTravelScale(normal, 0.01), false);

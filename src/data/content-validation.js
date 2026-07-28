@@ -654,8 +654,8 @@ export function validateContentCatalog(content = {}) {
     if (entry?.type === "fish") {
       requireReference("journalEntries", entry, "fishId", entry?.fishId, ids.fish, "魚種");
       const fish = collections.fish.find(candidate => candidate.id === entry?.fishId);
-      if (fish && fish.rarity !== "rare") {
-        addError("invalid-rarity", "journalEntries", entry?.id, `journalEntries[${entry.id}].fishId`, "魚類相遇日誌只收錄稀有魚");
+      if (fish && !HIGH_TIER_RARITIES.includes(fish.rarity)) {
+        addError("invalid-rarity", "journalEntries", entry?.id, `journalEntries[${entry.id}].fishId`, "魚類相遇日誌只收錄稀有以上魚類");
       }
       rareFishEntryIds.add(entry?.fishId);
     }
@@ -666,9 +666,9 @@ export function validateContentCatalog(content = {}) {
       requireReference("journalEntries", entry, "unlock.sceneId", entry.unlock.sceneId, ids.residentStoryScenes, "居民故事場景");
     }
   }
-  for (const fish of collections.fish.filter(entry => entry?.rarity === "rare")) {
+  for (const fish of collections.fish.filter(entry => HIGH_TIER_RARITIES.includes(entry?.rarity))) {
     if (!rareFishEntryIds.has(fish.id)) {
-      addError("missing-journal-entry", "fish", fish.id, `fish[${fish.id}]`, "每種稀有魚都需要一篇固定相遇日誌");
+      addError("missing-journal-entry", "fish", fish.id, `fish[${fish.id}]`, "每種稀有以上魚類都需要一篇固定相遇日誌");
     }
   }
 

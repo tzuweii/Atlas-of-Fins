@@ -154,11 +154,15 @@ class Sound {
       const time = TIMES[state.timeIndex].id;
       const region = regionById(state.world?.currentRegionId);
       const luminous = region?.musicId === "windglass_current";
-      const notes = luminous
+      const mistCape = region?.musicId === "mistbell_strings";
+      const notes = mistCape
+        ? (time === "night" || state.weather === "rain" ? [196, 246, 293] : time === "dusk" ? [220, 277, 349] : [233, 293, 370])
+        : luminous
         ? (time === "night" || state.weather === "rain" ? [246, 329, 415] : time === "dusk" ? [293, 392, 523] : [329, 440, 554])
         : time === "dusk" ? [293, 369, 440] : (time === "night" || state.weather === "rain") ? [220, 277, 330] : [261, 329, 392];
-      notes.forEach((note, index) => this.tone(note, 2.8, luminous && index === 2 ? "triangle" : index === 1 ? "triangle" : "sine", .007, index * .42));
+      notes.forEach((note, index) => this.tone(note, 2.8, (luminous || mistCape) && index === 2 ? "triangle" : index === 1 ? "triangle" : "sine", .007, index * .42));
       if (region?.ambientId === "coral_wind_chimes") this.tone(notes[2] * 2, 1.4, "sine", .0035, 1.45);
+      if (region?.ambientId === "fog_bell_kelp_rustle") this.tone(notes[0] / 2, 2.2, "sine", .0038, 1.55);
     };
     playPhrase();
     this.ambientTimer = setInterval(playPhrase, 7200);
@@ -942,7 +946,7 @@ function chartRegionNode(point) {
   const known = chartRegionIsKnown(region.id);
   const preview = !known || (region.contentStatus === "route-only" && !visited);
   const statusIcon = current ? "⚓" : offshore ? "◉" : destination ? "➜" : visited ? "✓" : "⌁";
-  const statusText = current ? "船隻目前停泊" : offshore ? "船隻位於外海" : destination ? "目前航行目的地" : visited ? "已到訪" : known ? "航線已開放" : "等待取得灣外海圖";
+  const statusText = current ? "船隻目前停泊" : offshore ? "船隻位於外海" : destination ? "目前航行目的地" : visited ? "已到訪" : known ? "航線已開放" : "等待前章自然線索";
   const regionLabel = known ? region.name : "霧後海域";
   return `<div class="chart-region-node ${current || offshore ? "is-current" : ""} ${preview ? "is-preview" : ""}" style="left:${point.x}%;top:${point.y}%" role="group" aria-label="${regionLabel}，${statusText}"><span class="chart-region-marker" aria-hidden="true">${point.marker === "harbor" ? "◉" : "◌"}</span><span class="chart-region-copy"><b>${regionLabel}</b><small>${statusIcon} ${statusText}</small></span>${preview ? '<i class="chart-mist" aria-hidden="true"></i>' : ""}</div>`;
 }
@@ -986,7 +990,8 @@ function chartDestinationCards() {
     const destinationName = available || state.world.visitedRegionIds.includes(destinationId) ? destination?.name : "霧後海域";
     const familiar = state.world.completedRouteIds.includes(route.id);
     const duration = getRouteDurationForState(state, route.id);
-    return `<article class="card chart-route-card ${available ? "is-available" : "is-preview"}" data-route="${route.id}"><span class="section-label">相鄰航線</span><h3>${available ? route.name : "尚未取得灣外海圖"}</h3><p>${destinationName || "未知海域"} · ${available ? `${route.travelSegments} 段航程 · ${formatTravelMinutes(duration)}` : "完成眠潮灣主線與八成魚類探索後開放"}</p><div class="chart-route-state"><span aria-hidden="true">${available ? "✓" : "🔒"}</span><b>${available ? familiar ? "熟悉航線，可自由往返" : "首次短程航行已開放" : "等待燈塔守望者交付海圖"}</b></div><button class="${available ? "primary-button" : "soft-button"}" data-action="prepare-chart-route" data-id="${route.id}" ${available ? "" : "disabled"}>${available ? `準備前往${destination?.name || "目的地"}` : "尚未取得海圖"}</button></article>`;
+    const origin = regionById(state.world.currentRegionId);
+    return `<article class="card chart-route-card ${available ? "is-available" : "is-preview"}" data-route="${route.id}"><span class="section-label">相鄰航線</span><h3>${available ? route.name : "尚未取得航線圖"}</h3><p>${destinationName || "未知海域"} · ${available ? `${route.travelSegments} 段航程 · ${formatTravelMinutes(duration)}` : `完成${origin?.name || "目前海域"}第六節主線後開放`}</p><div class="chart-route-state"><span aria-hidden="true">${available ? "✓" : "🔒"}</span><b>${available ? familiar ? "熟悉航線，可自由往返" : "首次航行已開放" : "等待當地居民交付自然線索"}</b></div><button class="${available ? "primary-button" : "soft-button"}" data-action="prepare-chart-route" data-id="${route.id}" ${available ? "" : "disabled"}>${available ? `準備前往${destination?.name || "目的地"}` : "尚未取得航線圖"}</button></article>`;
   }).join("");
 }
 
@@ -996,7 +1001,7 @@ function chartCurrentCard() {
     const from = regionById(travelStatus.travel.fromRegionId);
     const to = regionById(travelStatus.travel.toRegionId);
     const voyageShip = shipById(travelStatus.travel.shipId) || activeShip(state);
-    return `<div class="card chart-current-card"><span class="section-label">目前船位 · ${voyageShip.name}</span><h3>⌁ 暖流航程中</h3><p>${from?.name || "出發地"} → ${to?.name || "目的地"}</p></div>`;
+    return `<div class="card chart-current-card"><span class="section-label">目前船位 · ${voyageShip.name}</span><h3>⌁ ${travelStatus.route.name}航程中</h3><p>${from?.name || "出發地"} → ${to?.name || "目的地"}</p></div>`;
   }
   if (state.world.docking?.status === "offshore") {
     const region = regionById(state.world.docking.regionId);
@@ -1069,7 +1074,7 @@ function showRouteConfirmation(routeId) {
   const route = routeById(routeId);
   if (!route) return;
   if (!isRouteUnlockedForState(state, routeId)) {
-    toast("完成第六節主線並取得《眠潮灣外海圖》後，才能沿這條航線出發");
+    toast(`完成${regionById(route.fromRegionId)?.name || "目前海域"}的第六節主線並取得航線圖後，才能出發`);
     renderChart();
     return;
   }
@@ -1078,13 +1083,21 @@ function showRouteConfirmation(routeId) {
   const familiar = state.world.completedRouteIds.includes(route.id);
   const duration = getRouteDurationForState(state, route.id);
   const ship = activeShip(state);
-  modalRoot.innerHTML = `<div class="modal-backdrop"><div class="modal route-confirm-modal"><div class="route-ship-preview">${shipMiniature(ship,ship.name)}<span><small>${familiar ? "熟悉航線" : "第一次遠航"}</small><b>${ship.name}</b></span></div><h2>前往${destination?.name || "目的地"}？</h2><p class="modal-copy">${route.name}預計需要${formatTravelMinutes(duration)}，分成 ${route.travelSegments} 段。航程不能瞬間略過，會以目前 ${activeShipSpeed(state).toFixed(2)}× 航速鎖定整段時間；出發後不因切換或讀檔跳變，也可以放心關閉遊戲。</p><div class="route-confirm-notes"><span>✓ 不消耗燃料</span><span>✓ 不會迷航或失敗</span><span>✓ 抵達後由你決定停泊</span></div><div class="modal-actions"><button class="soft-button" data-action="close-modal">再準備一下</button><button class="primary-button" data-action="confirm-chart-route" data-id="${route.id}">沿暖流出發</button></div></div></div>`;
+  modalRoot.innerHTML = `<div class="modal-backdrop"><div class="modal route-confirm-modal"><div class="route-ship-preview">${shipMiniature(ship,ship.name)}<span><small>${familiar ? "熟悉航線" : "第一次遠航"}</small><b>${ship.name}</b></span></div><h2>前往${destination?.name || "目的地"}？</h2><p class="modal-copy">${route.name}預計需要${formatTravelMinutes(duration)}，分成 ${route.travelSegments} 段。航程不能瞬間略過，會以目前 ${activeShipSpeed(state).toFixed(2)}× 航速鎖定整段時間；出發後不因切換或讀檔跳變，也可以放心關閉遊戲。</p><div class="route-confirm-notes"><span>✓ 不消耗燃料</span><span>✓ 不會迷航或失敗</span><span>✓ 抵達後由你決定停泊</span></div><div class="modal-actions"><button class="soft-button" data-action="close-modal">再準備一下</button><button class="primary-button" data-action="confirm-chart-route" data-id="${route.id}">沿潮路出發</button></div></div></div>`;
 }
 
 function showDockingScene(result) {
   const destination = regionById(result.destinationId);
   const returningHome = result.destinationId === SLEEPING_TIDE_BAY_ID;
-  modalRoot.innerHTML = `<div class="modal-backdrop docking-backdrop"><div class="modal docking-modal"><div class="docking-scene-mark" aria-hidden="true">${returningHome ? "⚓" : "◌"}</div><span class="section-label">${result.firstArrival ? "第一次停泊" : "再次靠岸"}</span><h2>${destination?.portName || "港口"}</h2><p class="modal-copy">${returningHome ? "熟悉的燈火穿過薄霧，眠潮灣把返航的船穩穩接回木棧橋。" : "暖色海面托著零散島影，風棲港的繩索輕輕落上船柱。這一刻已記進你的航程。"}</p>${result.firstArrival && result.destinationId === LUMINOUS_ARCHIPELAGO_ID ? '<p class="quiet-note">曬網棚旁，有位戴著大圓盤帽的研究員正低頭修理一枚漂流觀測器。她沒有招手，只先替你把鬆開的纜繩繫好。</p>' : ""}<div class="modal-actions"><button class="primary-button" data-action="close-modal">踏上碼頭</button></div></div></div>`;
+  const arrivalCopy = returningHome
+    ? "熟悉的燈火穿過薄霧，眠潮灣把返航的船穩穩接回木棧橋。"
+    : destination?.arrivalCopy || "港口的繫纜柱從海面景色裡靠近，這次停泊已安靜記進航程。";
+  const firstArrivalCopy = result.firstArrival
+    ? destination?.firstArrivalCopy || (result.destinationId === LUMINOUS_ARCHIPELAGO_ID
+      ? "曬網棚旁，有位戴著大圓盤帽的研究員正低頭修理一枚漂流觀測器。她沒有招手，只先替你把鬆開的纜繩繫好。"
+      : "")
+    : "";
+  modalRoot.innerHTML = `<div class="modal-backdrop docking-backdrop"><div class="modal docking-modal"><div class="docking-scene-mark" aria-hidden="true">${returningHome ? "⚓" : "◌"}</div><span class="section-label">${result.firstArrival ? "第一次停泊" : "再次靠岸"}</span><h2>${destination?.portName || "港口"}</h2><p class="modal-copy">${arrivalCopy}</p>${firstArrivalCopy ? `<p class="quiet-note">${firstArrivalCopy}</p>` : ""}<div class="modal-actions"><button class="primary-button" data-action="close-modal">踏上碼頭</button></div></div></div>`;
 }
 
 function showObservationPreview(spotId) {
@@ -1461,8 +1474,8 @@ function fishCard(fish) {
   return `<button class="fish-card rarity-${fish.rarity} ${found?"":"is-unknown"} ${found?.caughtShimmer?"has-shimmer":""} ${selectedJournalFish===fish.id?"is-active":""}" data-rarity="${fish.rarity}" data-action="select-fish" data-id="${fish.id}">${found?.caughtShimmer?'<span class="shimmer-mark" title="曾捕獲閃光個體">✦</span>':""}${fishArt(fish,!found,"normal",found?"journal":"silhouette")}<b>${found?fish.name:"未發現"}</b><small><span class="fish-card-rarity">${RARITY[fish.rarity].name}</span> · ${found?`捕獲 ${found.count} 次`:unknownHint(fish)}</small>${found?`<span class="familiarity-chip is-${familiarity.id}">${familiarity.name}</span>`:""}</button>`;
 }
 function unknownHint(fish){
-  const luminousOnly=Boolean(getFishHabitat(fish,LUMINOUS_ARCHIPELAGO_ID))&&!getFishHabitat(fish,SLEEPING_TIDE_BAY_ID);
-  if(luminousOnly)return "琉光群島暖色水光中的陌生剪影";
+  const habitat=fish.habitats?.[0],region=regionById(habitat?.regionId);
+  if(habitat?.regionId!==SLEEPING_TIDE_BAY_ID)return `${region?.name||"遠方海域"}水色中的陌生剪影`;
   return fish.spots.includes("deep")||fish.spots.includes("warm_current_channel")?"深藍水域的神秘剪影":fish.spots.includes("reef")||fish.spots.includes("prism_coral_garden")?"礁石間似乎有什麼身影":"近岸水光中的小小身影";
 }
 
@@ -1948,16 +1961,20 @@ function confirmPortableImport() {
 
 function developerTideglowRefs(eventType) {
   const source = TIDEGLOW_SOURCES.find(entry => entry.eventType === eventType);
+  const regionId = state.world?.currentRegionId || SLEEPING_TIDE_BAY_ID;
+  const localObservation = OBSERVATION_SUBJECTS.find(subject => subject.regionId === regionId) || OBSERVATION_SUBJECTS[0];
+  const localNode = RESEARCH_NODES.find(node => node.regionId === regionId) || RESEARCH_NODES[0];
+  const localResident = RESIDENTS.find(resident => resident.regionId === regionId && getResidentStoryStatus(state, resident.id).scenes.length) || RESIDENTS.find(resident => getResidentStoryStatus(state, resident.id).scenes.length);
   const valueBySourceId = {
     fish_discovery: FISH[0]?.id,
-    region_arrival: LUMINOUS_ARCHIPELAGO_ID,
-    formal_observation: OBSERVATION_SUBJECTS[0]?.id,
-    research_node: RESEARCH_NODES[0]?.id,
-    region_research: LUMINOUS_ARCHIPELAGO_ID,
-    resident_story: getResidentStoryStatus(state, CHENGYE_ID).scenes[0]?.id
+    region_arrival: regionId,
+    formal_observation: localObservation?.id,
+    research_node: localNode?.id,
+    region_research: regionId,
+    resident_story: localResident ? getResidentStoryStatus(state, localResident.id).scenes[0]?.id : null
   };
   const refs = source ? { [source.refKey]: valueBySourceId[source.id] } : {};
-  if (source?.id === "resident_story") refs.residentId = CHENGYE_ID;
+  if (source?.id === "resident_story" && localResident) refs.residentId = localResident.id;
   return refs;
 }
 
@@ -1970,16 +1987,17 @@ function showDeveloperTools() {
   modalRoot.innerHTML = `<div class="modal-backdrop"><div class="modal developer-modal"><span class="section-label">資料驅動測試入口</span><h2>Slice D 開發者控制</h2><p class="modal-copy">每日模板與居民今日提案直接由正式內容資料產生；所有操作只寫入獨立開發者存檔。</p><div class="developer-control-grid"><section class="developer-control-card"><h3>每日小目標</h3><label>卡片位置<select id="developer-daily-slot"><option value="0">第 1 張</option><option value="1">第 2 張</option><option value="2">第 3 張</option></select></label><label>正式模板<select id="developer-daily-template">${dailyOptions}</select></label><div class="developer-control-actions"><button class="soft-button" data-action="developer-set-daily">指定模板</button><button class="soft-button" data-action="developer-complete-daily">全部完成</button><button class="soft-button" data-action="developer-claim-daily">領取完成</button><button class="soft-button" data-action="developer-next-day">推進航海日</button><button class="soft-button" data-action="developer-reset-daily">重置今日</button></div></section><section class="developer-control-card"><h3>居民今日提案</h3><label>居民<select id="developer-resident">${residentOptions}</select></label><label>正式模板<select id="developer-commission-template">${commissionOptions}</select></label><p class="quiet-note">${active ? `進行中：${active.title} · ${active.progress}/${active.goal}` : "目前沒有進行中的今日提案"}</p><div class="developer-control-actions"><button class="soft-button" data-action="developer-set-offer">指定提案</button><button class="soft-button" data-action="developer-accept-offer">接受提案</button><button class="soft-button" data-action="developer-complete-commission">完成進度</button><button class="soft-button" data-action="developer-deliver-commission">交付</button><button class="soft-button" data-action="developer-drop-commission">放下</button><button class="soft-button" data-action="developer-clear-commission-history">清除歷史</button></div></section></div><div class="modal-actions"><button class="primary-button" data-action="close-modal">完成測試</button></div></div></div>`;
   const travelStatus = getTravelStatus(state.world);
   const scaleOptions = DEVELOPER_TRAVEL_SCALES.map(scale => `<option value="${scale}" ${state.travelSettings.developerDurationScale === scale ? "selected" : ""}>${scale === 1 ? "正式速度 100%" : `測試速度 ${Math.round(scale * 100)}%`}</option>`).join("");
-  $(".developer-modal h2")?.replaceChildren("v0.5 Slice E 整合控制");
-  $(".developer-modal .modal-copy")?.replaceChildren("既有旅程控制與 v5 事件、潮光帳本集中於此；全部操作只寫入獨立開發者存檔。");
+  $(".developer-modal h2")?.replaceChildren("海域內容整合控制");
+  $(".developer-modal .modal-copy")?.replaceChildren("旅程、區域內容、事件與潮光帳本集中於此；全部操作只寫入獨立開發者存檔。");
   $(".developer-control-grid")?.insertAdjacentHTML("beforeend", `<section class="developer-control-card"><h3>正式航線</h3><label>航程時間比例<select id="developer-travel-scale">${scaleOptions}</select></label><p class="quiet-note">${travelStatus ? `航行中：${travelStatus.route.name} · ${travelStatus.segment}/${travelStatus.totalSegments}` : state.world.docking?.status === "offshore" ? `已抵達${regionById(state.world.docking.regionId)?.name || "目的地"}外海` : "目前安全停泊"}</p><div class="developer-control-actions"><button class="soft-button" data-action="developer-set-travel-scale">套用比例</button><button class="soft-button" data-action="developer-arrive-travel" ${travelStatus ? "" : "disabled"}>立即抵達外海</button><button class="soft-button" data-action="developer-reset-route">重置首條航線</button></div></section>`);
   const regionOptions = REGIONS.filter(region => region.status === "available").map(region => `<option value="${region.id}" ${state.world.currentRegionId === region.id ? "selected" : ""}>${region.name} · ${region.portName}</option>`).join("");
   const eventOptions = BAY_EVENTS.filter(event => event.regionId === state.world.currentRegionId).map(event => `<option value="${event.id}">${event.id} · ${event.name}</option>`).join("");
-  $(".developer-control-grid")?.insertAdjacentHTML("beforeend", `<section class="developer-control-card"><h3>琉光群島內容</h3><label>直接停泊區域<select id="developer-region">${regionOptions}</select></label><label>目前區域事件<select id="developer-region-event">${eventOptions}</select></label><p class="quiet-note">三個釣點、正式觀察點、澄野與研究主路均可直接驗證。</p><div class="developer-control-actions"><button class="soft-button" data-action="developer-dock-region">直接停泊</button><button class="soft-button" data-action="developer-set-region-event" ${eventOptions ? "" : "disabled"}>指定事件</button></div></section>`);
+  $(".developer-control-grid")?.insertAdjacentHTML("beforeend", `<section class="developer-control-card"><h3>區域內容定位</h3><label>直接停泊區域<select id="developer-region">${regionOptions}</select></label><label>目前區域事件<select id="developer-region-event">${eventOptions}</select></label><p class="quiet-note">正式釣點、觀察點、居民與研究主路均由目前區域資料直接產生。</p><div class="developer-control-actions"><button class="soft-button" data-action="developer-dock-region">直接停泊</button><button class="soft-button" data-action="developer-set-region-event" ${eventOptions ? "" : "disabled"}>指定事件</button></div></section>`);
   const observationOptions = OBSERVATION_SUBJECTS.map(subject => `<option value="${subject.id}">${subject.id} · ${subject.name}</option>`).join("");
-  const luminousResearch = getRegionResearchStatus(state, LUMINOUS_ARCHIPELAGO_ID);
-  const chengyeStory = getResidentStoryStatus(state, CHENGYE_ID);
-  $(".developer-control-grid")?.insertAdjacentHTML("beforeend", `<section class="developer-control-card"><h3>觀察、研究與澄野</h3><label>正式觀察魚<select id="developer-observation-subject">${observationOptions}</select></label><p class="quiet-note">觀察 ${Object.keys(state.observations?.recordsById || {}).length}/${OBSERVATION_SUBJECTS.length} · 研究 ${luminousResearch?.speciesCount || 0}/${luminousResearch?.research.fullSpeciesGoal || 33} · 澄野 ${chengyeStory.completedSceneIds.length}/${chengyeStory.scenes.length}</p><div class="developer-control-actions"><button class="soft-button" data-action="developer-record-observation">直接記錄</button><button class="soft-button" data-action="developer-reset-observations">重置觀察</button><button class="soft-button" data-action="developer-complete-research">完成研究</button><button class="soft-button" data-action="developer-reset-chengye">重置澄野故事</button></div></section>`);
+  const currentResearch = getRegionResearchStatus(state, state.world.currentRegionId);
+  const localStoryResident = RESIDENTS.find(resident => resident.regionId === state.world.currentRegionId && getResidentStoryStatus(state, resident.id).scenes.length);
+  const localStory = localStoryResident ? getResidentStoryStatus(state, localStoryResident.id) : null;
+  $(".developer-control-grid")?.insertAdjacentHTML("beforeend", `<section class="developer-control-card"><h3>觀察、研究與區域主線</h3><label>正式觀察魚<select id="developer-observation-subject">${observationOptions}</select></label><p class="quiet-note">觀察 ${Object.keys(state.observations?.recordsById || {}).length}/${OBSERVATION_SUBJECTS.length} · ${currentResearch ? `研究 ${currentResearch.speciesCount}/${currentResearch.research.fullSpeciesGoal}` : "無區域研究"} · ${localStoryResident ? `${localStoryResident.name} ${localStory.completedSceneIds.length}/${localStory.scenes.length}` : "無區域主線"}</p><div class="developer-control-actions"><button class="soft-button" data-action="developer-record-observation">直接記錄</button><button class="soft-button" data-action="developer-reset-observations">重置觀察</button><button class="soft-button" data-action="developer-complete-research" ${currentResearch ? "" : "disabled"}>完成研究</button><button class="soft-button" data-action="developer-reset-chengye" data-id="${localStoryResident?.id || ""}" ${localStoryResident ? "" : "disabled"}>重置區域主線</button></div></section>`);
   const tideglowOptions = TIDEGLOW_SOURCES.map(source => `<option value="${source.eventType}">${source.label} · +${source.points}</option>`).join("");
   const ledger = Object.values(state.tideglow?.ledgerBySourceId || {}).slice(-5).reverse();
   $(".developer-control-grid")?.insertAdjacentHTML("beforeend", `<section class="developer-control-card"><h3>潮光與事件帳本</h3><label>合法來源<select id="developer-tideglow-source">${tideglowOptions}</select></label><p class="quiet-note">顯示 ${state.tideglow?.total || 0} · 帳本 ${Object.keys(state.tideglow?.ledgerBySourceId || {}).length} · pending ${state.gameEvents?.pending?.length || 0} · recent ${state.gameEvents?.recent?.length || 0}</p><div class="developer-ledger">${ledger.length ? ledger.map(entry => `<small>${entry.sourceId} · +${entry.points}</small>`).join("") : "<small>帳本尚未留下光點</small>"}</div><div class="developer-control-actions"><button class="soft-button" data-action="developer-tideglow-down">−10 顯示值</button><button class="soft-button" data-action="developer-tideglow-up">+10 顯示值</button><button class="soft-button" data-action="developer-emit-tideglow">發送來源</button><button class="soft-button" data-action="developer-emit-tideglow">重送驗證去重</button></div></section>`);
@@ -2273,8 +2291,8 @@ document.addEventListener("click", event => {
     if(developerRecordObservation(state,subjectId))finishDeveloperAction(`已直接記錄「${OBSERVATION_SUBJECTS.find(subject=>subject.id===subjectId)?.name||subjectId}」`);
   }
   if(action==="developer-reset-observations"&&developerResetObservations(state))finishDeveloperAction("正式觀察與奇景紀錄已重置");
-  if(action==="developer-complete-research"&&developerCompleteRegionResearch(state,LUMINOUS_ARCHIPELAGO_ID))finishDeveloperAction("琉光研究節點與外觀獎勵已完成");
-  if(action==="developer-reset-chengye"&&developerResetChengyeStory(state))finishDeveloperAction("澄野故事已回到初遇前");
+  if(action==="developer-complete-research"&&developerCompleteRegionResearch(state,state.world.currentRegionId))finishDeveloperAction(`${regionById(state.world.currentRegionId)?.name||"區域"}研究節點與外觀獎勵已完成`);
+  if(action==="developer-reset-chengye"&&developerResetChengyeStory(state,id))finishDeveloperAction(`${residentById(id)?.name||"區域居民"}故事已回到初遇前`);
   if(action==="developer-tideglow-down"&&developerAdjustTideglow(state,-10))finishDeveloperAction("潮光測試顯示值已減少 10");
   if(action==="developer-tideglow-up"&&developerAdjustTideglow(state,10))finishDeveloperAction("潮光測試顯示值已增加 10");
   if(action==="developer-emit-tideglow"){
@@ -2284,8 +2302,8 @@ document.addEventListener("click", event => {
   }
   if(action==="developer-check-journal"){
     const categories=getJournalCategories(state),entries=categories.flatMap(category=>getJournalEntries(state,category.id));
-    const valid=categories.length===8&&entries.every(entry=>entry.title&&Array.isArray(entry.body)&&entry.body.length&&entry.closing)&&!document.querySelector('[data-action="logbook-cross-link"]');
-    toast(valid?"八個分類、固定文字與純閱讀規則皆通過":"日誌檢查發現分類、文字或入口異常",valid?"gold":"");
+    const valid=categories.length===9&&entries.every(entry=>entry.title&&Array.isArray(entry.body)&&entry.body.length&&entry.closing)&&!document.querySelector('[data-action="logbook-cross-link"]');
+    toast(valid?"九個分類、固定文字與純閱讀規則皆通過":"日誌檢查發現分類、文字或入口異常",valid?"gold":"");
   }
   if(action==="developer-auto-owned"&&developerResetAutoFishing(state,true))finishDeveloperAction("自動釣架已重置為永久擁有");
   if(action==="developer-auto-locked"&&developerResetAutoFishing(state,false))finishDeveloperAction("自動釣架已重置為未擁有");

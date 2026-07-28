@@ -2,10 +2,10 @@ import {
   ACHIEVEMENTS, AQUARIUM_CAPACITY_MILESTONES, AQUARIUM_DECORATIONS, AUTO_FISHING_EQUIPMENT, BAITS, BAY_EVENTS,
   BASE_APPEARANCE_BUDGETS, CHENGYE_ID, DAILY_GOAL_TEMPLATES, FISH, FISH_APPEARANCE_BONUSES,
   FISH_RARITY_ORDER, FURNITURE, HIGH_TIER_RARITIES, LUMINOUS_ARCHIPELAGO_ID, MILESTONES, RARITY,
-  REGIONS, RODS, ROUTES, SHIPS, SHIP_FURNITURE, SLEEPING_TIDE_BAY_ID, SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID,
+  REGIONS, RESEARCH_NODES, RODS, ROUTES, SHIPS, SHIP_FURNITURE, SLEEPING_TIDE_BAY_ID, SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID,
   SPOTS, TIDEGLOW_SOURCES, TIMES,
   cascadeHighTierSplit, fishCanAppearAtSpot, getFishHabitat, getRegionFishingSpots,
-  isRegionAvailable, residentStorySceneById, shipFurnitureById as findShipFurnitureById
+  isRegionAvailable, observationSubjectById, residentStorySceneById, shipFurnitureById as findShipFurnitureById
 } from "./data.js";
 import {
   BACKUP_KEY, DEV_BACKUP_KEY, DEV_SAVE_KEY, DEV_TEMP_SAVE_KEY, SAVE_KEY, SAVE_VERSION, TEMP_SAVE_KEY
@@ -802,7 +802,7 @@ export function isCurrentSaveSchema(raw) {
       Array.isArray(progress?.caughtSpotIds) && Array.isArray(progress?.caughtTimeIds)
     ))
     && raw?.regionEvents && typeof raw.regionEvents === "object"
-    && Object.hasOwn(raw.regionEvents, LUMINOUS_ARCHIPELAGO_ID)
+    && REGIONS.filter(region => region.status === "available").every(region => Object.hasOwn(raw.regionEvents, region.id))
     && raw?.gameEvents && Array.isArray(raw.gameEvents.pending) && Array.isArray(raw.gameEvents.recent)
     && raw?.tideglow && Number.isFinite(Number(raw.tideglow.total))
     && typeof raw.tideglow.enabled === "boolean"
@@ -1247,7 +1247,7 @@ export function recordCatch(state, caught, baitId = state.equippedBait, { source
   state.catchInventory.push(caught);
   state.totalCaught += 1;
   if (caught.sizeTier === "record") state.recordCatches = (state.recordCatches || 0) + 1;
-  if (isNew) state.money += 35 + ({ common: 0, uncommon: 30, rare: 100 }[fish.rarity]);
+  if (isNew) state.money += 35 + ({ common: 0, uncommon: 30, rare: 100, epic: 220 }[fish.rarity] || 0);
   if (isFirstShimmer) state.money += SHIMMER_CONFIG.researchReward;
   const progressUpdate = updateProgressEvent(state, {
     type: "catch",
@@ -1492,6 +1492,7 @@ export function acceptResidentStory(state, residentId) {
 export function completeResidentStory(state, residentId) {
   const result = completeResidentStoryState(state, residentId);
   if (!result.ok) return result;
+  syncStoryRouteUnlocks(state);
   const tideglowEvent = emitTideglowEvent(state, "resident.story.completed", {
     residentId,
     milestoneId: result.scene.id
@@ -1717,7 +1718,7 @@ export function developerResetRouteState(state) {
   stopAutoFishingSessionState(state, "region-changed");
   const previousBayProgress = state.world?.regionProgress?.[SLEEPING_TIDE_BAY_ID];
   state.world = createDeveloperWorldState({
-    discoveredFishIds: previousBayProgress?.discoveredFishIds || Object.keys(state.discovered || {}),
+    discoveredFishIds: Object.keys(state.discovered || {}),
     currentRegionId: SLEEPING_TIDE_BAY_ID,
     firstArrivedAt: previousBayProgress?.firstArrivedAt || state.lastSavedAt
   });
@@ -1773,6 +1774,8 @@ export function developerSetRegionEvent(state, eventId) {
 
 export function developerRecordObservation(state, subjectId) {
   if (!state?.developerMode) return false;
+  const subject = observationSubjectById(subjectId);
+  if (!subject) return false;
   const result = recordObservationSubject(state.observations, subjectId, {
     day: state.day,
     observedAt: new Date().toISOString(),
@@ -1781,20 +1784,20 @@ export function developerRecordObservation(state, subjectId) {
   });
   if (!result.ok) return false;
   state.observations = result.state;
-  evaluateResearchProgress(state, LUMINOUS_ARCHIPELAGO_ID);
+  evaluateResearchProgress(state, subject.regionId);
   return true;
 }
 
 export function developerResetObservations(state) {
   if (!state?.developerMode) return false;
   state.observations = createObservationState();
-  const progress = state.world?.regionProgress?.[LUMINOUS_ARCHIPELAGO_ID];
-  if (progress) {
-    state.world.regionProgress[LUMINOUS_ARCHIPELAGO_ID] = {
+  const observationNodeIds = new Set(RESEARCH_NODES
+    .filter(node => node.requirement?.type === "observation")
+    .map(node => node.id));
+  for (const [regionId, progress] of Object.entries(state.world?.regionProgress || {})) {
+    state.world.regionProgress[regionId] = {
       ...progress,
-      completedResearchIds: (progress.completedResearchIds || []).filter(nodeId => ![
-        "luminous_clarks_anemonefish", "luminous_twospined_angelfish"
-      ].includes(nodeId))
+      completedResearchIds: (progress.completedResearchIds || []).filter(nodeId => !observationNodeIds.has(nodeId))
     };
   }
   return true;
@@ -1804,8 +1807,8 @@ export function developerCompleteRegionResearch(state, regionId = LUMINOUS_ARCHI
   return completeRegionResearchForDeveloper(state, regionId);
 }
 
-export function developerResetChengyeStory(state) {
-  return resetResidentStory(state, CHENGYE_ID);
+export function developerResetChengyeStory(state, residentId = CHENGYE_ID) {
+  return resetResidentStory(state, residentId);
 }
 
 export function developerSetDailyGoal(state, slotIndex, templateId) {
