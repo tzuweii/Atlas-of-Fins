@@ -6,6 +6,11 @@ import {
   PACIFIC_SPINY_LUMPSUCKER_OBSERVATION_ID, TWO_SPINED_ANGELFISH_OBSERVATION_ID
 } from "./observations.js";
 
+export const MAIN_RESEARCH_SPECIES_RATIO = 0.7;
+export const mainResearchSpeciesGoal = totalSpecies => Math.ceil(
+  Math.max(0, Math.floor(Number(totalSpecies) || 0)) * MAIN_RESEARCH_SPECIES_RATIO
+);
+
 export const LUMINOUS_RESEARCH_NODE_IDS = {
   arrival: "luminous_arrival",
   lagoon: "luminous_lagoon_notes",
@@ -174,9 +179,9 @@ export const REGION_RESEARCH = {
   [SLEEPING_TIDE_BAY_ID]: {
     regionId: SLEEPING_TIDE_BAY_ID,
     name: "眠潮灣研究主路",
-    description: "從棲地、時段與天氣逐步認識海灣；發現八成魚類即可取得前往下一片海域的海圖。",
+    description: "從棲地、時段與天氣逐步認識海灣；發現七成魚類即可取得前往下一片海域的海圖。",
     nodeIds: RESEARCH_NODES.filter(node => node.regionId === SLEEPING_TIDE_BAY_ID).map(node => node.id),
-    mainSpeciesGoal: 24,
+    mainSpeciesGoal: mainResearchSpeciesGoal(30),
     fullSpeciesGoal: 30,
     mainReward: {
       id: "sleeping_tide_research_book",
@@ -192,9 +197,9 @@ export const REGION_RESEARCH = {
   [LUMINOUS_ARCHIPELAGO_ID]: {
     regionId: LUMINOUS_ARCHIPELAGO_ID,
     name: "琉光群島研究主路",
-    description: "這一頁會隨釣魚、換時段與安靜觀察自然亮起；發現八成魚類即可完成前往下一片海域的準備。",
+    description: "這一頁會隨釣魚、換時段與安靜觀察自然亮起；發現七成魚類即可完成前往下一片海域的準備。",
     nodeIds: RESEARCH_NODES.filter(node => node.regionId === LUMINOUS_ARCHIPELAGO_ID).map(node => node.id),
-    mainSpeciesGoal: 27,
+    mainSpeciesGoal: mainResearchSpeciesGoal(33),
     fullSpeciesGoal: 33,
     mainReward: {
       id: "luminous_research_book",
@@ -210,9 +215,9 @@ export const REGION_RESEARCH = {
   [MIST_CAPE_COLD_CURRENT_ID]: {
     regionId: MIST_CAPE_COLD_CURRENT_ID,
     name: "霧岬雙流研究主路",
-    description: "從霧線、海藻林、深槽與正式觀察辨認冷暖水如何共同安排生命；發現八成魚類即可完成本章主研究。",
+    description: "從霧線、海藻林、深槽與正式觀察辨認冷暖水如何共同安排生命；發現七成魚類即可完成本章主研究。",
     nodeIds: RESEARCH_NODES.filter(node => node.regionId === MIST_CAPE_COLD_CURRENT_ID).map(node => node.id),
-    mainSpeciesGoal: 28,
+    mainSpeciesGoal: mainResearchSpeciesGoal(34),
     fullSpeciesGoal: 34,
     mainReward: {
       id: "mist_cape_temperature_fieldbook",

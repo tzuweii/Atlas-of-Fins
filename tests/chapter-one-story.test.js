@@ -108,7 +108,7 @@ test("chapter one teaches distinct habitats, catch destinations, time, and prefe
   finishActive(state);
 });
 
-test("twenty-four of thirty Sleeping Tide fish complete the eighty-percent gate and the keeper hands over the route chart", () => {
+test("twenty-one of thirty Sleeping Tide fish complete the seventy-percent gate and the keeper hands over the route chart", () => {
   const state = createInitialState();
   state.completedTutorial = true;
   state.residentStories[LIGHTHOUSE_KEEPER_ID] = {
@@ -125,20 +125,20 @@ test("twenty-four of thirty Sleeping Tide fish complete the eighty-percent gate 
   const accepted = acceptResidentStory(state, LIGHTHOUSE_KEEPER_ID);
   assert.equal(accepted.scene.id, "keeper_outer_current_chart");
   const bayFishIds = FISH.filter(fish => fish.habitats[0].regionId === SLEEPING_TIDE_BAY_ID).map(fish => fish.id);
-  state.world.regionProgress[SLEEPING_TIDE_BAY_ID].discoveredFishIds = bayFishIds.slice(0, 23);
+  state.world.regionProgress[SLEEPING_TIDE_BAY_ID].discoveredFishIds = bayFishIds.slice(0, 20);
   evaluateResearchProgress(state, SLEEPING_TIDE_BAY_ID);
   const waiting = getResidentStoryStatus(state, LIGHTHOUSE_KEEPER_ID);
   assert.equal(waiting.canComplete, false);
   assert.deepEqual(waiting.objectiveDetails.map(detail => ({ label: detail.label, progress: detail.progress, goal: detail.goal })), [
     { label: "完成前五節玩法主線", progress: 5, goal: 5 },
-    { label: "眠潮灣魚類探索（24／30＝80%）", progress: 23, goal: 24 }
+    { label: "眠潮灣魚類探索（21／30＝70%）", progress: 20, goal: 21 }
   ]);
 
-  state.world.regionProgress[SLEEPING_TIDE_BAY_ID].discoveredFishIds.push(bayFishIds[23]);
+  state.world.regionProgress[SLEEPING_TIDE_BAY_ID].discoveredFishIds.push(bayFishIds[20]);
   evaluateResearchProgress(state, SLEEPING_TIDE_BAY_ID);
   const ready = getResidentStoryStatus(state, LIGHTHOUSE_KEEPER_ID);
-  assert.equal(ready.objectiveProgress, 24);
-  assert.deepEqual(ready.objectiveDetails.map(detail => detail.progress), [5, 24]);
+  assert.equal(ready.objectiveProgress, 21);
+  assert.deepEqual(ready.objectiveDetails.map(detail => detail.progress), [5, 21]);
   assert.equal(ready.canComplete, true);
 
   const completed = finishActive(state);
@@ -148,4 +148,31 @@ test("twenty-four of thirty Sleeping Tide fish complete the eighty-percent gate 
   assert.equal(getResidentStoryStatus(state, LIGHTHOUSE_KEEPER_ID).complete, true);
   state.journal = syncJournalUnlocks(state);
   assert.equal(getJournalEntries(state, SLEEPING_TIDE_BAY_ID).length, 6);
+});
+
+test("current saves between the old and new thresholds use the lowered gate without another catch", () => {
+  const state = createInitialState();
+  const bayFishIds = FISH.filter(fish => fish.habitats[0].regionId === SLEEPING_TIDE_BAY_ID).map(fish => fish.id);
+  state.world.regionProgress[SLEEPING_TIDE_BAY_ID].discoveredFishIds = bayFishIds.slice(0, 21);
+  state.residentStories[LIGHTHOUSE_KEEPER_ID] = {
+    completedSceneIds: [
+      "keeper_returning_light",
+      "keeper_two_habitats",
+      "keeper_catch_destinations",
+      "keeper_four_lights",
+      "keeper_weather_surface"
+    ],
+    rewardIds: [],
+    activeSceneId: "keeper_outer_current_chart",
+    objectiveProgress: 0,
+    acceptedDay: state.day
+  };
+
+  const restored = JSON.parse(JSON.stringify(state));
+  const ready = getResidentStoryStatus(restored, LIGHTHOUSE_KEEPER_ID);
+  assert.equal(ready.objectiveProgress, 21);
+  assert.equal(ready.canComplete, true);
+  assert.equal(isRouteUnlockedForState(restored, SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID), false);
+  assert.equal(completeResidentStory(restored, LIGHTHOUSE_KEEPER_ID).ok, true);
+  assert.equal(isRouteUnlockedForState(restored, SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID), true);
 });

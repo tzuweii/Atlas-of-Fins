@@ -81,32 +81,42 @@ test("wonders do not alter formal completion and never require a hidden slot", (
   assert.equal(Object.keys(state.observations.wonderRecordsById).length, 1);
 });
 
-test("luminous research completes its story at twenty-seven species and full collection at thirty-three", () => {
+test("luminous research completes its story at twenty-four species and full collection at thirty-three", () => {
   const state = createInitialState();
   const pool = getRegionFish(FISH, LUMINOUS_ARCHIPELAGO_ID);
   state.world.currentRegionId = LUMINOUS_ARCHIPELAGO_ID;
   state.world.visitedRegionIds.push(LUMINOUS_ARCHIPELAGO_ID);
   state.world.docking = { status: "docked", regionId: LUMINOUS_ARCHIPELAGO_ID };
   state.world.regionProgress[LUMINOUS_ARCHIPELAGO_ID] = {
-    discoveredFishIds: pool.slice(0, 27).map(fish => fish.id),
+    discoveredFishIds: pool.slice(0, 23).map(fish => fish.id),
     completedResearchIds: [],
     mainResearchCompletedDay: null,
     fullResearchCompletedDay: null,
     researchRewardIds: [],
     firstArrivedAt: "2026-07-17T00:00:00.000Z"
   };
-  for (const fish of pool.slice(0, 27)) {
+  for (const fish of pool.slice(0, 23)) {
     const habitat = getFishHabitat(fish, LUMINOUS_ARCHIPELAGO_ID);
     state.discovered[fish.id] = { count: 1, spots: [...habitat.spotIds], times: [...fish.preferredTimeIds] };
   }
 
+  assert.equal(evaluateResearchProgress(state, LUMINOUS_ARCHIPELAGO_ID).rewards.length, 0);
+  assert.equal(getRegionResearchStatus(state, LUMINOUS_ARCHIPELAGO_ID).mainComplete, false);
+  const thresholdFish = pool[23];
+  const thresholdHabitat = getFishHabitat(thresholdFish, LUMINOUS_ARCHIPELAGO_ID);
+  state.world.regionProgress[LUMINOUS_ARCHIPELAGO_ID].discoveredFishIds.push(thresholdFish.id);
+  state.discovered[thresholdFish.id] = {
+    count: 1,
+    spots: [...thresholdHabitat.spotIds],
+    times: [...thresholdFish.preferredTimeIds]
+  };
   const main = evaluateResearchProgress(state, LUMINOUS_ARCHIPELAGO_ID);
   assert.equal(main.rewards.length, 1);
   assert.equal(getRegionResearchStatus(state, LUMINOUS_ARCHIPELAGO_ID).mainComplete, true);
   assert.equal(getRegionResearchStatus(state, LUMINOUS_ARCHIPELAGO_ID).fullComplete, false);
   assert.equal(evaluateResearchProgress(state, LUMINOUS_ARCHIPELAGO_ID).rewards.length, 0);
 
-  for (const fish of pool.slice(27)) {
+  for (const fish of pool.slice(24)) {
     const habitat = getFishHabitat(fish, LUMINOUS_ARCHIPELAGO_ID);
     state.world.regionProgress[LUMINOUS_ARCHIPELAGO_ID].discoveredFishIds.push(fish.id);
     state.discovered[fish.id] = { count: 1, spots: [...habitat.spotIds], times: [...fish.preferredTimeIds] };

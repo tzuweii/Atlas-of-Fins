@@ -235,7 +235,7 @@ export const MAIN_STORY_JOURNAL_ENTRIES = Object.freeze([
     order: 5,
     unlock: { type: "resident-scene", sceneId: "keeper_outer_current_chart" },
     title: "灣外的暖流線",
-    body: ["眠潮灣三十種魚裡，我已認識二十四種。燈塔守望者依八成探索紀錄補完《眠潮灣外海圖》，讓船屋航圖桌第一次出現通往琉光群島的暖流線。"],
+    body: ["眠潮灣三十種魚裡，我已認識二十一種。燈塔守望者依七成探索紀錄補完《眠潮灣外海圖》，讓船屋航圖桌第一次出現通往琉光群島的暖流線。"],
     closing: "海圖沒有催我離開，只確保想出發時仍找得到回來的路。"
   },
   {
@@ -400,7 +400,7 @@ export const MAIN_STORY_JOURNAL_ENTRIES = Object.freeze([
     order: 5,
     unlock: { type: "resident-scene", sceneId: "wuhe_seasonal_section" },
     title: "會換季的雙流剖面",
-    body: ["完成二十八種霧岬魚類的八成主研究後，霧禾把《霧岬雙流溫度剖面圖》裝進船屋航圖桌。多年舊頁顯示寒流會隨季節與長風收放，下一片海的群島正由那些風安排生活。"],
+    body: ["完成二十四種霧岬魚類的七成主研究後，霧禾把《霧岬雙流溫度剖面圖》裝進船屋航圖桌。多年舊頁顯示寒流會隨季節與長風收放，下一片海的群島正由那些風安排生活。"],
     closing: "看懂兩種水如何相遇後，我開始留意讓整片海換季的風。"
   }
 ]);

@@ -182,15 +182,15 @@ export const SLEEPING_TIDE_STORY_SCENES = [
     locationName: "眠潮泊地 · 燈塔頂層",
     opening: [
       { speaker: "旁白", text: "燈塔頂層的圓桌上攤著一張沒有東側邊界的舊海圖。眠潮灣畫得很仔細，灣外卻只留下褪色水痕與一條尚未描深的暖流。" },
-      { speaker: "燈塔守望者", text: "一片海不必百分之百收盡才算看懂。留下稀有相遇與完整收藏給往後的回訪；先認識八成住民，就足以辨認這裡主要的棲地與潮路。" },
-      { speaker: "旁白", text: "眠潮灣共有三十種魚。研究冊會在第二十四種被確認時完成主路，深水、夜色與不同天氣都會成為不可缺少的線索。" },
-      { speaker: "燈塔守望者", text: "完成眠潮灣二十四種魚的主研究後回來吧。我會依你的紀錄補完灣外暖流，讓海圖不只指出怎麼離開，也記得怎麼回來。" }
+      { speaker: "燈塔守望者", text: "一片海不必百分之百收盡才算看懂。留下稀有相遇與完整收藏給往後的回訪；先認識七成住民，就足以辨認這裡主要的棲地與潮路。" },
+      { speaker: "旁白", text: "眠潮灣共有三十種魚。研究冊會在第二十一種被確認時完成主路，深水、夜色與不同天氣都會成為不可缺少的線索。" },
+      { speaker: "燈塔守望者", text: "完成眠潮灣二十一種魚的主研究後回來吧。我會依你的紀錄補完灣外暖流，讓海圖不只指出怎麼離開，也記得怎麼回來。" }
     ],
     objective: {
       kind: "region-main-research",
-      title: "完成眠潮灣八成魚類探索",
-      description: "親手發現眠潮灣 30 種魚中的 24 種，完成區域研究主路後回到燈塔。",
-      goal: 24,
+      title: "完成眠潮灣七成魚類探索",
+      description: "親手發現眠潮灣 30 種魚中的 21 種，完成區域研究主路後回到燈塔。",
+      goal: 21,
       regionId: SLEEPING_TIDE_BAY_ID,
       requirements: [
         {
@@ -207,10 +207,11 @@ export const SLEEPING_TIDE_STORY_SCENES = [
           ]
         },
         {
+          // Keep the original content ID so existing saves and references remain valid.
           id: "sleeping_tide_species_eighty_percent",
           kind: "region-species",
-          label: "眠潮灣魚類探索（24／30＝80%）",
-          goal: 24,
+          label: "眠潮灣魚類探索（21／30＝70%）",
+          goal: 21,
           total: 30,
           regionId: SLEEPING_TIDE_BAY_ID
         }
@@ -223,8 +224,8 @@ export const SLEEPING_TIDE_STORY_SCENES = [
       routeId: SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID
     },
     completion: [
-      { speaker: "旁白", text: "第二十四種魚的棲地被放回正確位置後，近岸、礁石與深水的紀錄終於在圖上接成完整潮路。守望者沿著它們共同指向的方向描出灣外暖流。" },
-      { speaker: "燈塔守望者", text: "八成已經足夠。剩下的魚不會消失，你也隨時能回來繼續尋找。主研究的意義，是讓前進不必以清空一片海為代價。" },
+      { speaker: "旁白", text: "第二十一種魚的棲地被放回正確位置後，近岸、礁石與深水的紀錄終於在圖上接成完整潮路。守望者沿著它們共同指向的方向描出灣外暖流。" },
+      { speaker: "燈塔守望者", text: "七成已經足夠。剩下的魚不會消失，你也隨時能回來繼續尋找。主研究的意義，是讓前進不必以清空一片海為代價。" },
       { speaker: "旁白", text: "他將海圖捲起，以燈塔換下的舊繫繩綁好，正式交到你手中。船屋航圖桌隨之亮起一條通往琉光群島的暖色航線。" },
       { speaker: "燈塔守望者", text: "這不是催你離港的命令。只是等你想看看灣外的水色時，已經有一條回得來的路。" },
       { speaker: "旁白", text: "《眠潮灣外海圖》成為第一章的旅程紀念。何時展開它、何時沿暖流出航，仍由你自己決定。" }

@@ -88,14 +88,14 @@ test("Chengye's final chart unlocks a timed outbound and familiar return voyage"
   assert.equal(ready.world.currentRegionId, LUMINOUS_ARCHIPELAGO_ID);
 });
 
-test("Mist Cape main research completes at twenty-eight species and full research at thirty-four", () => {
+test("Mist Cape main research completes at twenty-four species and full research at thirty-four", () => {
   const state = createInitialState();
   const pool = getRegionFish(FISH, MIST_CAPE_COLD_CURRENT_ID);
   state.world.currentRegionId = MIST_CAPE_COLD_CURRENT_ID;
   state.world.visitedRegionIds.push(MIST_CAPE_COLD_CURRENT_ID);
   state.world.docking = { status: "docked", regionId: MIST_CAPE_COLD_CURRENT_ID };
   state.world.regionProgress[MIST_CAPE_COLD_CURRENT_ID] = {
-    discoveredFishIds: pool.slice(0, 28).map(fish => fish.id),
+    discoveredFishIds: pool.slice(0, 23).map(fish => fish.id),
     completedResearchIds: [],
     mainResearchCompletedDay: null,
     fullResearchCompletedDay: null,
@@ -103,13 +103,16 @@ test("Mist Cape main research completes at twenty-eight species and full researc
     firstArrivedAt: iso(T0)
   };
 
+  assert.equal(evaluateResearchProgress(state, MIST_CAPE_COLD_CURRENT_ID).rewards.length, 0);
+  assert.equal(getRegionResearchStatus(state, MIST_CAPE_COLD_CURRENT_ID).mainComplete, false);
+  state.world.regionProgress[MIST_CAPE_COLD_CURRENT_ID].discoveredFishIds.push(pool[23].id);
   const main = evaluateResearchProgress(state, MIST_CAPE_COLD_CURRENT_ID);
   assert.deepEqual(main.rewards.map(reward => reward.id), ["mist_cape_temperature_fieldbook"]);
   assert.equal(getRegionResearchStatus(state, MIST_CAPE_COLD_CURRENT_ID).mainComplete, true);
   assert.equal(getRegionResearchStatus(state, MIST_CAPE_COLD_CURRENT_ID).fullComplete, false);
 
   state.world.regionProgress[MIST_CAPE_COLD_CURRENT_ID].discoveredFishIds.push(
-    ...pool.slice(28).map(fish => fish.id)
+    ...pool.slice(24).map(fish => fish.id)
   );
   const full = evaluateResearchProgress(state, MIST_CAPE_COLD_CURRENT_ID);
   assert.deepEqual(full.rewards.map(reward => reward.id), [

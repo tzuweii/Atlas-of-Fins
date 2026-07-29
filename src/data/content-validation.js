@@ -5,6 +5,7 @@ import {
   FISH_APPEARANCE_WEIGHT_RANGE, HIGH_TIER_RARITIES, MAX_APPEARANCE_WEIGHT_RATIO,
   MAX_RARITY_FISH_PER_SPOT, appearanceWeightIsValid
 } from "./fish-probabilities.js";
+import { mainResearchSpeciesGoal } from "./research.js";
 
 const COLLECTION_NAMES = [
   "times", "spots", "rods", "baits", "furniture", "fish", "dailyGoals",
@@ -491,14 +492,14 @@ export function validateContentCatalog(content = {}) {
       requireReference("residentStoryScenes", scene, "objective.regionId", objective.regionId, ids.regions, "區域");
       const regionFishCount = collections.fish.filter(fish => asArray(fish?.habitats)
         .some(habitat => habitat?.regionId === objective.regionId)).length;
-      const requiredGoal = Math.ceil(regionFishCount * 0.8);
+      const requiredGoal = mainResearchSpeciesGoal(regionFishCount);
       if (regionFishCount > 0 && objective.goal !== requiredGoal) {
         addError(
           "invalid-goal",
           "residentStoryScenes",
           scene?.id,
           `residentStoryScenes[${scene?.id || "missing-id"}].objective.goal`,
-          `區域主研究必須完成八成魚類：${regionFishCount} 種需達 ${requiredGoal} 種`
+          `區域主研究必須完成七成魚類：${regionFishCount} 種需達 ${requiredGoal} 種`
         );
       }
       asArray(objective.requirements).forEach((requirement, index) => {
@@ -514,9 +515,9 @@ export function validateContentCatalog(content = {}) {
           requireReference("residentStoryScenes", scene, `objective.requirements[${index}].regionId`, requirement.regionId, ids.regions, "區域");
           const requirementFishCount = collections.fish.filter(fish => asArray(fish?.habitats)
             .some(habitat => habitat?.regionId === requirement.regionId)).length;
-          const requirementGoal = Math.ceil(requirementFishCount * 0.8);
+          const requirementGoal = mainResearchSpeciesGoal(requirementFishCount);
           if (requirement.goal !== requirementGoal || requirement.total !== requirementFishCount) {
-            addError("invalid-goal", "residentStoryScenes", scene?.id, path, `八成探索條件必須顯示 ${requirementGoal}／${requirementFishCount}`);
+            addError("invalid-goal", "residentStoryScenes", scene?.id, path, `七成探索條件必須顯示 ${requirementGoal}／${requirementFishCount}`);
           }
         } else {
           addError("invalid-type", "residentStoryScenes", scene?.id, `${path}.kind`, "不支援的主線條件類型");
