@@ -222,7 +222,7 @@ export function applyJournalEvent(rawState, event) {
     state = { ...state, fishEncounterLineById: { ...state.fishEncounterLineById, [fish.id]: encounterLineValue } };
   }
 
-  const entry = fish?.rarity === "rare" ? rareFishJournalEntryByFishId(fish.id) : storyJournalEntryByEvent(event);
+  const entry = fish ? rareFishJournalEntryByFishId(fish.id) : storyJournalEntryByEvent(event);
   if (!entry || state.readEntryIds.includes(entry.id) || state.unreadEntryIds.includes(entry.id)) {
     return { ok: true, state, createdEntries: [], encounterLine: encounterLineValue };
   }

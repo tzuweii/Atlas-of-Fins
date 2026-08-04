@@ -38,9 +38,10 @@ test("journal catalogs separate special sea conditions from six main-story chapt
   assert.equal(JOURNAL_CATEGORIES.filter(category => category.kind === "events").length, 1);
   assert.equal(RARE_FISH_JOURNAL_ENTRIES.length, FISH.filter(fish => HIGH_TIER_RARITIES.includes(fish.rarity)).length);
   assert.equal(MAIN_STORY_JOURNAL_ENTRIES.filter(entry => entry.categoryId === "sleeping_tide_bay").length, 6);
-  assert.equal(MAIN_STORY_JOURNAL_ENTRIES.filter(entry => entry.categoryId === "sea_events").length, 3);
+  assert.equal(MAIN_STORY_JOURNAL_ENTRIES.filter(entry => entry.categoryId === "sea_events").length, 6);
   assert.equal(MAIN_STORY_JOURNAL_ENTRIES.filter(entry => entry.categoryId === "luminous_archipelago").length, 6);
   assert.equal(MAIN_STORY_JOURNAL_ENTRIES.filter(entry => entry.categoryId === "mist_cape_cold_current").length, 6);
+  assert.equal(MAIN_STORY_JOURNAL_ENTRIES.filter(entry => entry.categoryId === "monsoon_archipelago").length, 6);
   assert.equal(DAILY_TIDE_ESSAYS.length, 12);
   assert.equal(JOURNAL_EVENT_TEMPLATES.length, 3);
 });
@@ -103,7 +104,7 @@ test("initial categories expose today's essay while story and optional sea recor
   const categories = Object.fromEntries(getJournalCategories(state).map(category => [category.id, category]));
   assert.equal(categories.today.unlockedCount, 1);
   assert.equal(categories.rare_fish.unlockedCount, 0);
-  assert.deepEqual([categories.sea_events.unlockedCount, categories.sea_events.totalCount], [0, 3]);
+  assert.deepEqual([categories.sea_events.unlockedCount, categories.sea_events.totalCount], [0, 6]);
   assert.deepEqual([categories.sleeping_tide_bay.unlockedCount, categories.sleeping_tide_bay.totalCount], [0, 6]);
   assert.deepEqual([categories.luminous_archipelago.unlockedCount, categories.luminous_archipelago.totalCount], [0, 6]);
   assert.deepEqual([categories.mist_cape_cold_current.unlockedCount, categories.mist_cape_cold_current.totalCount], [0, 6]);

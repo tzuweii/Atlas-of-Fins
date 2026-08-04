@@ -1,6 +1,7 @@
 import { KELP_PIPEFISH_OBSERVATION_ID, PACIFIC_SPINY_LUMPSUCKER_OBSERVATION_ID } from "./observations.js";
 import { MIST_CAPE_COLD_CURRENT_ID } from "./regions.js";
 import { WUHE_ID } from "./residents.js";
+import { MIST_CAPE_TO_MONSOON_ROUTE_ID } from "./routes.js";
 
 const catchTask = (title, description, spotId, goal) => ({
   kind: "catch",
@@ -210,8 +211,9 @@ export const MIST_CAPE_STORY_SCENES = [
     },
     reward: {
       id: "mist_cape_temperature_section_chart",
-      type: "resident-keepsake",
-      label: "《霧岬雙流溫度剖面圖》"
+      type: "route-chart",
+      routeId: MIST_CAPE_TO_MONSOON_ROUTE_ID,
+      label: "《霧岬雙流溫度剖面圖》與長風寒舌航線"
     },
     completion: [
       { speaker: "旁白", text: "二十四種魚沿著三層水重新排列。普通魚群填滿陸棚與林間的日常，深槽住民壓住藍色底線，稀有訪客則只在剖面邊緣留下不必追趕的記號。" },

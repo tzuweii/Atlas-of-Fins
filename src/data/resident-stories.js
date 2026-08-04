@@ -5,6 +5,7 @@ import {
 } from "./observations.js";
 import { SLEEPING_TIDE_STORY_SCENES } from "./sleeping-tide-story.js";
 import { MIST_CAPE_STORY_SCENES } from "./mist-cape-story.js";
+import { MONSOON_STORY_SCENES } from "./monsoon-story.js";
 import { LUMINOUS_TO_MIST_CAPE_ROUTE_ID } from "./routes.js";
 
 const catchTask = (title, description, spotId, goal) => ({
@@ -194,7 +195,8 @@ export const RESIDENT_STORY_SCENES = [
       { speaker: "澄野", text: "哪天想出發，就沿著我沒畫完的那條線走吧。記得替空白保留位置——你已經知道，看見一片海不必急著把它帶走。" }
     ]
   },
-  ...MIST_CAPE_STORY_SCENES
+  ...MIST_CAPE_STORY_SCENES,
+  ...MONSOON_STORY_SCENES
 ];
 
 export function getResidentStoryScenes(residentId) {

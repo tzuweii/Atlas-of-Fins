@@ -39,7 +39,10 @@
 .app[data-fishing-scene="luminous_channel"] .luminous-channel-landmark,
 .app[data-fishing-scene="mist_fogfront"] .mist-fogfront-landmark,
 .app[data-fishing-scene="mist_kelp_forest"] .mist-kelp-landmark,
-.app[data-fishing-scene="mist_cold_trench"] .mist-trench-landmark {
+.app[data-fishing-scene="mist_cold_trench"] .mist-trench-landmark,
+.app[data-fishing-scene="monsoon_windward"] .monsoon-windward-landmark,
+.app[data-fishing-scene="monsoon_seagrass"] .monsoon-seagrass-landmark,
+.app[data-fishing-scene="monsoon_mangrove"] .monsoon-mangrove-landmark {
   opacity: 1;
   transform: none;
 }
@@ -412,6 +415,9 @@
 .app[data-fishing-scene="mist_fogfront"] .sea-layer { background: linear-gradient(180deg, rgba(211, 221, 214, .09), rgba(45, 91, 101, .38)); }
 .app[data-fishing-scene="mist_kelp_forest"] .sea-layer { background: linear-gradient(180deg, rgba(110, 148, 130, .08), rgba(27, 75, 75, .48)); }
 .app[data-fishing-scene="mist_cold_trench"] .sea-layer { background: linear-gradient(180deg, rgba(76, 111, 124, .08), rgba(10, 43, 62, .58)); }
+.app[data-fishing-scene="monsoon_windward"] .sea-layer { background: linear-gradient(180deg, rgba(198, 232, 205, .08), rgba(29, 111, 119, .42)); }
+.app[data-fishing-scene="monsoon_seagrass"] .sea-layer { background: linear-gradient(180deg, rgba(190, 231, 180, .11), rgba(41, 126, 105, .34)); }
+.app[data-fishing-scene="monsoon_mangrove"] .sea-layer { background: linear-gradient(180deg, rgba(142, 177, 119, .08), rgba(54, 91, 76, .49)); }
 
 .app[data-fishing-scene="reef"] .buoy { right: 31%; top: 15%; transform: scale(.82); }
 .app[data-fishing-scene="deep"] .buoy { right: 8%; opacity: .32; transform: scale(.7); }
@@ -553,6 +559,139 @@
 .app[data-fishing-scene="mist_cold_trench"] .lighthouse { opacity: 0; }
 .app[data-fishing-scene="mist_fogfront"] .far-island { opacity: .24; }
 .app[data-fishing-scene="mist_kelp_forest"] .island-two { opacity: .72; }
+
+/* 季風群島・迎風白沫水道 — diagonal swell and wind cords. */
+.monsoon-windward-landmark::before {
+  content: "";
+  position: absolute;
+  inset: 43% -10% 25%;
+  background: repeating-linear-gradient(164deg, transparent 0 34px, rgba(241, 244, 211, .34) 36px 40px, transparent 42px 72px);
+  animation: channelCurrentDrift 10s linear infinite;
+}
+
+.monsoon-windward-landmark > span {
+  right: 9%;
+  bottom: 44%;
+  width: 6px;
+  height: 45px;
+  border-radius: 4px 4px 0 0;
+  background: #695942;
+  box-shadow: -2px -8px 0 2px #cf9c58;
+  transform: rotate(-7deg);
+}
+
+.monsoon-windward-landmark > span::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 4px;
+  width: 86px;
+  height: 2px;
+  background: linear-gradient(90deg, #d76f55 0 25%, #e0bb61 25% 50%, #4e8d82 50% 75%, transparent 75%);
+  transform: rotate(-13deg);
+  transform-origin: left;
+}
+
+.monsoon-windward-landmark > i {
+  left: -2%;
+  bottom: 40%;
+  width: 27%;
+  height: 15%;
+  background: linear-gradient(150deg, #557256, #2f5d54);
+  clip-path: polygon(0 100%, 12% 63%, 30% 58%, 43% 24%, 55% 62%, 72% 41%, 100% 100%);
+}
+
+/* 季風群島・背風海草灣 — clear sheltered shallows and leaf canopy. */
+.monsoon-seagrass-landmark::before {
+  content: "";
+  position: absolute;
+  inset: 52% 0 0;
+  background:
+    radial-gradient(ellipse at 14% 38%, rgba(67, 121, 72, .53) 0 7%, transparent 8%),
+    radial-gradient(ellipse at 37% 55%, rgba(76, 135, 78, .48) 0 9%, transparent 10%),
+    radial-gradient(ellipse at 64% 33%, rgba(52, 111, 70, .55) 0 8%, transparent 9%),
+    radial-gradient(ellipse at 88% 57%, rgba(78, 128, 68, .45) 0 10%, transparent 11%);
+}
+
+.monsoon-seagrass-landmark > span {
+  left: 8%;
+  right: 8%;
+  bottom: 43%;
+  height: 3px;
+  background: repeating-radial-gradient(ellipse at 50% 0, transparent 0 28px, rgba(231, 241, 194, .3) 30px 33px, transparent 35px 64px);
+}
+
+.monsoon-seagrass-landmark > i {
+  right: -2%;
+  bottom: 41%;
+  width: 38%;
+  height: 18%;
+  border-radius: 70% 0 0;
+  background: linear-gradient(150deg, #65815e, #365f51);
+  clip-path: polygon(0 100%, 11% 65%, 22% 72%, 36% 28%, 46% 64%, 58% 18%, 70% 57%, 83% 39%, 100% 100%);
+}
+
+/* 季風群島・雨脈紅樹岸 — root lattice and a darker freshwater plume. */
+.monsoon-mangrove-landmark::before {
+  content: "";
+  position: absolute;
+  left: -4%;
+  bottom: 38%;
+  width: 52%;
+  height: 27%;
+  background:
+    radial-gradient(ellipse at 20% 22%, #41644c 0 17%, transparent 18%),
+    radial-gradient(ellipse at 44% 12%, #527054 0 20%, transparent 21%),
+    radial-gradient(ellipse at 73% 25%, #3b6049 0 19%, transparent 20%);
+}
+
+.monsoon-mangrove-landmark > span {
+  left: 3%;
+  bottom: 38%;
+  width: 7px;
+  height: 56px;
+  background: #5f4e39;
+  box-shadow: 36px -8px 0 #654f38, 74px 4px 0 #564934, 112px -6px 0 #69553b, 151px 1px 0 #574834;
+}
+
+.monsoon-mangrove-landmark > span::after {
+  content: "";
+  position: absolute;
+  left: -18px;
+  bottom: -16px;
+  width: 190px;
+  height: 25px;
+  background: repeating-linear-gradient(112deg, transparent 0 15px, rgba(73, 58, 39, .8) 16px 20px, transparent 21px 32px);
+}
+
+.monsoon-mangrove-landmark > i {
+  left: 22%;
+  right: -5%;
+  bottom: 39%;
+  height: 8%;
+  border-radius: 50%;
+  background: linear-gradient(94deg, rgba(85, 112, 75, .48), rgba(91, 81, 57, .36), transparent);
+  transform: rotate(-3deg);
+}
+
+.app[data-fishing-scene="monsoon_windward"] .wave-lines {
+  opacity: .62;
+  background: repeating-linear-gradient(163deg, transparent 0 31px, rgba(235, 243, 213, .28) 33px 37px, transparent 39px 70px);
+}
+
+.app[data-fishing-scene="monsoon_seagrass"] .wave-lines {
+  opacity: .3;
+  background: repeating-radial-gradient(ellipse at 46% 0, transparent 0 38px, rgba(226, 241, 201, .23) 40px 42px, transparent 44px 82px);
+}
+
+.app[data-fishing-scene="monsoon_mangrove"] .wave-lines {
+  opacity: .25;
+  background: repeating-linear-gradient(176deg, transparent 0 45px, rgba(210, 221, 177, .14) 47px 49px, transparent 51px 94px);
+}
+
+.app[data-fishing-scene="monsoon_windward"] .lighthouse,
+.app[data-fishing-scene="monsoon_seagrass"] .lighthouse,
+.app[data-fishing-scene="monsoon_mangrove"] .lighthouse { opacity: 0; }
 
 .app[data-time="night"] .spot-landmark { filter: brightness(.64) saturate(.78); }
 .app[data-time="night"][data-fishing-scene="luminous_coral"] .luminous-coral-landmark { filter: brightness(.82) saturate(.92); }

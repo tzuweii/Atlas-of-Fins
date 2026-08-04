@@ -1,9 +1,11 @@
 import {
-  LUMINOUS_ARCHIPELAGO_ID, MIST_CAPE_COLD_CURRENT_ID, SLEEPING_TIDE_BAY_ID
+  LUMINOUS_ARCHIPELAGO_ID, MIST_CAPE_COLD_CURRENT_ID, MONSOON_ARCHIPELAGO_ID,
+  SLEEPING_TIDE_BAY_ID
 } from "./regions.js";
 import {
-  CLARKS_ANEMONEFISH_OBSERVATION_ID, KELP_PIPEFISH_OBSERVATION_ID,
-  PACIFIC_SPINY_LUMPSUCKER_OBSERVATION_ID, TWO_SPINED_ANGELFISH_OBSERVATION_ID
+  BARRED_MUDSKIPPER_OBSERVATION_ID, CLARKS_ANEMONEFISH_OBSERVATION_ID,
+  KELP_PIPEFISH_OBSERVATION_ID, PACIFIC_SPINY_LUMPSUCKER_OBSERVATION_ID,
+  TWO_SPINED_ANGELFISH_OBSERVATION_ID, YELLOW_SEAHORSE_OBSERVATION_ID
 } from "./observations.js";
 
 export const MAIN_RESEARCH_SPECIES_RATIO = 0.7;
@@ -37,6 +39,16 @@ export const MIST_CAPE_RESEARCH_NODE_IDS = {
   night: "mist_cape_night_current",
   lumpsucker: "mist_cape_spiny_lumpsucker",
   pipefish: "mist_cape_kelp_pipefish"
+};
+
+export const MONSOON_RESEARCH_NODE_IDS = {
+  arrival: "monsoon_arrival",
+  windward: "monsoon_windward_whitecaps",
+  leeward: "monsoon_leeward_seagrass",
+  rainPlume: "monsoon_rainfresh_plume",
+  night: "monsoon_night_windshift",
+  mudskipper: "monsoon_barred_mudskipper",
+  seahorse: "monsoon_yellow_seahorse"
 };
 
 export const RESEARCH_NODES = [
@@ -172,6 +184,55 @@ export const RESEARCH_NODES = [
     name: "一段葉柄游過兩層水",
     description: "讓海藻海龍自然游進潮界觀察簿。",
     requirement: { type: "observation", observationId: KELP_PIPEFISH_OBSERVATION_ID }
+  },
+  {
+    id: MONSOON_RESEARCH_NODE_IDS.arrival,
+    regionId: MONSOON_ARCHIPELAGO_ID,
+    name: "長風把第四枚印記吹進港",
+    description: "沿寒流季節頁抵達回風港，完成停泊並讓風候石印記落進研究冊。",
+    requirement: { type: "visited-region", regionId: MONSOON_ARCHIPELAGO_ID }
+  },
+  {
+    id: MONSOON_RESEARCH_NODE_IDS.windward,
+    regionId: MONSOON_ARCHIPELAGO_ID,
+    name: "白沫替迎風浪畫出斜線",
+    description: "在迎風白沫水道記錄一種沿長浪活動的群島魚。",
+    requirement: { type: "spot-discovery", regionId: MONSOON_ARCHIPELAGO_ID, spotId: "windward_whitecap_passage" }
+  },
+  {
+    id: MONSOON_RESEARCH_NODE_IDS.leeward,
+    regionId: MONSOON_ARCHIPELAGO_ID,
+    name: "島脊與草葉收住慢水",
+    description: "在背風海草灣記錄一種利用遮蔽的群島魚。",
+    requirement: { type: "spot-discovery", regionId: MONSOON_ARCHIPELAGO_ID, spotId: "leeward_seagrass_bay" }
+  },
+  {
+    id: MONSOON_RESEARCH_NODE_IDS.rainPlume,
+    regionId: MONSOON_ARCHIPELAGO_ID,
+    name: "雨水用深色重畫鹽度邊界",
+    description: "在雨天的雨脈紅樹岸留下淡水羽流捕獲紀錄。",
+    requirement: { type: "spot-discovery", regionId: MONSOON_ARCHIPELAGO_ID, spotId: "rainmangrove_estuary" }
+  },
+  {
+    id: MONSOON_RESEARCH_NODE_IDS.night,
+    regionId: MONSOON_ARCHIPELAGO_ID,
+    name: "夜風讓魚群換到另一層水",
+    description: "在季風群島夜間留下捕獲紀錄。",
+    requirement: { type: "region-time-discovery", regionId: MONSOON_ARCHIPELAGO_ID, timeId: "night" }
+  },
+  {
+    id: MONSOON_RESEARCH_NODE_IDS.mudskipper,
+    regionId: MONSOON_ARCHIPELAGO_ID,
+    name: "濕泥也有一條潮間航線",
+    description: "在風候石觀察台記錄大彈塗魚。",
+    requirement: { type: "observation", observationId: BARRED_MUDSKIPPER_OBSERVATION_ID }
+  },
+  {
+    id: MONSOON_RESEARCH_NODE_IDS.seahorse,
+    regionId: MONSOON_ARCHIPELAGO_ID,
+    name: "捲尾記住背風草床的慢流",
+    description: "讓庫達海馬自然游進正式觀察簿。",
+    requirement: { type: "observation", observationId: YELLOW_SEAHORSE_OBSERVATION_ID }
   }
 ];
 
@@ -229,6 +290,24 @@ export const REGION_RESEARCH = {
       { id: "mist_cape_sail_pattern", type: "sail-pattern", label: "霧岬雙流船帆紋樣" }
     ],
     preview: "霧禾的舊溫度頁顯示：寒流的季節擺動，與遠方風向一起改變。"
+  },
+  [MONSOON_ARCHIPELAGO_ID]: {
+    regionId: MONSOON_ARCHIPELAGO_ID,
+    name: "季風群島風候研究主路",
+    description: "從迎背風、海草遮蔽、紅樹淡水羽流與正式觀察，讀出同一地方如何隨風與晴雨重排；發現七成魚類即可完成主研究。",
+    nodeIds: RESEARCH_NODES.filter(node => node.regionId === MONSOON_ARCHIPELAGO_ID).map(node => node.id),
+    mainSpeciesGoal: mainResearchSpeciesGoal(36),
+    fullSpeciesGoal: 36,
+    mainReward: {
+      id: "monsoon_windwater_fieldbook",
+      type: "research-keepsake",
+      label: "《季風水色與棲地觀測冊》"
+    },
+    fullRewards: [
+      { id: "monsoon_region_badge", type: "region-badge", label: "季風群島徽章" },
+      { id: "monsoon_sail_pattern", type: "sail-pattern", label: "回風魚群船帆紋樣" }
+    ],
+    preview: "風候石最深的長浪刻痕，把圓灰石與下一條航線一起指向灰冠石岸。"
   }
 };
 

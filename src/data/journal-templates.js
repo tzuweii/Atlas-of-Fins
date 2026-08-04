@@ -4,7 +4,7 @@ export const JOURNAL_REGION_CATEGORIES = Object.freeze([
   { id: "sleeping_tide_bay", name: "眠潮灣", chapter: 1, status: "available" },
   { id: "luminous_archipelago", name: "琉光群島", chapter: 2, status: "available" },
   { id: "mist_cape_cold_current", name: "霧岬寒流水道", chapter: 3, status: "available" },
-  { id: "monsoon_archipelago", name: "季風群島", chapter: 4, status: "planned" },
+  { id: "monsoon_archipelago", name: "季風群島", chapter: 4, status: "available" },
   { id: "graycrown_stone_coast", name: "灰冠石岸", chapter: 5, status: "planned" },
   { id: "starice_southern_sea", name: "星冰南方海", chapter: 6, status: "planned" }
 ]);
@@ -162,7 +162,12 @@ export const RARE_FISH_JOURNAL_ENTRIES = Object.freeze([
   { fishId: "yelloweye_rockfish", title: "深礁先亮起一雙黃眼", body: ["冷雨下的海藻林幾乎失去顏色，黃眼平鮋卻從深礁陰影裡交出一雙明亮眼睛。橙紅身軀只停留片刻，又回到長久使用的住處。"], closing: "活得很久的魚，總把大部分故事留在原來的礁石。" },
   { fishId: "bluntnose_sixgill_shark", title: "六道鰓裂掠過藍寒深槽", body: ["灰六鰓鯊沿槽壁抬升，寬厚背影幾乎與深水同色。牠轉身時，六道鰓裂逐一穿過船燈，像深海把一段古老呼吸交到較淺的夜裡。"], closing: "深槽沒有把年代說完，只讓一個輪廓安靜經過。" },
   { fishId: "ocean_sunfish", title: "霧線外的一枚灰月", body: ["翻車魨側躺在晴日表層，高而扁的身體被暖光照成一枚灰色月亮。牠停在冷暖水交界，讓原本看不見的溫度鋒面有了寬度。"], closing: "月亮不只掛在天空，也會在兩種水相遇時短暫漂浮。" },
-  { fishId: "basking_shark", title: "潮界張開一座安靜的門", body: ["象鮫張口穿過富含浮游生物的潮界。巨大的身體沒有追逐魚群，只讓冷暖水與微小生命一起流過鰓耙；第一尾史詩魚因此像一座緩慢移動的門。"], closing: "海把最龐大的身形，用來收集最微小的食物。" }
+  { fishId: "basking_shark", title: "潮界張開一座安靜的門", body: ["象鮫張口穿過富含浮游生物的潮界。巨大的身體沒有追逐魚群，只讓冷暖水與微小生命一起流過鰓耙；第一尾史詩魚因此像一座緩慢移動的門。"], closing: "海把最龐大的身形，用來收集最微小的食物。" },
+  { fishId: "barramundi", title: "雨水羽流下的銀身", body: ["尖吻鱸從深色淡水羽流下方升起。牠能在河口的鹹淡變化間生活，沉重翻水替今日雨量留下一道比鹽度杯更直接的回聲。"], closing: "能穿過兩種水的魚，也替兩種岸保存了連結。" },
+  { fishId: "fourfinger_threadfin", title: "四根觸線讀過泥底", body: ["四指馬鮁讓游離胸鰭絲貼過混濁海床。水色沒有提供視野，那四根細線卻替牠把雨後河口摸成一張可使用的圖。"], closing: "看不清的水裡，觸覺也能替生活留下方向。" },
+  { fishId: "bluespotted_ribbontail_ray", title: "草床沙地上的藍星", body: ["藍斑條尾魟滑過背風沙地，盤緣掀起一圈細砂，鮮藍圓斑則在草葉影間保持清楚。"], closing: "平靜不是沒有移動，而是每一道砂紋都有時間落回原處。" },
+  { fishId: "cobia", title: "跟著外水結構遠行", body: ["海鱺沿迎風外水的漂流物靠近，深褐長身借長浪維持速度。牠沒有屬於某一座島的固定小路，卻熟悉每一種能提供食物與遮蔽的移動結構。"], closing: "有些住處固定在岸上，有些住處隨水一同遠行。" },
+  { fishId: "narrow_barred_spanish_mackerel", title: "長風拉直的一筆", body: ["康氏馬加鰆越過最外側白浪，狹長深帶幾乎與浪向平行。那次高速通過把魚線、風繩與航圖上的長風箭頭拉成同一筆。"], closing: "速度離開以後，方向仍留在浪的排列裡。" }
 ].map((entry, order) => ({
   ...entry,
   id: `journal:fish:${entry.fishId}`,
@@ -402,6 +407,105 @@ export const MAIN_STORY_JOURNAL_ENTRIES = Object.freeze([
     title: "會換季的雙流剖面",
     body: ["完成二十四種霧岬魚類的七成主研究後，霧禾把《霧岬雙流溫度剖面圖》裝進船屋航圖桌。多年舊頁顯示寒流會隨季節與長風收放，下一片海的群島正由那些風安排生活。"],
     closing: "看懂兩種水如何相遇後，我開始留意讓整片海換季的風。"
+  },
+  {
+    id: "journal:story:monsoon_archipelago:jicen_longwind_arrival",
+    categoryId: "monsoon_archipelago",
+    regionId: "monsoon_archipelago",
+    type: "story",
+    order: 0,
+    unlock: { type: "resident-scene", sceneId: "jicen_longwind_arrival" },
+    title: "長風把寒舌送到港外",
+    body: ["我帶著霧禾的雙流剖面圖與多年季節頁抵達回風港。季岑讓我在迎風白沫水道用兩次捕獲讀浪向；圖上的寒舌、岸邊風繩與手中拉力第一次指向同一邊。"],
+    closing: "風沒有更換這座群島，只替今天的水重新排了方向。"
+  },
+  {
+    id: "journal:story:monsoon_archipelago:jicen_two_sides_one_island",
+    categoryId: "monsoon_archipelago",
+    regionId: "monsoon_archipelago",
+    type: "story",
+    order: 1,
+    unlock: { type: "resident-scene", sceneId: "jicen_two_sides_one_island" },
+    title: "一座島的兩面水",
+    body: ["迎風水道的魚線持續斜拉，背風海草灣的魚線則在草葉上方放鬆。島脊替一面承受長浪，也替另一面留出清淺遮蔽；同一座島因此同時容納兩種海況。"],
+    closing: "地名沒有變，迎風與背風卻每天重新回答。"
+  },
+  {
+    id: "journal:story:monsoon_archipelago:jicen_mangrove_airline",
+    categoryId: "monsoon_archipelago",
+    regionId: "monsoon_archipelago",
+    type: "story",
+    order: 2,
+    unlock: { type: "resident-scene", sceneId: "jicen_mangrove_airline" },
+    title: "紅樹根間的空氣航線",
+    body: ["大彈塗魚從半鹹水孔躍過濕泥，停進紅樹根影。那次正式觀察沒有走入泥灘，也沒有帶走任何生命，卻把水、岸與潮間濕度連成一條完整生活路。"],
+    closing: "航線不只屬於船，濕泥也能讓一尾小魚往返。"
+  },
+  {
+    id: "journal:story:monsoon_archipelago:jicen_freshwater_plume",
+    categoryId: "monsoon_archipelago",
+    regionId: "monsoon_archipelago",
+    type: "story",
+    order: 3,
+    unlock: { type: "resident-scene", sceneId: "jicen_freshwater_plume" },
+    title: "雨把海染深一層",
+    body: ["雨水把淡水、細泥與陸地養分送進紅樹岸。我在深色羽流內外各留下捕獲，才明白水色只是線索；鹽度、位置與魚種必須一起讀，同一個釣點才顯出雨前雨後的不同房間。"],
+    closing: "季風不只推浪，也讓陸地用一場雨重新加入海。"
+  },
+  {
+    id: "journal:story:monsoon_archipelago:jicen_seagrass_cradle",
+    categoryId: "monsoon_archipelago",
+    regionId: "monsoon_archipelago",
+    type: "story",
+    order: 4,
+    unlock: { type: "resident-scene", sceneId: "jicen_seagrass_cradle" },
+    title: "草葉替小魚收住風",
+    body: ["庫達海馬鬆開一根草葉，順著慢流漂過很短距離，再用捲尾纏住下一根葉柄。島脊先擋風，海草再拆流，兩層遮蔽共同把力量改成小魚能使用的尺度。"],
+    closing: "遮蔽不是沒有水動，而是讓移動仍有地方停下。"
+  },
+  {
+    id: "journal:story:monsoon_archipelago:jicen_windstone_route_rubbing",
+    categoryId: "monsoon_archipelago",
+    regionId: "monsoon_archipelago",
+    type: "story",
+    order: 5,
+    unlock: { type: "resident-scene", sceneId: "jicen_windstone_route_rubbing" },
+    title: "風候石上的下一道長浪",
+    body: ["完成前五節 5／5 與季風魚類 26／36 後，我回港向季岑正式交付。風候石拓印永久留在港口與船屋航圖桌；最深長浪痕把圓灰石與下一條航線一同指向灰冠石岸。"],
+    closing: "風浪把石磨成岸，也把岸磨成船能閱讀的方向。"
+  },
+  {
+    id: "journal:event:monsoon_archipelago:windward_whitecap_run",
+    categoryId: "sea_events",
+    regionId: "monsoon_archipelago",
+    type: "event",
+    order: 9,
+    unlock: { type: "region-event", eventId: "windward_whitecap_run" },
+    title: "迎風白沫列",
+    body: ["長風把白沫排成斜線，群游魚沿浪後窄窄的平水帶通過。這是今日選填海況，不完成也不會阻擋季岑的主線。"],
+    closing: "浪把方向寫得很大，魚群用轉身把它讀完。"
+  },
+  {
+    id: "journal:event:monsoon_archipelago:leeward_seagrass_lull",
+    categoryId: "sea_events",
+    regionId: "monsoon_archipelago",
+    type: "event",
+    order: 10,
+    unlock: { type: "region-event", eventId: "leeward_seagrass_lull" },
+    title: "草床收風",
+    body: ["島脊削弱長風，海草再把湧浪拆細。草床住民沿清淺邊緣靠近；我只在願意時留下兩筆選填紀錄。"],
+    closing: "一片草葉不能擋住季風，許多草葉卻能共同留下慢水。"
+  },
+  {
+    id: "journal:event:monsoon_archipelago:rainfresh_mangrove_plume",
+    categoryId: "sea_events",
+    regionId: "monsoon_archipelago",
+    type: "event",
+    order: 11,
+    unlock: { type: "region-event", eventId: "rainfresh_mangrove_plume" },
+    title: "雨脈淡水羽流",
+    body: ["細雨讓深色低鹽羽流沿紅樹根展開，河口魚在內外側重新排列。這場選填海況只保存今日差異，不與主線共用完成壓力。"],
+    closing: "雨把岸上的消息帶進海，又讓魚替它標出邊界。"
   }
 ]);
 

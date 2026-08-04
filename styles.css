@@ -611,3 +611,30 @@ button.tracker-item:hover{background:linear-gradient(135deg,rgba(18,63,72,.94),r
   .fishing-stage.is-reeling .reel-ui{bottom:4px;padding-top:7px;padding-bottom:7px}.fishing-stage.is-reeling .reel-button{min-height:48px}.fishing-result-fail{top:40%}
 }
 @media (prefers-reduced-motion:reduce){.rod-line,.fish-shadow,.fish-shadow-body,.struggle-fish-body,.struggle-fish-cue,.struggle-wake::before,.struggle-wake::after,.struggle-wake>i,.struggle-wake>b,.fishing-stage .waiting-bobber,.fishing-stage .bobber,.probe-ripples>i,.probe-ripples>b,.probe-ripples::after,.bite-alert,.bite-splash,.fishing-line-cue path{animation:none!important}.tutorial-spotlight{transition:none}}
+
+/* 季風群島沿用既有晴雨與四時段，只以區域景色表達迎背風和雨季水色。 */
+.app[data-region="monsoon_archipelago"][data-time="dawn"] .world-scene{background:linear-gradient(#9dc9b8 0%,#e8c98f 56%,#66aa9b 56%,#2a6b72 100%)}
+.app[data-region="monsoon_archipelago"][data-time="day"] .world-scene{background:linear-gradient(#72bdbd 0%,#d9dca4 56%,#5eaf96 56%,#236d70 100%)}
+.app[data-region="monsoon_archipelago"][data-time="dusk"] .world-scene{background:linear-gradient(#718892 0%,#d99e72 56%,#568a7c 56%,#28565e 100%)}
+.app[data-region="monsoon_archipelago"][data-time="night"] .world-scene{background:linear-gradient(#173742 0%,#52665e 56%,#2b625b 56%,#153f49 100%)}
+.app[data-region="monsoon_archipelago"] .far-island{height:51px;background:rgba(44,91,63,.67);box-shadow:inset 0 8px rgba(136,165,102,.14)}
+.app[data-region="monsoon_archipelago"] .island-one{left:-2%;width:40%;clip-path:polygon(0 100%,5% 73%,16% 65%,27% 31%,38% 56%,49% 20%,60% 61%,73% 42%,85% 70%,100% 100%)}
+.app[data-region="monsoon_archipelago"] .island-two{right:-1%;width:36%;clip-path:polygon(0 100%,12% 70%,25% 48%,38% 63%,50% 19%,63% 58%,76% 35%,89% 69%,100% 100%)}
+.app[data-region="monsoon_archipelago"] .lighthouse{display:none}
+.app[data-region="monsoon_archipelago"] .buoy{color:#d4aa58}
+.app[data-region="monsoon_archipelago"] .wave-lines{opacity:.52;background:repeating-linear-gradient(164deg,transparent 0 38px,rgba(231,242,200,.21) 40px 43px,transparent 45px 82px)}
+.app[data-region="monsoon_archipelago"][data-weather="rain"] .sea-layer{filter:saturate(.78) brightness(.85)}
+.app[data-region="monsoon_archipelago"][data-time="night"] .sun-moon::after{background:#173742}
+
+.scene-caption .chapter-keepsake{color:#e8d29b;border-top-color:rgba(232,210,155,.32);letter-spacing:.04em}
+.chart-route-path.is-revealed{stroke:#8c7449;stroke-width:1.35;stroke-dasharray:5 2}
+.chart-route-label.is-revealed{background:rgba(117,91,54,.9)}
+.chart-route-card.is-revealed{border-color:rgba(151,116,65,.38);background:linear-gradient(145deg,#f8efd9,#ebe4cf)}
+.chart-route-card.is-revealed .chart-route-state{color:#715b39;background:#eee2c7}
+.chart-keepsake{color:#8d6534!important;font-weight:900!important}
+
+@media (max-width:580px){
+  .chart-region-node{max-width:104px}
+  .chart-region-copy b,.chart-region-copy small{overflow:hidden;text-overflow:ellipsis}
+  .scene-caption .chapter-keepsake{max-width:78vw}
+}

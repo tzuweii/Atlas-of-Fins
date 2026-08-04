@@ -29,7 +29,8 @@ import {
   getEligibleAutoFishingSpots, getFamiliarity, getObservationHint,
   getJournalCategories, getJournalEntries, getJournalEntry, getJournalUnreadCount,
   getRegionResearchStatus, getResidentStoryStatus, getShipPurchaseState,
-  getRouteDurationForState, getTensionConfig, getTravelStatus, getUnclaimedAchievementCount, isRouteUnlockedForState, isUnlocked,
+  getRouteDurationForState, getTensionConfig, getTravelStatus, getUnclaimedAchievementCount,
+  isRouteRevealedForState, isRouteUnlockedForState, isUnlocked,
   markAutoFishingClosed, markJournalEntriesRead, acknowledgeJournalNotices, migrateState, moveCatchToAquarium,
   isBayEventConditionActive, isCurrentSaveSchema, observeAtSpot, recordCatch, removeFishFromAquarium, replaceAquariumFish, rodById, sellCatches,
   rollCaptureSuccess,
@@ -575,7 +576,10 @@ function syncWorld() {
     ? `第 ${travelStatus.segment} / ${travelStatus.totalSegments} 段 · ${formatTravelTime(travelStatus.remainingMs)}後抵達外海`
     : offshoreRegion ? "船已收帆，等待你決定何時停泊。"
       : spot?.description || (currentRegion?.id === LUMINOUS_ARCHIPELAGO_ID ? "暖流把碎光送過島鏈，風鈴般的潮聲從遠處傳來。" : time.line);
-  $("#scene-caption").innerHTML = `<span>${sceneTitle}</span><small>${sceneLine}</small>${bayEvent ? `<em>${bayEvent.icon} ${bayEvent.name}</em>` : ""}`;
+  const chapterKeepsake = !travelStatus && !offshoreRegion && regionKeepsakeEarned(currentRegion)
+    ? currentRegion.chapterKeepsake
+    : null;
+  $("#scene-caption").innerHTML = `<span>${sceneTitle}</span><small>${sceneLine}</small>${bayEvent ? `<em>${bayEvent.icon} ${bayEvent.name}</em>` : ""}${chapterKeepsake ? `<em class="chapter-keepsake">${chapterKeepsake.icon} ${escapeText(chapterKeepsake.shortLabel)}永久留在港口與航圖桌</em>` : ""}`;
   const chartBadge = $("#chart-badge");
   if (chartBadge) chartBadge.textContent = travelStatus ? `${travelStatus.segment}/${travelStatus.totalSegments}` : offshoreRegion ? "停泊" : "航路";
 }
@@ -931,9 +935,15 @@ function chartShipPosition() {
   return CHART_REGION_POINTS.find(point => point.regionId === locationId) || CHART_REGION_POINTS[0];
 }
 
+function regionKeepsakeEarned(region) {
+  const rewardId = region?.chapterKeepsake?.rewardId;
+  if (!rewardId) return false;
+  return Object.values(state.residentStories || {}).some(entry => entry.rewardIds?.includes(rewardId));
+}
+
 function chartRegionIsKnown(regionId) {
   if (state.world.visitedRegionIds.includes(regionId)) return true;
-  return getRoutesForRegion(regionId).some(route => isRouteUnlockedForState(state, route.id));
+  return getRoutesForRegion(regionId, { includePreview: true }).some(route => isRouteRevealedForState(state, route.id));
 }
 
 function chartRegionNode(point) {
@@ -944,11 +954,12 @@ function chartRegionNode(point) {
   const destination = state.world.travel?.toRegionId === region.id;
   const visited = state.world.visitedRegionIds.includes(region.id);
   const known = chartRegionIsKnown(region.id);
+  const keepsake = regionKeepsakeEarned(region) ? region.chapterKeepsake : null;
   const preview = !known || (region.contentStatus === "route-only" && !visited);
   const statusIcon = current ? "⚓" : offshore ? "◉" : destination ? "➜" : visited ? "✓" : "⌁";
-  const statusText = current ? "船隻目前停泊" : offshore ? "船隻位於外海" : destination ? "目前航行目的地" : visited ? "已到訪" : known ? "航線已開放" : "等待前章自然線索";
+  const statusText = current ? "船隻目前停泊" : offshore ? "船隻位於外海" : destination ? "目前航行目的地" : visited ? "已到訪" : known && region.status === "planned" ? "航圖已取得 · 待開放" : known ? "航線已開放" : "等待前章自然線索";
   const regionLabel = known ? region.name : "霧後海域";
-  return `<div class="chart-region-node ${current || offshore ? "is-current" : ""} ${preview ? "is-preview" : ""}" style="left:${point.x}%;top:${point.y}%" role="group" aria-label="${regionLabel}，${statusText}"><span class="chart-region-marker" aria-hidden="true">${point.marker === "harbor" ? "◉" : "◌"}</span><span class="chart-region-copy"><b>${regionLabel}</b><small>${statusIcon} ${statusText}</small></span>${preview ? '<i class="chart-mist" aria-hidden="true"></i>' : ""}</div>`;
+  return `<div class="chart-region-node ${current || offshore ? "is-current" : ""} ${preview ? "is-preview" : ""}" style="left:${point.x}%;top:${point.y}%" role="group" aria-label="${regionLabel}，${statusText}"><span class="chart-region-marker" aria-hidden="true">${point.marker === "harbor" ? "◉" : "◌"}</span><span class="chart-region-copy"><b>${regionLabel}</b><small>${statusIcon} ${statusText}</small>${keepsake ? `<small class="chart-keepsake">${keepsake.icon} ${escapeText(keepsake.shortLabel)}</small>` : ""}</span>${preview ? '<i class="chart-mist" aria-hidden="true"></i>' : ""}</div>`;
 }
 
 function chartRouteMarkup() {
@@ -960,10 +971,11 @@ function chartRouteMarkup() {
     const status = getTravelStatus(state.world);
     const traveling = status?.route.id === route.id;
     const available = isRouteUnlockedForState(state, route.id);
+    const revealed = isRouteRevealedForState(state, route.id);
     const familiar = state.world.completedRouteIds.includes(route.id);
     return {
-      path: `<path class="chart-route-path ${available ? "is-available" : "is-preview"} ${traveling ? "is-traveling" : ""}" d="M ${from.x} ${from.y} Q ${path.controlX} ${path.controlY} ${to.x} ${to.y}" vector-effect="non-scaling-stroke"/>`,
-      label: `<div class="chart-route-label ${available ? "is-available" : "is-preview"}" style="left:${(from.x + to.x + path.controlX) / 3}%;top:${(from.y + to.y + path.controlY) / 3}%">${traveling ? `航行 ${status.segment}/${status.totalSegments}` : familiar ? "✓ 熟悉航線" : available ? "✓ 可航行" : "🔒 測繪中"}</div>`
+      path: `<path class="chart-route-path ${available ? "is-available" : revealed ? "is-revealed" : "is-preview"} ${traveling ? "is-traveling" : ""}" d="M ${from.x} ${from.y} Q ${path.controlX} ${path.controlY} ${to.x} ${to.y}" vector-effect="non-scaling-stroke"/>`,
+      label: `<div class="chart-route-label ${available ? "is-available" : revealed ? "is-revealed" : "is-preview"}" style="left:${(from.x + to.x + path.controlX) / 3}%;top:${(from.y + to.y + path.controlY) / 3}%">${traveling ? `航行 ${status.segment}/${status.totalSegments}` : familiar ? "✓ 熟悉航線" : available ? "✓ 可航行" : revealed ? "▧ 航圖已取得" : "🔒 測繪中"}</div>`
     };
   }).filter(Boolean);
   return `<svg class="chart-route-layer" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${entries.map(entry => entry.path).join("")}</svg>${entries.map(entry => entry.label).join("")}`;
@@ -987,11 +999,13 @@ function chartDestinationCards() {
     const destinationId = route.fromRegionId === state.world.currentRegionId ? route.toRegionId : route.fromRegionId;
     const destination = regionById(destinationId);
     const available = connected && isRouteUnlockedForState(state, route.id);
-    const destinationName = available || state.world.visitedRegionIds.includes(destinationId) ? destination?.name : "霧後海域";
+    const revealed = connected && isRouteRevealedForState(state, route.id);
+    const destinationName = revealed || state.world.visitedRegionIds.includes(destinationId) ? destination?.name : "霧後海域";
     const familiar = state.world.completedRouteIds.includes(route.id);
     const duration = getRouteDurationForState(state, route.id);
     const origin = regionById(state.world.currentRegionId);
-    return `<article class="card chart-route-card ${available ? "is-available" : "is-preview"}" data-route="${route.id}"><span class="section-label">相鄰航線</span><h3>${available ? route.name : "尚未取得航線圖"}</h3><p>${destinationName || "未知海域"} · ${available ? `${route.travelSegments} 段航程 · ${formatTravelMinutes(duration)}` : `完成${origin?.name || "目前海域"}第六節主線後開放`}</p><div class="chart-route-state"><span aria-hidden="true">${available ? "✓" : "🔒"}</span><b>${available ? familiar ? "熟悉航線，可自由往返" : "首次航行已開放" : "等待當地居民交付自然線索"}</b></div><button class="${available ? "primary-button" : "soft-button"}" data-action="prepare-chart-route" data-id="${route.id}" ${available ? "" : "disabled"}>${available ? `準備前往${destination?.name || "目的地"}` : "尚未取得航線圖"}</button></article>`;
+    const previewReady = revealed && route.status === "preview";
+    return `<article class="card chart-route-card ${available ? "is-available" : previewReady ? "is-revealed" : "is-preview"}" data-route="${route.id}"><span class="section-label">相鄰航線</span><h3>${revealed ? route.name : "尚未取得航線圖"}</h3><p>${destinationName || "未知海域"} · ${available ? `${route.travelSegments} 段航程 · ${formatTravelMinutes(duration)}` : previewReady ? "航線拓印已永久保存；目的港將於第五章開放" : `完成${origin?.name || "目前海域"}第六節主線後開放`}</p><div class="chart-route-state"><span aria-hidden="true">${available ? "✓" : previewReady ? "▧" : "🔒"}</span><b>${available ? familiar ? "熟悉航線，可自由往返" : "首次航行已開放" : previewReady ? "航圖已取得，灰冠泊地仍待測繪" : "等待當地居民交付自然線索"}</b></div><button class="${available ? "primary-button" : "soft-button"}" data-action="prepare-chart-route" data-id="${route.id}" ${available ? "" : "disabled"}>${available ? `準備前往${destination?.name || "目的地"}` : previewReady ? "第五章內容製作中" : "尚未取得航線圖"}</button></article>`;
   }).join("");
 }
 

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ACHIEVEMENTS, BAITS, BASE_APPEARANCE_BUDGETS, BAY_EVENTS, FISH, FISH_APPEARANCE_BONUSES, FURNITURE, LUMINOUS_ARCHIPELAGO_ID, MIST_CAPE_COLD_CURRENT_ID, RARITY, RODS, SLEEPING_TIDE_BAY_ID, fishCanAppearAtSpot } from "../src/data.js";
+import { ACHIEVEMENTS, BAITS, BASE_APPEARANCE_BUDGETS, BAY_EVENTS, FISH, FISH_APPEARANCE_BONUSES, FURNITURE, LUMINOUS_ARCHIPELAGO_ID, MIST_CAPE_COLD_CURRENT_ID, MONSOON_ARCHIPELAGO_ID, RARITY, RODS, SLEEPING_TIDE_BAY_ID, fishCanAppearAtSpot } from "../src/data.js";
 import {
   SAVE_VERSION, SHIMMER_CONFIG, advanceTime, applyMilestones, buyBait, buyRod, chooseFish, claimAchievement,
   createBayEventState, createDeveloperState, createInitialState, equipTitle, evaluateAchievements, generateCatch, getAchievementProgress,
@@ -18,9 +18,9 @@ const NEW_FISH_IDS = [
   "needlefish", "red_seabream", "malabar_grouper", "mirror_butterflyfish", "greater_amberjack"
 ];
 
-test("catalog preserves the bay and island pools while adding thirty-four distinct Mist Cape fish", () => {
-  assert.equal(FISH.length, 97);
-  assert.equal(new Set(FISH.map(fish => fish.id)).size, 97);
+test("catalog preserves prior pools while adding thirty-six distinct Monsoon Archipelago fish", () => {
+  assert.equal(FISH.length, 133);
+  assert.equal(new Set(FISH.map(fish => fish.id)).size, 133);
   assert.deepEqual(Object.fromEntries(Object.entries(RARITY).map(([id, rarity]) => [id, rarity.color])), {
     common: "#686f73",
     uncommon: "#477ca5",
@@ -31,9 +31,12 @@ test("catalog preserves the bay and island pools while adding thirty-four distin
   assert.equal(FISH.slice(30, 63).length, 33);
   assert.equal(FISH.slice(30, 63).every(fish => fish.habitats.length === 1
     && fish.habitats[0].regionId === LUMINOUS_ARCHIPELAGO_ID), true);
-  assert.equal(FISH.slice(63).length, 34);
-  assert.equal(FISH.slice(63).every(fish => fish.habitats.length === 1
+  assert.equal(FISH.slice(63, 97).length, 34);
+  assert.equal(FISH.slice(63, 97).every(fish => fish.habitats.length === 1
     && fish.habitats[0].regionId === MIST_CAPE_COLD_CURRENT_ID), true);
+  assert.equal(FISH.slice(97).length, 36);
+  assert.equal(FISH.slice(97).every(fish => fish.habitats.length === 1
+    && fish.habitats[0].regionId === MONSOON_ARCHIPELAGO_ID), true);
 });
 
 test("ten new fish have balanced rarity, preferences, and appearance weights", () => {
@@ -203,10 +206,11 @@ test("existing developer saves backfill newly catalogued fish and collection rew
 });
 
 test("bay event catalog and daily schedule are deterministic", () => {
-  assert.equal(BAY_EVENTS.length, 9);
+  assert.equal(BAY_EVENTS.length, 12);
   assert.equal(BAY_EVENTS.filter(event => event.regionId === SLEEPING_TIDE_BAY_ID).length, 3);
   assert.equal(BAY_EVENTS.filter(event => event.regionId === LUMINOUS_ARCHIPELAGO_ID).length, 3);
   assert.equal(BAY_EVENTS.filter(event => event.regionId === MIST_CAPE_COLD_CURRENT_ID).length, 3);
+  assert.equal(BAY_EVENTS.filter(event => event.regionId === MONSOON_ARCHIPELAGO_ID).length, 3);
   assert.equal(new Set(BAY_EVENTS.map(event => event.id)).size, BAY_EVENTS.length);
   assert.equal(getScheduledBayEvent(1)?.id, "silver_tide");
   assert.equal(getScheduledBayEvent(2), null);

@@ -27,6 +27,7 @@ import {
   LUMINOUS_ARCHIPELAGO_FISH, LUMINOUS_ARCHIPELAGO_FISH_COUNT
 } from "./data/luminous-fish.js";
 import { MIST_CAPE_FISH, MIST_CAPE_FISH_COUNT } from "./data/mist-cape-fish.js";
+import { MONSOON_FISH, MONSOON_FISH_COUNT } from "./data/monsoon-fish.js";
 import {
   FISH_ASSET_PURPOSES, FISH_ASSET_REPRESENTATIVES, FISH_ASSET_SPEC, FISH_BODY_PLANS,
   fishAssetSrcSet, resolveFishAsset
@@ -35,37 +36,40 @@ import {
   CHART_LAYOUT, CHART_REGION_POINTS, CHART_ROUTE_PATHS, chartRegionPointById, chartRoutePathById
 } from "./data/chart.js";
 import {
-  CHENGYE_ID, FISH_MARKET_OWNER_ID, LIGHTHOUSE_KEEPER_ID, RESIDENTS, WUHE_ID,
+  CHENGYE_ID, FISH_MARKET_OWNER_ID, JICEN_ID, LIGHTHOUSE_KEEPER_ID, RESIDENTS, WUHE_ID,
   getRegionResidents, residentById
 } from "./data/residents.js";
 import {
-  CLARKS_ANEMONEFISH_OBSERVATION_ID, KELP_PIPEFISH_OBSERVATION_ID, MISTBELL_OVERLOOK_ID,
-  OBSERVATION_SUBJECTS, PACIFIC_SPINY_LUMPSUCKER_OBSERVATION_ID, STARLIGHT_OBSERVATION_CAPE_ID,
-  TWO_SPINED_ANGELFISH_OBSERVATION_ID, WONDERS, getObservationSubjectsForSpot,
+  BARRED_MUDSKIPPER_OBSERVATION_ID, CLARKS_ANEMONEFISH_OBSERVATION_ID,
+  KELP_PIPEFISH_OBSERVATION_ID, MISTBELL_OVERLOOK_ID, OBSERVATION_SUBJECTS,
+  PACIFIC_SPINY_LUMPSUCKER_OBSERVATION_ID, SEASONSTONE_WATCH_ID, STARLIGHT_OBSERVATION_CAPE_ID,
+  TWO_SPINED_ANGELFISH_OBSERVATION_ID, WONDERS, YELLOW_SEAHORSE_OBSERVATION_ID, getObservationSubjectsForSpot,
   getWondersForSpot, observationSubjectById, wonderById
 } from "./data/observations.js";
 import {
-  LUMINOUS_RESEARCH_NODE_IDS, MIST_CAPE_RESEARCH_NODE_IDS, REGION_RESEARCH, RESEARCH_NODES,
-  SLEEPING_TIDE_RESEARCH_NODE_IDS,
+  LUMINOUS_RESEARCH_NODE_IDS, MIST_CAPE_RESEARCH_NODE_IDS, MONSOON_RESEARCH_NODE_IDS,
+  REGION_RESEARCH, RESEARCH_NODES, SLEEPING_TIDE_RESEARCH_NODE_IDS,
   getRegionResearch, researchNodeById
 } from "./data/research.js";
 import {
   RESIDENT_STORY_SCENES, getResidentStoryScenes, residentStorySceneById
 } from "./data/resident-stories.js";
 import {
-  LUMINOUS_ARCHIPELAGO_ID, MIST_CAPE_COLD_CURRENT_ID, REGIONS, REGION_SPOTS, SLEEPING_TIDE_BAY_ID, SPOTS,
+  GRAYCROWN_STONE_COAST_ID, LUMINOUS_ARCHIPELAGO_ID, MIST_CAPE_COLD_CURRENT_ID,
+  MONSOON_ARCHIPELAGO_ID, REGIONS, REGION_SPOTS, SLEEPING_TIDE_BAY_ID, SPOTS,
   fishCanAppearAtSpot, getFishHabitat, getRegionFish, getRegionFishingSpots, getRegionObservationSpots,
   getRegionSpots, isRegionAvailable, regionById, regionSpotById
 } from "./data/regions.js";
 import {
-  LUMINOUS_TO_MIST_CAPE_ROUTE_ID, ROUTES, SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID,
+  LUMINOUS_TO_MIST_CAPE_ROUTE_ID, MIST_CAPE_TO_MONSOON_ROUTE_ID,
+  MONSOON_TO_GRAYCROWN_ROUTE_ID, ROUTES, SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID,
   getRouteDestination, getRoutesForRegion,
   isRouteAvailable, routeById
 } from "./data/routes.js";
 
 export {
   CHART_LAYOUT, CHART_REGION_POINTS, CHART_ROUTE_PATHS, COMMISSION_TEMPLATES, DAILY_GOAL_TEMPLATES,
-  CHENGYE_ID, FISH_MARKET_OWNER_ID, LIGHTHOUSE_KEEPER_ID, WUHE_ID,
+  CHENGYE_ID, FISH_MARKET_OWNER_ID, JICEN_ID, LIGHTHOUSE_KEEPER_ID, WUHE_ID,
   BASE_APPEARANCE_BUDGETS, CAPTURE_RATE_BY_RARITY, FISH_APPEARANCE_BONUSES,
   FISH_APPEARANCE_WEIGHTS, FISH_APPEARANCE_WEIGHT_RANGE, FISH_RARITY_ORDER,
   FISH_ASSET_PURPOSES, FISH_ASSET_REPRESENTATIVES, FISH_ASSET_SPEC,
@@ -73,16 +77,19 @@ export {
   MAX_APPEARANCE_WEIGHT_RATIO, MAX_RARITY_FISH_PER_SPOT,
   QUEST_TEMPLATES, RESIDENTS, commissionTemplateById, fishAssetSrcSet, getRegionResidents,
   getResidentCommissionTemplates, resolveFishAsset,
-  CLARKS_ANEMONEFISH_OBSERVATION_ID, KELP_PIPEFISH_OBSERVATION_ID, MISTBELL_OVERLOOK_ID,
-  OBSERVATION_SUBJECTS, PACIFIC_SPINY_LUMPSUCKER_OBSERVATION_ID, STARLIGHT_OBSERVATION_CAPE_ID,
-  TWO_SPINED_ANGELFISH_OBSERVATION_ID, WONDERS, getObservationSubjectsForSpot,
+  BARRED_MUDSKIPPER_OBSERVATION_ID, CLARKS_ANEMONEFISH_OBSERVATION_ID,
+  KELP_PIPEFISH_OBSERVATION_ID, MISTBELL_OVERLOOK_ID, OBSERVATION_SUBJECTS,
+  PACIFIC_SPINY_LUMPSUCKER_OBSERVATION_ID, SEASONSTONE_WATCH_ID, STARLIGHT_OBSERVATION_CAPE_ID,
+  TWO_SPINED_ANGELFISH_OBSERVATION_ID, WONDERS, YELLOW_SEAHORSE_OBSERVATION_ID, getObservationSubjectsForSpot,
   getWondersForSpot, observationSubjectById, wonderById,
-  LUMINOUS_RESEARCH_NODE_IDS, MIST_CAPE_RESEARCH_NODE_IDS, REGION_RESEARCH, RESEARCH_NODES,
-  SLEEPING_TIDE_RESEARCH_NODE_IDS,
+  LUMINOUS_RESEARCH_NODE_IDS, MIST_CAPE_RESEARCH_NODE_IDS, MONSOON_RESEARCH_NODE_IDS,
+  REGION_RESEARCH, RESEARCH_NODES, SLEEPING_TIDE_RESEARCH_NODE_IDS,
   getRegionResearch, researchNodeById,
   RESIDENT_STORY_SCENES, getResidentStoryScenes, residentStorySceneById,
-  LUMINOUS_ARCHIPELAGO_ID, MIST_CAPE_COLD_CURRENT_ID, REGIONS, REGION_SPOTS, ROUTES, SLEEPING_TIDE_BAY_ID,
-  LUMINOUS_TO_MIST_CAPE_ROUTE_ID, SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID, SPOTS, getFishHabitat, getRegionFish,
+  GRAYCROWN_STONE_COAST_ID, LUMINOUS_ARCHIPELAGO_ID, MIST_CAPE_COLD_CURRENT_ID,
+  MONSOON_ARCHIPELAGO_ID, REGIONS, REGION_SPOTS, ROUTES, SLEEPING_TIDE_BAY_ID,
+  LUMINOUS_TO_MIST_CAPE_ROUTE_ID, MIST_CAPE_TO_MONSOON_ROUTE_ID,
+  MONSOON_TO_GRAYCROWN_ROUTE_ID, SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID, SPOTS, getFishHabitat, getRegionFish,
   fishCanAppearAtSpot, getRegionFishingSpots, getRegionObservationSpots, getRegionSpots,
   getRouteDestination, getRoutesForRegion, isRegionAvailable,
   isRouteAvailable, regionById, regionSpotById, residentById, routeById,
@@ -96,6 +103,7 @@ export {
   MAIN_STORY_JOURNAL_ENTRIES, RARE_FISH_JOURNAL_ENTRIES, journalTemplateByEventType,
   rareFishJournalEntryByFishId, storyJournalEntryByEvent,
   LUMINOUS_ARCHIPELAGO_FISH_COUNT, MIST_CAPE_FISH, MIST_CAPE_FISH_COUNT,
+  MONSOON_FISH, MONSOON_FISH_COUNT,
   AUTO_FISHING_EQUIPMENT, AUTO_FISHING_POETIC_LINES, AUTO_FISHING_REASON_LABELS,
   cascadeHighTierSplit, highTierSplitForHighestRarity
 };
@@ -168,7 +176,8 @@ export const FISH = [
   fish("mirror_butterflyfish", "鏡斑蝴蝶魚", "Mirror Butterflyfish", "rare", ["reef"], ["dawn","day"], "sunny", ["shrimp"], "sway", [12,25], [.1,.42], 248, 1.34, "flat", ["#f0c847","#31383f"], "金黃身側托著一面墨色圓斑，轉身時像小鏡子掠過珊瑚。", "鏡斑蝴蝶魚常成對穿梭在結構複雜的礁區，以細小嘴部啄食礁石表面的微小食物。晴朗晨光最能映出牠鮮明的黑黃對比。", "身側的大型黑斑能打亂真正眼睛的位置，讓掠食者不容易判斷牠準備游向哪一邊。", ["rare","small","reef"]),
   fish("greater_amberjack", "紅甘", "Greater Amberjack", "rare", ["deep"], ["dawn","day"], "any", ["cutfish","glow"], "rare", [55,130], [3.2,18.5], 410, 1.68, "torpedo", ["#8da29b","#c79b4e"], "琥珀色側線穿過厚實銀身，是深水晨光裡強健而從容的旅者。", "紅甘會在深水礁坡與潮流交會處巡游，結實身形能帶來長時間的強勁拉力。牠不常靠岸，是準備充分的釣手才容易遇見的目標。", "紅甘眼部常有一道斜向深色帶，琥珀色側線則讓牠在轉身時格外醒目。", ["rare","large","sprint"]),
   ...LUMINOUS_ARCHIPELAGO_FISH,
-  ...MIST_CAPE_FISH
+  ...MIST_CAPE_FISH,
+  ...MONSOON_FISH
 ];
 
 export const RARITY = {
@@ -371,6 +380,72 @@ export const BAY_EVENTS = [
       "今日冷雨上湧觀察完成。"
     ],
     firstReward: { type: "title", value: "深槽候雨者", label: "稱號「深槽候雨者」" },
+    repeatReward: { type: "coins", amount: 145, label: "145 金幣" }
+  },
+  {
+    id: "windward_whitecap_run",
+    regionId: MONSOON_ARCHIPELAGO_ID,
+    name: "迎風白沫列",
+    icon: "≋",
+    description: "長風把外水白沫排成清楚斜線，群游魚沿浪後的窄平水帶一批批通過。",
+    spotIds: ["windward_whitecap_passage"],
+    timeIds: ["dawn", "day"],
+    weatherIds: ["sunny"],
+    forceWeather: "sunny",
+    fishIds: ["indian_mackerel", "shortfin_scad", "talang_queenfish"],
+    fishAppearanceMultiplier: 3.2,
+    objective: "晴朗晨日至白天在迎風水道捕獲 2 條白沫旅者",
+    goal: 2,
+    inactiveHint: "長風仍在換向；等晴朗晨日，再沿白沫後方的平水帶拋竿。",
+    hints: [
+      "白沫已排成斜線，小魚切片能讓順浪巡游魚自然靠近。",
+      "第一道迎風路徑已寫進海況冊，再等下一群通過。",
+      "今日迎風白沫列觀察完成。"
+    ],
+    firstReward: { type: "title", value: "白沫讀向者", label: "稱號「白沫讀向者」" },
+    repeatReward: { type: "coins", amount: 140, label: "140 金幣" }
+  },
+  {
+    id: "leeward_seagrass_lull",
+    regionId: MONSOON_ARCHIPELAGO_ID,
+    name: "草床收風",
+    icon: "♒",
+    description: "島脊削弱長風後，海草葉片把剩下的湧浪拆細，草冠住民沿清淺邊緣靠近。",
+    spotIds: ["leeward_seagrass_bay"],
+    timeIds: ["day", "dusk"],
+    fishIds: ["whitespotted_spinefoot", "bristle_tail_filefish", "longspine_emperor", "bluespotted_ribbontail_ray"],
+    fishAppearanceMultiplier: 3.1,
+    objective: "白日至黃昏在背風海草灣捕獲 2 條草床住民",
+    goal: 2,
+    inactiveHint: "草葉仍在較強湧浪裡俯仰；休息到白日或黃昏，再沿背風清水慢慢拋竿。",
+    hints: [
+      "草床正在收住慢水，小蝦或沙蠶適合停在葉片與沙地交界。",
+      "第一層遮蔽已有記錄，再看看另一簇草葉下的身影。",
+      "今日草床收風觀察完成。"
+    ],
+    firstReward: { type: "title", value: "草床聽風者", label: "稱號「草床聽風者」" },
+    repeatReward: { type: "coins", amount: 130, label: "130 金幣" }
+  },
+  {
+    id: "rainfresh_mangrove_plume",
+    regionId: MONSOON_ARCHIPELAGO_ID,
+    name: "雨脈淡水羽流",
+    icon: "☂",
+    description: "雨水從島坡進入紅樹根間，深色低鹽羽流讓河口魚沿內外側重新排列。",
+    spotIds: ["rainmangrove_estuary"],
+    weatherIds: ["rain"],
+    forceWeather: "rain",
+    fishIds: ["silver_biddy", "banded_archerfish", "blochs_gizzard_shad", "barramundi"],
+    fishAppearanceMultiplier: 3.2,
+    objective: "細雨時在雨脈紅樹岸捕獲 2 條羽流住民",
+    goal: 2,
+    inactiveHint: "淡水羽流尚未展開；等細雨落下，再到紅樹根外側讀水色。",
+    hints: [
+      "深色雨水正沿根間擴散，讓餌停在清濁與鹹淡交界。",
+      "第一筆鹽度位置已完成，羽流另一側還有魚影。",
+      "今日雨脈淡水羽流觀察完成。"
+    ],
+    firstReward: { type: "title", value: "雨脈讀色者", label: "稱號「雨脈讀色者」" },
     repeatReward: { type: "coins", amount: 145, label: "145 金幣" }
   }
 ];

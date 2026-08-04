@@ -1,11 +1,13 @@
 import {
-  LUMINOUS_ARCHIPELAGO_ID, MIST_CAPE_COLD_CURRENT_ID, SLEEPING_TIDE_BAY_ID
+  LUMINOUS_ARCHIPELAGO_ID, MIST_CAPE_COLD_CURRENT_ID, MONSOON_ARCHIPELAGO_ID,
+  SLEEPING_TIDE_BAY_ID
 } from "./regions.js";
 
 export const LIGHTHOUSE_KEEPER_ID = "lighthouse_keeper";
 export const FISH_MARKET_OWNER_ID = "fish_market_owner";
 export const CHENGYE_ID = "chengye";
 export const WUHE_ID = "wuhe";
+export const JICEN_ID = "jicen";
 
 export const RESIDENTS = [
   {
@@ -72,6 +74,23 @@ export const RESIDENTS = [
       active: "先照自己的節奏走。潮界會移動，錯過一刻不代表錯過整片海。",
       ready: "你帶回來的不是答案，是兩邊都還在好好生活的證明。來，把溫度線疊上去。",
       farewell: "聽見下一次鐘聲再回頭也行。霧裡的港口一直在原處。"
+    }
+  },
+  {
+    id: JICEN_ID,
+    name: "季岑",
+    role: "照看風候石、染色風繩與回風港航線拓印的在地領航員",
+    regionId: MONSOON_ARCHIPELAGO_ID,
+    portLocationId: "huifeng_windstone_boathouse",
+    portLocationName: "回風港風候船屋",
+    icon: "▧",
+    appearance: "蠟布短斗篷、四色風繩、黃銅鹽度杯與沾著石粉的拓印袋",
+    dialogue: {
+      greeting: "今天的風從石頭另一側來。港還是同一個港，只是海把家具又挪了一遍。",
+      offer: "若你的航程正好經過那一面水，替我記下浪、顏色和魚停的位置就好。",
+      active: "別跟風比快。等它把水面排好，再慢慢讀也不遲。",
+      ready: "把船繫好再說。你帶回來的差異，正好能和石上的舊痕疊在一起。",
+      farewell: "回風港不會追著季節走；它只會替每一種風留一個泊位。"
     }
   }
 ];

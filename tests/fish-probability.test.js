@@ -89,7 +89,10 @@ test("common and uncommon fish are region-shared while high-tier fish stay spot-
     warm_current_channel: 2,
     fogfront_shelf: 1,
     whispering_kelp_forest: 2,
-    bluecold_trench: 1
+    bluecold_trench: 1,
+    windward_whitecap_passage: 1,
+    leeward_seagrass_bay: 1,
+    rainmangrove_estuary: 2
   });
 });
 

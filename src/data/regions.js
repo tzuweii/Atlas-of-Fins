@@ -1,6 +1,8 @@
 export const SLEEPING_TIDE_BAY_ID = "sleeping_tide_bay";
 export const LUMINOUS_ARCHIPELAGO_ID = "luminous_archipelago";
 export const MIST_CAPE_COLD_CURRENT_ID = "mist_cape_cold_current";
+export const MONSOON_ARCHIPELAGO_ID = "monsoon_archipelago";
+export const GRAYCROWN_STONE_COAST_ID = "graycrown_stone_coast";
 
 export const REGION_SPOTS = [
   {
@@ -147,6 +149,60 @@ export const REGION_SPOTS = [
     habitatTags: ["temperate", "observation", "kelp", "fog"],
     activityType: "observation",
     contentStatus: "complete"
+  },
+  {
+    id: "windward_whitecap_passage",
+    regionId: MONSOON_ARCHIPELAGO_ID,
+    name: "迎風白沫水道",
+    icon: "≋",
+    description: "長風正面推著外海浪進島間水道，白沫與群游魚都沿斜向流線通過。",
+    hint: "迎風浪向 · 外水巡游魚",
+    difficulty: 2,
+    unlock: { type: "default" },
+    sceneVariant: "monsoon_windward",
+    habitatTags: ["tropical", "windward", "open-water", "monsoon"],
+    activityType: "fishing"
+  },
+  {
+    id: "leeward_seagrass_bay",
+    regionId: MONSOON_ARCHIPELAGO_ID,
+    name: "背風海草灣",
+    icon: "♒",
+    description: "島脊擋住長風，清淺水面下的海草床收住細浪，也收住依賴遮蔽的魚。",
+    hint: "背風遮蔽 · 海草床",
+    difficulty: 2,
+    unlock: { type: "default" },
+    sceneVariant: "monsoon_seagrass",
+    habitatTags: ["tropical", "leeward", "seagrass", "sheltered"],
+    activityType: "fishing"
+  },
+  {
+    id: "rainmangrove_estuary",
+    regionId: MONSOON_ARCHIPELAGO_ID,
+    name: "雨脈紅樹岸",
+    icon: "⌇",
+    description: "雨水沿島坡匯入紅樹根間，深色淡水羽流每天用不同形狀改寫鹽度邊界。",
+    hint: "雨季淡水 · 紅樹河口",
+    difficulty: 3,
+    requires: "farcast",
+    unlock: { type: "rod", rodId: "farcast" },
+    sceneVariant: "monsoon_mangrove",
+    habitatTags: ["tropical", "mangrove", "estuary", "freshwater-input", "rain"],
+    activityType: "fishing"
+  },
+  {
+    id: "seasonstone_watch",
+    regionId: MONSOON_ARCHIPELAGO_ID,
+    name: "風候石觀察台",
+    icon: "◫",
+    description: "港外磨圓的風候石刻著歷年浪向，視線同時越過紅樹岸、海草床與迎風水道。",
+    hint: "安靜觀察 · 讀風與水色",
+    difficulty: 0,
+    unlock: { type: "default" },
+    sceneVariant: "monsoon_observation",
+    habitatTags: ["tropical", "observation", "windstone", "mangrove", "seagrass"],
+    activityType: "observation",
+    contentStatus: "complete"
   }
 ];
 
@@ -211,6 +267,50 @@ export const REGIONS = [
     journalPoolId: "mist_cape_cold_current",
     contentStatus: "complete",
     status: "available"
+  },
+  {
+    id: MONSOON_ARCHIPELAGO_ID,
+    name: "季風群島",
+    portName: "回風港",
+    currentProfile: "monsoon_windward_leeward_rain_plume",
+    climateTags: ["tropical", "monsoon", "seagrass", "mangrove", "estuary"],
+    spotIds: ["windward_whitecap_passage", "leeward_seagrass_bay", "rainmangrove_estuary", "seasonstone_watch"],
+    fishingSpotIds: ["windward_whitecap_passage", "leeward_seagrass_bay", "rainmangrove_estuary"],
+    observationSpotIds: ["seasonstone_watch"],
+    residentIds: ["jicen"],
+    unlock: { type: "route", routeId: "mist_cape_to_monsoon_archipelago" },
+    palette: "monsoon_archipelago",
+    musicId: "windstone_reeds",
+    ambientId: "monsoon_palms_and_rainrunoff",
+    arrivalCopy: "船頭繞過迎風白沫，回風港的背風水面隨即平下來；繫纜完成後，風候石上的舊浪痕正對著今日長風。",
+    firstArrivalCopy: "霧禾的雙流剖面圖在長風裡掀動，回風港岸邊的季岑用染色風繩比對多年季節頁，等你親手把船纜繫上。",
+    journalPoolId: "monsoon_archipelago",
+    chapterKeepsake: {
+      rewardId: "monsoon_windstone_route_rubbing",
+      label: "《風候石航線拓印》",
+      shortLabel: "風候石拓印",
+      icon: "▧"
+    },
+    contentStatus: "complete",
+    status: "available"
+  },
+  {
+    id: GRAYCROWN_STONE_COAST_ID,
+    name: "灰冠石岸",
+    portName: "灰冠待測泊地",
+    currentProfile: "long_swell_stone_coast_preview",
+    climateTags: ["stone-coast", "long-swell", "planned"],
+    spotIds: [],
+    fishingSpotIds: [],
+    observationSpotIds: [],
+    residentIds: [],
+    unlock: { type: "route", routeId: "monsoon_archipelago_to_graycrown_stone_coast" },
+    palette: "graycrown_preview",
+    musicId: null,
+    ambientId: null,
+    journalPoolId: "graycrown_stone_coast",
+    contentStatus: "planned",
+    status: "planned"
   }
 ];
 

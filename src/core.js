@@ -534,17 +534,22 @@ function routeWasAlreadyTraversed(state, route) {
   return visited.has(route.fromRegionId) && visited.has(route.toRegionId);
 }
 
-export function isRouteUnlockedForState(state, routeId) {
+export function isRouteRevealedForState(state, routeId) {
   const route = ROUTES.find(entry => entry.id === routeId);
-  if (!route || route.status !== "available" || !state.world?.unlockedRouteIds?.includes(routeId)) return false;
+  if (!route || !["available", "preview"].includes(route.status) || !state.world?.unlockedRouteIds?.includes(routeId)) return false;
   if (state.developerMode) return true;
   const legacyReturnTrip = routeWasAlreadyTraversed(state, route) && state.world.currentRegionId === route.toRegionId;
   return routeStoryCompleted(state, route) || legacyReturnTrip;
 }
 
+export function isRouteUnlockedForState(state, routeId) {
+  const route = ROUTES.find(entry => entry.id === routeId);
+  return route?.status === "available" && isRouteRevealedForState(state, routeId);
+}
+
 function syncStoryRouteUnlocks(state) {
   const unlocked = new Set(state.world?.unlockedRouteIds || []);
-  for (const route of ROUTES.filter(entry => entry.status === "available" && entry.unlock?.type === "resident-story")) {
+  for (const route of ROUTES.filter(entry => ["available", "preview"].includes(entry.status) && entry.unlock?.type === "resident-story")) {
     if (state.developerMode || routeStoryCompleted(state, route) || routeWasAlreadyTraversed(state, route)) unlocked.add(route.id);
     else unlocked.delete(route.id);
   }
@@ -552,7 +557,7 @@ function syncStoryRouteUnlocks(state) {
 }
 
 function storyRouteUnlocksAreCurrent(state) {
-  return ROUTES.filter(entry => entry.status === "available" && entry.unlock?.type === "resident-story").every(route => {
+  return ROUTES.filter(entry => ["available", "preview"].includes(entry.status) && entry.unlock?.type === "resident-story").every(route => {
     const shouldBeUnlocked = Boolean(state.developerMode || routeStoryCompleted(state, route) || routeWasAlreadyTraversed(state, route));
     return state.world?.unlockedRouteIds?.includes(route.id) === shouldBeUnlocked;
   });

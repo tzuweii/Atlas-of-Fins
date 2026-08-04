@@ -12,7 +12,7 @@ const knownFishIds = new Set(FISH.map(fish => fish.id));
 const knownTimeIds = new Set(TIMES.map(time => time.id));
 
 const availableRegionIds = () => REGIONS.filter(region => region.status === "available").map(region => region.id);
-const availableRouteIds = () => ROUTES.filter(route => route.status === "available").map(route => route.id);
+const knownRouteIds = () => ROUTES.map(route => route.id);
 const defaultRouteIds = () => ROUTES.filter(route => route.status === "available" && route.unlock?.type === "default").map(route => route.id);
 const validFishIds = values => uniqueStrings(values).filter(fishId => knownFishIds.has(fishId));
 
@@ -81,7 +81,7 @@ export function createDeveloperWorldState({ discoveredFishIds = [], currentRegio
   return {
     currentRegionId: safeCurrentRegionId,
     visitedRegionIds: implementedRegionIds,
-    unlockedRouteIds: availableRouteIds(),
+    unlockedRouteIds: knownRouteIds(),
     completedRouteIds: [],
     regionProgress,
     travel: null,
@@ -135,7 +135,7 @@ export function normalizeWorldState(raw, {
   ])];
   const unlockedRouteIds = [...new Set([
     ...defaultRouteIds(),
-    ...uniqueStrings(source.unlockedRouteIds).filter(routeId => isRouteAvailable(routeId))
+    ...uniqueStrings(source.unlockedRouteIds).filter(routeId => Boolean(routeById(routeId)))
   ])];
   const completedRouteIds = uniqueStrings(source.completedRouteIds).filter(routeId => isRouteAvailable(routeId));
   const sourceProgress = source.regionProgress && typeof source.regionProgress === "object" ? source.regionProgress : {};

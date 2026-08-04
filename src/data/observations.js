@@ -1,4 +1,6 @@
-import { LUMINOUS_ARCHIPELAGO_ID, MIST_CAPE_COLD_CURRENT_ID } from "./regions.js";
+import {
+  LUMINOUS_ARCHIPELAGO_ID, MIST_CAPE_COLD_CURRENT_ID, MONSOON_ARCHIPELAGO_ID
+} from "./regions.js";
 
 export const STARLIGHT_OBSERVATION_CAPE_ID = "starlight_observation_cape";
 export const CLARKS_ANEMONEFISH_OBSERVATION_ID = "clarks_anemonefish";
@@ -6,6 +8,9 @@ export const TWO_SPINED_ANGELFISH_OBSERVATION_ID = "twospined_angelfish";
 export const MISTBELL_OVERLOOK_ID = "mistbell_overlook";
 export const PACIFIC_SPINY_LUMPSUCKER_OBSERVATION_ID = "pacific_spiny_lumpsucker";
 export const KELP_PIPEFISH_OBSERVATION_ID = "kelp_pipefish";
+export const SEASONSTONE_WATCH_ID = "seasonstone_watch";
+export const BARRED_MUDSKIPPER_OBSERVATION_ID = "barred_mudskipper";
+export const YELLOW_SEAHORSE_OBSERVATION_ID = "yellow_seahorse";
 
 export const OBSERVATION_SUBJECTS = [
   {
@@ -28,7 +33,9 @@ export const OBSERVATION_SUBJECTS = [
     missHint: "海葵仍在輕輕擺動。再選一個明亮時段回來，熟悉的住客不會永遠躲著。",
     ecologySource: {
       label: "FishBase 物種摘要",
-      url: "https://www.fishbase.se/summary/Amphiprion-clarkii.html"
+      url: "https://www.fishbase.se/summary/Amphiprion-clarkii.html",
+      checkedAt: "2026-08-04",
+      note: "依海葵共生與礁區棲地資料，轉為原地等待、不帶走魚的正式觀察。"
     }
   },
   {
@@ -52,7 +59,9 @@ export const OBSERVATION_SUBJECTS = [
     missHint: "礁影裡留下了一點紫橙反光。觀察次數會被記住，牠不會成為永遠缺少的那一頁。",
     ecologySource: {
       label: "FishBase 物種摘要",
-      url: "https://www.fishbase.se/summary/Centropyge-bispinosa.html"
+      url: "https://www.fishbase.se/summary/Centropyge-bispinosa.html",
+      checkedAt: "2026-08-04",
+      note: "依珊瑚豐富礁區與隱蔽行為資料，轉為具累積保底的礁影正式觀察。"
     }
   },
   {
@@ -76,7 +85,8 @@ export const OBSERVATION_SUBJECTS = [
     ecologySource: {
       label: "FishBase 物種摘要",
       url: "https://www.fishbase.se/summary/Eumicrotremus-orbis.html",
-      checkedAt: "2026-07-28"
+      checkedAt: "2026-07-28",
+      note: "依冷水岩礁與腹部吸盤資料，轉為海藻根部流速的非捕獲觀察。"
     }
   },
   {
@@ -101,7 +111,59 @@ export const OBSERVATION_SUBJECTS = [
     ecologySource: {
       label: "FishBase 物種摘要",
       url: "https://www.fishbase.se/summary/Syngnathus-californiensis.html",
-      checkedAt: "2026-07-28"
+      checkedAt: "2026-07-28",
+      note: "依海藻植被棲地與管狀吻資料，轉為冷暖林層換位的非捕獲觀察。"
+    }
+  },
+  {
+    id: BARRED_MUDSKIPPER_OBSERVATION_ID,
+    type: "catalog-fish",
+    regionId: MONSOON_ARCHIPELAGO_ID,
+    spotId: SEASONSTONE_WATCH_ID,
+    name: "大彈塗魚",
+    english: "Barred Mudskipper",
+    scientific: "Periophthalmus argentilineatus",
+    icon: "⌁",
+    colors: ["#88765c", "#4d6358", "#d2bb7a"],
+    timeIds: ["dawn", "day", "dusk"],
+    weatherIds: ["sunny", "rain"],
+    baseChance: 0.54,
+    pityVisits: 2,
+    short: "灰褐小魚用胸鰭撐過濕泥，在紅樹水孔與根影之間走出一條岸上潮路。",
+    detail: "大彈塗魚生活於熱帶紅樹林與泥質潮間帶，能在保持濕潤時離水活動。觀察牠如何使用泥孔、陰影與潮水，比追逐一次跳躍更重要。",
+    hint: "清晨至黃昏，留意紅樹根旁仍濕潤的泥面；有一小段影子會自己離開水孔。",
+    missHint: "泥面只留下幾枚新鮮胸鰭印。觀察次數會被記住，牠不會永遠躲在水孔裡。",
+    ecologySource: {
+      label: "FishBase 物種摘要",
+      url: "https://www.fishbase.se/summary/Periophthalmus-argentilineatus.html",
+      checkedAt: "2026-08-04",
+      note: "依沿岸、河口與紅樹潮間帶棲地資料，轉為不進入泥灘的遠距正式觀察。"
+    }
+  },
+  {
+    id: YELLOW_SEAHORSE_OBSERVATION_ID,
+    type: "catalog-fish",
+    regionId: MONSOON_ARCHIPELAGO_ID,
+    spotId: SEASONSTONE_WATCH_ID,
+    name: "庫達海馬",
+    english: "Yellow Seahorse",
+    scientific: "Hippocampus kuda",
+    icon: "∫",
+    colors: ["#d3aa4d", "#8e7e45", "#486b61"],
+    timeIds: ["dawn", "day", "dusk"],
+    weatherIds: ["sunny", "rain"],
+    requiresObservationIds: [BARRED_MUDSKIPPER_OBSERVATION_ID],
+    baseChance: 0.3,
+    pityVisits: 3,
+    short: "黃色捲尾纏住背風海草，慢流推過時只換到相鄰一根葉柄。",
+    detail: "庫達海馬利用海草床、紅樹與受遮蔽淺水，以捲尾固定身體並用管狀吻吸取小型獵物。牠的短距離換位能顯出背風遮蔽如何拆細水流。",
+    hint: "明亮至黃昏，觀察背風草床葉柄；有一段捲曲影子會隨草葉一起轉向。",
+    missHint: "草葉剛剛比水流慢了一拍。保持距離再來，捲尾住客會在累積觀察後自然露出輪廓。",
+    ecologySource: {
+      label: "FishBase 物種摘要",
+      url: "https://www.fishbase.se/summary/Hippocampus-kuda.html",
+      checkedAt: "2026-08-04",
+      note: "依海草、紅樹與受遮蔽沿岸棲地資料，轉為背風海草床的非捕獲正式觀察。"
     }
   }
 ];
@@ -158,6 +220,19 @@ export const WONDERS = [
     chance: 0.18,
     description: "遠處先傳來低低的呼吸聲，一縷白氣才從霧後升起，沿著岬角慢慢向北移動。",
     photoCaption: "沒有追上去；鐘聲與下一口呼吸已替牠標出安全的方向。"
+  },
+  {
+    id: "dugong_seagrass_breath",
+    type: "wonder",
+    regionId: MONSOON_ARCHIPELAGO_ID,
+    spotId: SEASONSTONE_WATCH_ID,
+    name: "儒艮的草床換氣線",
+    icon: "◡",
+    timeIds: ["dawn", "day"],
+    weatherIds: ["sunny", "rain"],
+    chance: 0.18,
+    description: "一枚圓鈍鼻端在背風灣換氣，寬厚身影沿海草床外緣慢慢離開，沒有改變原本的覓食方向。",
+    photoCaption: "沒有跟船追近；平靜水面替草床住客保留了一道逐漸合起的呼吸線。"
   }
 ];
 

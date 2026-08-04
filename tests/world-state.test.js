@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   BAY_EVENTS, FISH, LUMINOUS_ARCHIPELAGO_ID, LUMINOUS_TO_MIST_CAPE_ROUTE_ID,
-  MIST_CAPE_COLD_CURRENT_ID, REGIONS, REGION_SPOTS, ROUTES, SLEEPING_TIDE_BAY_ID,
+  MIST_CAPE_COLD_CURRENT_ID, MIST_CAPE_TO_MONSOON_ROUTE_ID, MONSOON_ARCHIPELAGO_ID,
+  MONSOON_TO_GRAYCROWN_ROUTE_ID, REGIONS, REGION_SPOTS, ROUTES, SLEEPING_TIDE_BAY_ID,
   SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID, getFishHabitat,
   getRegionFish, getRegionFishingSpots, getRegionObservationSpots, getRegionSpots,
   getRoutesForRegion, isRouteAvailable
@@ -37,13 +38,13 @@ test("Slice F completes luminous fishing content while preserving the Slice E ro
   assert.deepEqual(luminous.spotIds, ["windrest_shallows", "prism_coral_garden", "warm_current_channel", "starlight_observation_cape"]);
   assert.equal(getRegionFishingSpots(LUMINOUS_ARCHIPELAGO_ID).length, 3);
   assert.equal(new Set(fishingSpots.map(spot => spot.sceneVariant)).size, 3);
-  assert.equal(new Set(REGION_SPOTS.filter(spot => (spot.activityType || "fishing") === "fishing").map(spot => spot.sceneVariant)).size, 9);
+  assert.equal(new Set(REGION_SPOTS.filter(spot => (spot.activityType || "fishing") === "fishing").map(spot => spot.sceneVariant)).size, 12);
   assert.equal(getRegionObservationSpots(LUMINOUS_ARCHIPELAGO_ID).length, 1);
   assert.equal(getRegionFish(FISH, LUMINOUS_ARCHIPELAGO_ID).length, 33);
   assert.equal(getRegionFish(FISH, LUMINOUS_ARCHIPELAGO_ID).every(fish => fish.habitats.length === 1), true);
   assert.equal(getRegionFish(FISH, LUMINOUS_ARCHIPELAGO_ID).some(fish => getFishHabitat(fish, SLEEPING_TIDE_BAY_ID)), false);
   assert.equal(getRegionFish(FISH, LUMINOUS_ARCHIPELAGO_ID).some(fish => fish.spots.includes("starlight_observation_cape")), false);
-  assert.equal(ROUTES.length, 2);
+  assert.equal(ROUTES.length, 4);
   assert.equal(ROUTES[0].id, SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID);
   assert.equal(ROUTES[0].status, "available");
   assert.equal(ROUTES[0].distanceClass, "short");
@@ -69,12 +70,18 @@ test("new and developer games only unlock currently implemented world content", 
   assert.equal(initial.travel, null);
 
   const developer = createDeveloperWorldState({ discoveredFishIds: FISH.map(fish => fish.id) });
-  assert.deepEqual(developer.visitedRegionIds, [SLEEPING_TIDE_BAY_ID, LUMINOUS_ARCHIPELAGO_ID, MIST_CAPE_COLD_CURRENT_ID]);
-  assert.deepEqual(developer.unlockedRouteIds, [SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID, LUMINOUS_TO_MIST_CAPE_ROUTE_ID]);
+  assert.deepEqual(developer.visitedRegionIds, [
+    SLEEPING_TIDE_BAY_ID, LUMINOUS_ARCHIPELAGO_ID, MIST_CAPE_COLD_CURRENT_ID, MONSOON_ARCHIPELAGO_ID
+  ]);
+  assert.deepEqual(developer.unlockedRouteIds, [
+    SLEEPING_TIDE_TO_LUMINOUS_ROUTE_ID, LUMINOUS_TO_MIST_CAPE_ROUTE_ID,
+    MIST_CAPE_TO_MONSOON_ROUTE_ID, MONSOON_TO_GRAYCROWN_ROUTE_ID
+  ]);
   assert.deepEqual(developer.completedRouteIds, []);
   assert.equal(developer.regionProgress[SLEEPING_TIDE_BAY_ID].discoveredFishIds.length, 30);
   assert.equal(developer.regionProgress[LUMINOUS_ARCHIPELAGO_ID].discoveredFishIds.length, 33);
   assert.equal(developer.regionProgress[MIST_CAPE_COLD_CURRENT_ID].discoveredFishIds.length, 34);
+  assert.equal(developer.regionProgress[MONSOON_ARCHIPELAGO_ID].discoveredFishIds.length, 36);
   assert.deepEqual(createInitialState().world, initial);
   assert.deepEqual(createDeveloperState().world, developer);
 });

@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  CHENGYE_ID, COMMISSION_TEMPLATES, FISH_MARKET_OWNER_ID, LIGHTHOUSE_KEEPER_ID,
-  LUMINOUS_ARCHIPELAGO_ID, MIST_CAPE_COLD_CURRENT_ID, RESIDENTS, SLEEPING_TIDE_BAY_ID,
-  WUHE_ID, getResidentCommissionTemplates
+  CHENGYE_ID, COMMISSION_TEMPLATES, FISH_MARKET_OWNER_ID, JICEN_ID, LIGHTHOUSE_KEEPER_ID,
+  LUMINOUS_ARCHIPELAGO_ID, MIST_CAPE_COLD_CURRENT_ID, MONSOON_ARCHIPELAGO_ID, RESIDENTS,
+  SLEEPING_TIDE_BAY_ID, WUHE_ID, getResidentCommissionTemplates
 } from "../src/data.js";
 import {
   acceptResidentCommission, advanceTime, createDeveloperState, createInitialState,
@@ -28,9 +28,10 @@ test("port residents stay local and own calm commission templates", () => {
   const sleepingResidents = RESIDENTS.filter(resident => resident.regionId === SLEEPING_TIDE_BAY_ID);
   const chengye = RESIDENTS.find(resident => resident.id === CHENGYE_ID);
   const wuhe = RESIDENTS.find(resident => resident.id === WUHE_ID);
+  const jicen = RESIDENTS.find(resident => resident.id === JICEN_ID);
   assert.deepEqual(sleepingResidents.map(resident => resident.name), ["燈塔守望者", "魚市場老闆"]);
   assert.ok(sleepingResidents.every(resident => resident.portLocationId && resident.dialogue.greeting));
-  assert.equal(COMMISSION_TEMPLATES.length, 18);
+  assert.equal(COMMISSION_TEMPLATES.length, 23);
   assert.equal(getResidentCommissionTemplates(LIGHTHOUSE_KEEPER_ID).length, 4);
   assert.equal(getResidentCommissionTemplates(FISH_MARKET_OWNER_ID).length, 4);
   assert.equal(chengye.name, "澄野");
@@ -39,6 +40,9 @@ test("port residents stay local and own calm commission templates", () => {
   assert.equal(wuhe.name, "霧禾");
   assert.equal(wuhe.regionId, MIST_CAPE_COLD_CURRENT_ID);
   assert.equal(getResidentCommissionTemplates(WUHE_ID).length, 5);
+  assert.equal(jicen.name, "季岑");
+  assert.equal(jicen.regionId, MONSOON_ARCHIPELAGO_ID);
+  assert.equal(getResidentCommissionTemplates(JICEN_ID).length, 5);
   assert.ok(COMMISSION_TEMPLATES.every(template => ["coins", "bait"].includes(template.reward.type)
     && !["observe", "wonder"].includes(template.condition.eventType)));
 });

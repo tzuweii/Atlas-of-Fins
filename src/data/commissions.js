@@ -1,6 +1,7 @@
-import { CHENGYE_ID, FISH_MARKET_OWNER_ID, LIGHTHOUSE_KEEPER_ID, WUHE_ID } from "./residents.js";
+import { CHENGYE_ID, FISH_MARKET_OWNER_ID, JICEN_ID, LIGHTHOUSE_KEEPER_ID, WUHE_ID } from "./residents.js";
 import {
-  LUMINOUS_ARCHIPELAGO_ID, MIST_CAPE_COLD_CURRENT_ID, SLEEPING_TIDE_BAY_ID
+  LUMINOUS_ARCHIPELAGO_ID, MIST_CAPE_COLD_CURRENT_ID, MONSOON_ARCHIPELAGO_ID,
+  SLEEPING_TIDE_BAY_ID
 } from "./regions.js";
 
 const coins = amount => ({ type: "coins", amount, label: `${amount} 金幣` });
@@ -186,6 +187,56 @@ export const COMMISSION_TEMPLATES = [
     condition: { eventType: "catch", regionIds: [MIST_CAPE_COLD_CURRENT_ID], timeIds: ["night"] },
     reward: bait("glow", 2, "發光魚餌 2 份"),
     completionDialogue: "船燈只照見很近的水，兩筆普通夜影已經把第二條線說清楚了。"
+  },
+  {
+    id: "jicen_windward_lines",
+    residentId: JICEN_ID,
+    title: "今日白沫方向",
+    description: "在迎風白沫水道記錄 2 條魚，替風候石補上今天的浪向。",
+    goal: 2,
+    condition: { eventType: "catch", regionIds: [MONSOON_ARCHIPELAGO_ID], spotIds: ["windward_whitecap_passage"] },
+    reward: coins(115),
+    completionDialogue: "兩道拉力指向同一側。今天的白沫線已經足夠清楚。"
+  },
+  {
+    id: "jicen_leeward_grass",
+    residentId: JICEN_ID,
+    title: "背風草葉角度",
+    description: "在背風海草灣記錄 2 條魚，看看草床今天收住多少水流。",
+    goal: 2,
+    condition: { eventType: "catch", regionIds: [MONSOON_ARCHIPELAGO_ID], spotIds: ["leeward_seagrass_bay"] },
+    reward: bait("shrimp", 3, "小蝦 3 份"),
+    completionDialogue: "魚停得比昨天更靠草冠。風沒有停，只是被葉片拆細了。"
+  },
+  {
+    id: "jicen_mangrove_color",
+    residentId: JICEN_ID,
+    title: "紅樹岸水色",
+    description: "在雨脈紅樹岸記錄 2 條魚，替鹽度杯旁補上今日水色。",
+    goal: 2,
+    condition: { eventType: "catch", regionIds: [MONSOON_ARCHIPELAGO_ID], spotIds: ["rainmangrove_estuary"] },
+    reward: coins(125),
+    completionDialogue: "顏色與魚的位置都記下了。它們一起看，才不會把深色誤認成單一答案。"
+  },
+  {
+    id: "jicen_common_windbook",
+    residentId: JICEN_ID,
+    title: "季風的日常魚頁",
+    description: "在季風群島記錄 3 條常見魚，替研究冊補上不醒目卻可靠的底色。",
+    goal: 3,
+    condition: { eventType: "catch", regionIds: [MONSOON_ARCHIPELAGO_ID], rarityIds: ["common"] },
+    reward: coins(105),
+    completionDialogue: "常見魚每天都在回應風。這三筆比一次罕見浪花更能說明港口。"
+  },
+  {
+    id: "jicen_rain_plume",
+    residentId: JICEN_ID,
+    title: "淡水羽流外緣",
+    description: "在季風群島雨天記錄 2 條魚，不必等待稀有訪客。",
+    goal: 2,
+    condition: { eventType: "catch", regionIds: [MONSOON_ARCHIPELAGO_ID], weatherIds: ["rain"] },
+    reward: bait("glow", 2, "發光魚餌 2 份"),
+    completionDialogue: "雨把魚群重新排過，兩筆普通位置就已經讓羽流有了輪廓。"
   }
 ];
 

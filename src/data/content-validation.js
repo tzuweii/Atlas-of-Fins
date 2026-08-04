@@ -258,6 +258,21 @@ export function validateContentCatalog(content = {}) {
     }
   }
 
+  const scientificFishIds = new Map();
+  for (const fish of collections.fish.filter(entry => entry?.habitats?.[0]?.regionId !== "sleeping_tide_bay")) {
+    const scientific = typeof fish?.scientific === "string" ? fish.scientific.trim().toLowerCase() : "";
+    if (!scientific) continue;
+    if (scientificFishIds.has(scientific)) {
+      addError(
+        "duplicate-scientific-name",
+        "fish",
+        fish.id,
+        `fish[${fish.id}].scientific`,
+        `學名「${fish.scientific}」已由魚種「${scientificFishIds.get(scientific)}」使用`
+      );
+    } else scientificFishIds.set(scientific, fish.id);
+  }
+
   for (const spot of collections.spots.filter(entry => (entry?.activityType || "fishing") === "fishing")) {
     const pool = collections.fish.filter(fish => asArray(fish?.habitats).some(habitat =>
       habitat?.regionId === spot.regionId
@@ -404,6 +419,10 @@ export function validateContentCatalog(content = {}) {
     if (typeof observation?.scientific !== "string" || !/^https:\/\//.test(observation?.ecologySource?.url || "")) {
       addError("missing-ecology", "observations", observation?.id, `observations[${observation?.id || "missing-id"}].ecologySource`, "正式觀察魚需要學名與可追溯的 HTTPS 生態來源");
     }
+    if (Number.isNaN(Date.parse(observation?.ecologySource?.checkedAt || ""))
+      || typeof observation?.ecologySource?.note !== "string" || !observation.ecologySource.note.trim()) {
+      addError("missing-ecology-audit", "observations", observation?.id, `observations[${observation?.id || "missing-id"}].ecologySource`, "正式觀察魚需要來源查核日期與遊戲化簡化說明");
+    }
   }
   for (const wonder of collections.wonders) {
     requireReference("wonders", wonder, "regionId", wonder?.regionId, ids.regions, "區域");
@@ -526,6 +545,16 @@ export function validateContentCatalog(content = {}) {
     }
     if (scene?.reward?.type === "route-chart") {
       requireReference("residentStoryScenes", scene, "reward.routeId", scene.reward.routeId, ids.routes, "航線");
+    }
+  }
+  for (const region of collections.regions.filter(entry => entry?.chapterKeepsake)) {
+    const keepsake = region.chapterKeepsake;
+    const matchingScene = collections.residentStoryScenes.find(scene => {
+      const resident = collections.residents.find(entry => entry.id === scene.residentId);
+      return resident?.regionId === region.id && scene.reward?.id === keepsake.rewardId;
+    });
+    if (!matchingScene || typeof keepsake.label !== "string" || typeof keepsake.shortLabel !== "string") {
+      addError("invalid-keepsake", "regions", region.id, `regions[${region.id}].chapterKeepsake`, "章節永久紀念必須引用同區居民主線獎勵，並提供完整與短標籤");
     }
   }
   for (const point of collections.chartRegions) {
@@ -670,6 +699,14 @@ export function validateContentCatalog(content = {}) {
   for (const fish of collections.fish.filter(entry => HIGH_TIER_RARITIES.includes(entry?.rarity))) {
     if (!rareFishEntryIds.has(fish.id)) {
       addError("missing-journal-entry", "fish", fish.id, `fish[${fish.id}]`, "每種稀有以上魚類都需要一篇固定相遇日誌");
+    }
+  }
+  const fixedStorySceneIds = new Set(collections.journalEntries
+    .filter(entry => entry?.type === "story" && entry.unlock?.type === "resident-scene")
+    .map(entry => entry.unlock.sceneId));
+  for (const scene of collections.residentStoryScenes) {
+    if (!fixedStorySceneIds.has(scene.id)) {
+      addError("missing-journal-entry", "residentStoryScenes", scene.id, `residentStoryScenes[${scene.id}]`, "每節居民主線都需要一篇固定日誌頁");
     }
   }
 
