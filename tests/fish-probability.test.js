@@ -172,21 +172,26 @@ test("ten-thousand-cast Monte Carlo stays near the designed result at every spot
   };
   for (const spot of fishingSpots) {
     const state = stateAtSpot(spot);
-    const result = { common: 0, uncommon: 0, rare: 0, escaped: 0, noBite: 0 };
+    const table = getFishAppearanceTable(state);
+    const expectedHighTierSuccess = table.entries
+      .filter(entry => !["common", "uncommon"].includes(entry.fish.rarity))
+      .reduce((sum, entry) => sum + entry.finalRate * CAPTURE_RATE_BY_RARITY[entry.fish.rarity], 0) * 10000;
+    const expectedEscaped = (table.fishRate * 10000) - 5400 - 2100 - expectedHighTierSuccess;
+    const result = { common: 0, uncommon: 0, highTier: 0, escaped: 0, noBite: 0 };
     for (let cast = 0; cast < 10000; cast += 1) {
       const fish = chooseFish(state, random);
       if (!fish) {
         result.noBite += 1;
       } else if (rollCaptureSuccess(fish, RODS[0], random).success) {
-        result[fish.rarity] += 1;
+        result[["common", "uncommon"].includes(fish.rarity) ? fish.rarity : "highTier"] += 1;
       } else {
         result.escaped += 1;
       }
     }
     assert.ok(Math.abs(result.common - 5400) < 220, `${spot.id} common ${result.common}`);
     assert.ok(Math.abs(result.uncommon - 2100) < 180, `${spot.id} uncommon ${result.uncommon}`);
-    assert.ok(Math.abs(result.rare - 360) < 90, `${spot.id} rare ${result.rare}`);
-    assert.ok(Math.abs(result.escaped - 1740) < 180, `${spot.id} escaped ${result.escaped}`);
+    assert.ok(Math.abs(result.highTier - expectedHighTierSuccess) < 90, `${spot.id} high-tier ${result.highTier}`);
+    assert.ok(Math.abs(result.escaped - expectedEscaped) < 180, `${spot.id} escaped ${result.escaped}`);
     assert.ok(Math.abs(result.noBite - 400) < 90, `${spot.id} no-bite ${result.noBite}`);
   }
 });

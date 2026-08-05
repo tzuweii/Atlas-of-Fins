@@ -6,12 +6,26 @@
   <meta name="theme-color" content="#102d3d">
   <meta name="description" content="Atlas of Fins — 航行四片海域，以釣魚、觀察與固定日誌讀懂洋流、季風和魚群的家。">
   <title>Atlas of Fins｜鰭之圖鑑</title>
-  <link rel="stylesheet" href="styles.css?rev=20260804-monsoon">
-  <link rel="stylesheet" href="fishing-scenes.css?rev=20260804-monsoon">
+  <link rel="stylesheet" href="styles.css?rev=20260805-sailfish">
+  <link rel="stylesheet" href="fishing-scenes.css?rev=20260805-sailfish">
+  <script type="importmap">
+  {
+    "imports": {
+      "./src/data.js": "./src/data.js?rev=20260805-sailfish",
+      "./src/data/content-validation.js": "./src/data/content-validation.js?rev=20260805-sailfish",
+      "./src/data/fish-assets.js": "./src/data/fish-assets.js?rev=20260805-sailfish",
+      "./src/data/fish-probabilities.js": "./src/data/fish-probabilities.js?rev=20260805-sailfish",
+      "./src/data/journal-templates.js": "./src/data/journal-templates.js?rev=20260805-sailfish",
+      "./src/data/monsoon-fish.js": "./src/data/monsoon-fish.js?rev=20260805-sailfish",
+      "./src/data/monsoon-story.js": "./src/data/monsoon-story.js?rev=20260805-sailfish",
+      "./src/data/research.js": "./src/data/research.js?rev=20260805-sailfish"
+    }
+  }
+  </script>
 </head>
 <body>
   <noscript>請啟用 JavaScript 來遊玩 Atlas of Fins。</noscript>
-  <div id="app" class="app" data-time="dawn" data-weather="sunny" data-ui-revision="20260804-monsoon">
+  <div id="app" class="app" data-time="dawn" data-weather="sunny" data-ui-revision="20260805-sailfish">
     <section id="title-screen" class="title-screen" aria-label="主選單">
       <div class="title-sky">
         <span class="title-cloud cloud-a"></span>
@@ -107,6 +121,6 @@
     <div id="tutorial-spotlight" class="tutorial-spotlight is-hidden" aria-hidden="true"></div>
     <div id="tutorial" class="tutorial is-hidden" role="dialog" aria-modal="true" aria-live="polite" tabindex="-1"></div>
   </div>
-  <script type="module" src="src/game.js?rev=20260804-monsoon"></script>
+  <script type="module" src="src/game.js?rev=20260805-sailfish"></script>
 </body>
 </html>

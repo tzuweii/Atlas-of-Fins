@@ -81,7 +81,7 @@ test("new and developer games only unlock currently implemented world content", 
   assert.equal(developer.regionProgress[SLEEPING_TIDE_BAY_ID].discoveredFishIds.length, 30);
   assert.equal(developer.regionProgress[LUMINOUS_ARCHIPELAGO_ID].discoveredFishIds.length, 33);
   assert.equal(developer.regionProgress[MIST_CAPE_COLD_CURRENT_ID].discoveredFishIds.length, 34);
-  assert.equal(developer.regionProgress[MONSOON_ARCHIPELAGO_ID].discoveredFishIds.length, 36);
+  assert.equal(developer.regionProgress[MONSOON_ARCHIPELAGO_ID].discoveredFishIds.length, 37);
   assert.deepEqual(createInitialState().world, initial);
   assert.deepEqual(createDeveloperState().world, developer);
 });

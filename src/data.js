@@ -184,7 +184,8 @@ export const RARITY = {
   common: { name: "常見", multiplier: 1, catchRate: CAPTURE_RATE_BY_RARITY.common, color: "#686f73" },
   uncommon: { name: "少見", multiplier: 1.8, catchRate: CAPTURE_RATE_BY_RARITY.uncommon, color: "#477ca5" },
   rare: { name: "稀有", multiplier: 4, catchRate: CAPTURE_RATE_BY_RARITY.rare, color: "#76529b" },
-  epic: { name: "史詩", multiplier: 7, catchRate: CAPTURE_RATE_BY_RARITY.epic, color: "#ad622b" }
+  epic: { name: "史詩", multiplier: 7, catchRate: CAPTURE_RATE_BY_RARITY.epic, color: "#ad622b" },
+  legendary: { name: "傳說", multiplier: 12, catchRate: CAPTURE_RATE_BY_RARITY.legendary, color: "#a64f45" }
 };
 
 export const BAY_EVENTS = [

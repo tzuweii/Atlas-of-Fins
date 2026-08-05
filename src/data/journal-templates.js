@@ -167,7 +167,8 @@ export const RARE_FISH_JOURNAL_ENTRIES = Object.freeze([
   { fishId: "fourfinger_threadfin", title: "四根觸線讀過泥底", body: ["四指馬鮁讓游離胸鰭絲貼過混濁海床。水色沒有提供視野，那四根細線卻替牠把雨後河口摸成一張可使用的圖。"], closing: "看不清的水裡，觸覺也能替生活留下方向。" },
   { fishId: "bluespotted_ribbontail_ray", title: "草床沙地上的藍星", body: ["藍斑條尾魟滑過背風沙地，盤緣掀起一圈細砂，鮮藍圓斑則在草葉影間保持清楚。"], closing: "平靜不是沒有移動，而是每一道砂紋都有時間落回原處。" },
   { fishId: "cobia", title: "跟著外水結構遠行", body: ["海鱺沿迎風外水的漂流物靠近，深褐長身借長浪維持速度。牠沒有屬於某一座島的固定小路，卻熟悉每一種能提供食物與遮蔽的移動結構。"], closing: "有些住處固定在岸上，有些住處隨水一同遠行。" },
-  { fishId: "narrow_barred_spanish_mackerel", title: "長風拉直的一筆", body: ["康氏馬加鰆越過最外側白浪，狹長深帶幾乎與浪向平行。那次高速通過把魚線、風繩與航圖上的長風箭頭拉成同一筆。"], closing: "速度離開以後，方向仍留在浪的排列裡。" }
+  { fishId: "narrow_barred_spanish_mackerel", title: "長風拉直的一筆", body: ["康氏馬加鰆越過最外側白浪，狹長深帶幾乎與浪向平行。那次高速通過把魚線、風繩與航圖上的長風箭頭拉成同一筆。"], closing: "速度離開以後，方向仍留在浪的排列裡。" },
+  { fishId: "indo_pacific_sailfish", title: "季風張開一面深藍帆", body: ["第一尾傳說魚雨傘旗魚在迎風白沫外張開高大的深藍背帆。長吻穿過表層魚群，帆緣順著東北季風與島岸水流微微傾斜，讓原本看不見的季節方向忽然有了輪廓。"], closing: "傳說沒有停住季風，只替流動的海舉起一面帆。" }
 ].map((entry, order) => ({
   ...entry,
   id: `journal:fish:${entry.fishId}`,
@@ -471,7 +472,7 @@ export const MAIN_STORY_JOURNAL_ENTRIES = Object.freeze([
     order: 5,
     unlock: { type: "resident-scene", sceneId: "jicen_windstone_route_rubbing" },
     title: "風候石上的下一道長浪",
-    body: ["完成前五節 5／5 與季風魚類 26／36 後，我回港向季岑正式交付。風候石拓印永久留在港口與船屋航圖桌；最深長浪痕把圓灰石與下一條航線一同指向灰冠石岸。"],
+    body: ["完成前五節 5／5 與季風魚類 26／37 後，我回港向季岑正式交付。風候石拓印永久留在港口與船屋航圖桌；最深長浪痕把圓灰石與下一條航線一同指向灰冠石岸。"],
     closing: "風浪把石磨成岸，也把岸磨成船能閱讀的方向。"
   },
   {

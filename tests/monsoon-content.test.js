@@ -12,6 +12,7 @@ import {
   acceptResidentStory, beginRouteTravel, completeResidentStory, createDeveloperState,
   createInitialState, developerDockRegion, developerRecordObservation, developerResetObservations,
   dockAtDestination, getJournalEntries, getRegionResearchStatus, getResidentStoryStatus,
+  getUnboostedFishAppearanceRate, getUnboostedSingleCastSuccessRate,
   getRouteDurationForState, isRouteRevealedForState, isRouteUnlockedForState, migrateState,
   progressTravel, updateQuestProgress
 } from "../src/core.js";
@@ -34,24 +35,26 @@ function manualCatch(spotId, { source = "manual", weather = "sunny" } = {}) {
   };
 }
 
-test("Monsoon Archipelago has one port, three fishing habitats, one observation point, and thirty-six audited fish", () => {
+test("Monsoon Archipelago has one port, three fishing habitats, one observation point, and thirty-seven audited fish", () => {
   assert.equal(CONTENT_VALIDATION.ok, true);
   const region = REGIONS.find(entry => entry.id === MONSOON_ARCHIPELAGO_ID);
   assert.equal(region.portName, "回風港");
   assert.equal(region.status, "available");
   assert.equal(getRegionFishingSpots(region.id).length, 3);
   assert.equal(getRegionObservationSpots(region.id).length, 1);
-  assert.equal(MONSOON_FISH.length, 36);
-  assert.equal(getRegionFish(FISH, region.id).length, 36);
-  assert.equal(new Set(MONSOON_FISH.map(fish => fish.id)).size, 36);
-  assert.equal(new Set(MONSOON_FISH.map(fish => fish.scientific)).size, 36);
+  assert.equal(MONSOON_FISH.length, 37);
+  assert.equal(getRegionFish(FISH, region.id).length, 37);
+  assert.equal(new Set(MONSOON_FISH.map(fish => fish.id)).size, 37);
+  assert.equal(new Set(MONSOON_FISH.map(fish => fish.scientific)).size, 37);
   assert.deepEqual(
-    Object.fromEntries(["common", "uncommon", "rare", "epic"].map(rarity => [
+    Object.fromEntries(["common", "uncommon", "rare", "epic", "legendary"].map(rarity => [
       rarity,
       MONSOON_FISH.filter(fish => fish.rarity === rarity).length
     ])),
-    { common: 17, uncommon: 14, rare: 4, epic: 1 }
+    { common: 17, uncommon: 14, rare: 4, epic: 1, legendary: 1 }
   );
+  assert.equal(MONSOON_FISH.find(fish => fish.id === "narrow_barred_spanish_mackerel")?.rarity, "epic");
+  assert.equal(MONSOON_FISH.find(fish => fish.id === "indo_pacific_sailfish")?.rarity, "legendary");
   assert.ok(MONSOON_FISH.every(fish => {
     const habitat = getFishHabitat(fish, region.id);
     return fish.habitats.length === 1
@@ -61,9 +64,12 @@ test("Monsoon Archipelago has one port, three fishing habitats, one observation 
       && typeof fish.bodyClass === "string"
       && Array.isArray(fish.preferredTimeIds)
       && Array.isArray(fish.preferredWeatherIds)
-      && /^https:\/\/www\.fishbase\.se\//.test(fish.ecologySource.url)
-      && fish.ecologySource.checkedAt === "2026-08-04";
+      && /^https:\/\/(?:www\.)?(?:fishbase\.se|fao\.org)\//.test(fish.ecologySource.url)
+      && !Number.isNaN(Date.parse(fish.ecologySource.checkedAt));
   }));
+  const sailfish = MONSOON_FISH.find(fish => fish.id === "indo_pacific_sailfish");
+  assert.equal(sailfish.ecologySource.checkedAt, "2026-08-05");
+  assert.match(sailfish.ecologySource.url, /^https:\/\/www\.fao\.org\//);
 });
 
 test("formal observations, research nodes, optional events, and the wonder remain region-scoped", () => {
@@ -87,7 +93,19 @@ test("formal observations, research nodes, optional events, and the wonder remai
   );
 });
 
-test("Monsoon main research starts at exactly twenty-six of thirty-six and full collection stays voluntary", () => {
+test("the windward apex is the first legendary fish without expanding the fixed high-tier budget", () => {
+  const legendaryFish = FISH.filter(fish => fish.rarity === "legendary");
+  assert.deepEqual(legendaryFish.map(fish => fish.id), ["indo_pacific_sailfish"]);
+  const fish = legendaryFish[0];
+  assert.ok(Math.abs(getUnboostedFishAppearanceRate(fish, MONSOON_ARCHIPELAGO_ID, fish.spots[0]) - .006) < 1e-12);
+  assert.ok(Math.abs(getUnboostedSingleCastSuccessRate(fish, MONSOON_ARCHIPELAGO_ID, fish.spots[0]) - .0027) < 1e-12);
+  const mackerel = FISH.find(candidate => candidate.id === "narrow_barred_spanish_mackerel");
+  assert.equal(mackerel.rarity, "epic");
+  assert.ok(Math.abs(getUnboostedFishAppearanceRate(mackerel, MONSOON_ARCHIPELAGO_ID, mackerel.spots[0]) - .012) < 1e-12);
+  assert.ok(Math.abs(getUnboostedSingleCastSuccessRate(mackerel, MONSOON_ARCHIPELAGO_ID, mackerel.spots[0]) - .006) < 1e-12);
+});
+
+test("Monsoon main research starts at exactly twenty-six of thirty-seven and full collection stays voluntary", () => {
   const state = createInitialState();
   const pool = getRegionFish(FISH, MONSOON_ARCHIPELAGO_ID);
   state.world.currentRegionId = MONSOON_ARCHIPELAGO_ID;

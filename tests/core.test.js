@@ -18,14 +18,15 @@ const NEW_FISH_IDS = [
   "needlefish", "red_seabream", "malabar_grouper", "mirror_butterflyfish", "greater_amberjack"
 ];
 
-test("catalog preserves prior pools while adding thirty-six distinct Monsoon Archipelago fish", () => {
-  assert.equal(FISH.length, 133);
-  assert.equal(new Set(FISH.map(fish => fish.id)).size, 133);
+test("catalog preserves prior pools while adding thirty-seven distinct Monsoon Archipelago fish", () => {
+  assert.equal(FISH.length, 134);
+  assert.equal(new Set(FISH.map(fish => fish.id)).size, 134);
   assert.deepEqual(Object.fromEntries(Object.entries(RARITY).map(([id, rarity]) => [id, rarity.color])), {
     common: "#686f73",
     uncommon: "#477ca5",
     rare: "#76529b",
-    epic: "#ad622b"
+    epic: "#ad622b",
+    legendary: "#a64f45"
   });
   assert.deepEqual(FISH.slice(20, 30).map(fish => fish.id), NEW_FISH_IDS);
   assert.equal(FISH.slice(30, 63).length, 33);
@@ -34,7 +35,7 @@ test("catalog preserves prior pools while adding thirty-six distinct Monsoon Arc
   assert.equal(FISH.slice(63, 97).length, 34);
   assert.equal(FISH.slice(63, 97).every(fish => fish.habitats.length === 1
     && fish.habitats[0].regionId === MIST_CAPE_COLD_CURRENT_ID), true);
-  assert.equal(FISH.slice(97).length, 36);
+  assert.equal(FISH.slice(97).length, 37);
   assert.equal(FISH.slice(97).every(fish => fish.habitats.length === 1
     && fish.habitats[0].regionId === MONSOON_ARCHIPELAGO_ID), true);
 });

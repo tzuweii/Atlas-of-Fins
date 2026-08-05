@@ -1551,7 +1551,8 @@ function fishArt(fish,silhouette=false,variant="normal",purpose="card") {
     winged:`<path class="body" d="M19 53 Q48 28 92 44 L120 27 L114 52 L122 73 L92 60 Q49 76 19 53Z"/><path class="fin" d="M52 45 Q52 9 97 15 L75 46Z"/><path class="accent" d="M53 58 Q54 89 97 84 L75 58Z"/>`,
     glow:`<path class="body" d="M21 53 Q44 25 89 35 Q107 38 119 28 L114 51 L122 74 Q105 66 90 69 Q45 82 21 53Z"/><circle class="accent" cx="48" cy="64" r="3"/><circle class="accent" cx="61" cy="67" r="3"/><circle class="accent" cx="74" cy="67" r="3"/>`,
     box:`<path class="body" d="M25 37 Q29 27 43 25 L88 28 Q103 31 109 43 L109 65 Q101 76 86 78 L43 76 Q28 72 24 59Z"/><path class="accent" d="M109 43 L127 29 L121 52 L128 75 L109 65Z"/><circle class="accent" cx="60" cy="42" r="5"/><circle class="accent" cx="78" cy="61" r="6"/>`,
-    needle:`<path class="body" d="M12 49 L32 45 Q69 35 105 46 L128 31 L120 51 L128 70 L104 56 Q69 65 32 55 L12 57Z"/><path class="accent" d="M12 49 L2 52 L12 57 L38 53Z"/><path class="fin" d="M72 43 L86 31 L94 45Z"/>`
+    needle:`<path class="body" d="M12 49 L32 45 Q69 35 105 46 L128 31 L120 51 L128 70 L104 56 Q69 65 32 55 L12 57Z"/><path class="accent" d="M12 49 L2 52 L12 57 L38 53Z"/><path class="fin" d="M72 43 L86 31 L94 45Z"/>`,
+    billfish:`<path class="body" d="M20 55 Q48 31 98 43 L124 27 L117 52 L126 75 L98 61 Q51 77 20 55Z"/><path class="accent" d="M20 51 L2 54 L20 57 L45 54Z"/><path class="fin" d="M43 42 Q56 5 101 35 L91 44 Q66 28 43 48Z"/>`
   };
   return `<div class="fish-art ${silhouette?"is-silhouette":""} ${variant==="shimmer"?"is-shimmer":""}" style="--fish-a:${fish.colors[0]};--fish-b:${fish.colors[1]}"><svg class="fish-svg" viewBox="0 0 140 105" aria-hidden="true">${paths[fish.shape]||paths.round}<circle class="eye" cx="40" cy="47" r="2.7"/><path class="shine" d="M42 37 Q58 28 76 32"/></svg></div>`;
 }

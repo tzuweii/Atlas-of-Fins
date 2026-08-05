@@ -100,10 +100,18 @@ await wait(350);
 await waitFor(`document.readyState === "complete"`);
 await evaluate(`localStorage.clear()`);
 assert.equal(await evaluate("document.title"), "Atlas of Fins｜鰭之圖鑑");
-assert.equal(await evaluate("document.querySelector('#app').dataset.uiRevision"), "20260804-monsoon");
-assert.equal(await evaluate("document.querySelector('link[rel=\"stylesheet\"]').href.endsWith('styles.css?rev=20260804-monsoon')"), true);
-assert.equal(await evaluate("Boolean([...document.querySelectorAll('link[rel=\"stylesheet\"]')].find(link => link.href.endsWith('fishing-scenes.css?rev=20260804-monsoon')))"), true);
-assert.equal(await evaluate("document.querySelector('script[type=\"module\"]').src.endsWith('src/game.js?rev=20260804-monsoon')"), true);
+assert.equal(await evaluate("document.querySelector('#app').dataset.uiRevision"), "20260805-sailfish");
+assert.equal(await evaluate("document.querySelector('link[rel=\"stylesheet\"]').href.endsWith('styles.css?rev=20260805-sailfish')"), true);
+assert.equal(await evaluate("Boolean([...document.querySelectorAll('link[rel=\"stylesheet\"]')].find(link => link.href.endsWith('fishing-scenes.css?rev=20260805-sailfish')))"), true);
+assert.equal(await evaluate("document.querySelector('script[type=\"module\"]').src.endsWith('src/game.js?rev=20260805-sailfish')"), true);
+const versionedContentModules = await evaluate(`performance.getEntriesByType('resource').map(entry => entry.name).filter(name => name.includes('?rev=20260805-sailfish'))`);
+for (const modulePath of [
+  "src/data.js", "src/data/content-validation.js", "src/data/fish-assets.js",
+  "src/data/fish-probabilities.js", "src/data/journal-templates.js", "src/data/monsoon-fish.js",
+  "src/data/monsoon-story.js", "src/data/research.js"
+]) {
+  assert.equal(versionedContentModules.some(url => url.endsWith(`${modulePath}?rev=20260805-sailfish`)), true, `${modulePath} uses the shared browser cache revision`);
+}
 
 await clickCenter("#title-settings-button");
 assert.match(await evaluate("document.querySelector('.settings-modal').innerText"), /聲音與顯示[\s\S]*總音量[\s\S]*文字大小[\s\S]*介面縮放/);
@@ -217,7 +225,7 @@ assert.equal(await evaluate("document.querySelectorAll('.logbook-tree-group').le
 assert.equal(await evaluate("document.querySelectorAll('.logbook-tree-group.is-expanded').length"), 1);
 assert.equal(await evaluate("document.querySelector('.logbook-layout').firstElementChild.classList.contains('logbook-sidebar')"), true);
 await click('[data-action="logbook-category"][data-id="rare_fish"]');
-assert.equal(await evaluate("document.querySelectorAll('[data-action=\"select-logbook-entry\"]').length"), 19);
+assert.equal(await evaluate("document.querySelectorAll('[data-action=\"select-logbook-entry\"]').length"), 20);
 assert.equal(await evaluate("document.querySelector('.logbook-tree-group.is-expanded [data-action=\"logbook-category\"]').dataset.id"), "rare_fish");
 assert.equal(exceptions.length, 0, `Journal category click has no browser exception: ${exceptions.join(", ")}`);
 await click('[data-action="logbook-category"][data-id="mist_cape_cold_current"]');
@@ -401,7 +409,7 @@ await click('[data-action="developer-dock-region"]');
 assert.equal(await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.dev-save")).world.currentRegionId`), "monsoon_archipelago");
 assert.equal(await evaluate("document.querySelectorAll('#developer-region-event option').length"), 3);
 await click('[data-action="developer-complete-research"]');
-assert.match(await evaluate("document.querySelector('.developer-modal').innerText"), /季風群島[\s\S]*研究 36\/36[\s\S]*季岑 0\/6/);
+assert.match(await evaluate("document.querySelector('.developer-modal').innerText"), /季風群島[\s\S]*研究 37\/37[\s\S]*季岑 0\/6/);
 await click('[data-action="close-modal"]');
 await click('[data-view="fishing"]');
 assert.equal(await evaluate("document.querySelector('#app').dataset.region"), "monsoon_archipelago");
@@ -418,7 +426,7 @@ await click('[data-action="spot"][data-id="windward_whitecap_passage"]');
 assert.equal(await evaluate("document.querySelector('#app').dataset.fishingScene"), "monsoon_windward");
 assert.equal(await evaluate("document.querySelectorAll('.observation-preview').length"), 1);
 assert.match(await evaluate("document.querySelector('.observation-preview').innerText"), /特殊觀察點 · 0 \/ 2/);
-assert.match(await evaluate("document.querySelector('.research-card').innerText"), /季風群島風候研究主路[\s\S]*36 \/ 36[\s\S]*區域完整/);
+assert.match(await evaluate("document.querySelector('.research-card').innerText"), /季風群島風候研究主路[\s\S]*37 \/ 37[\s\S]*區域完整/);
 await click('[data-action="close-modal"]');
 await click('[data-view="residents"]');
 assert.equal(await evaluate("document.querySelectorAll('.resident-card').length"), 1);
@@ -429,16 +437,23 @@ assert.equal(exceptions.length, 0, `Monsoon narrow UI has no browser exception: 
 await command("Emulation.clearDeviceMetricsOverride");
 await click('[data-view="journal"]');
 await click('[data-action="journal-filter"][data-id="monsoon_archipelago"]');
-assert.equal(await evaluate("document.querySelectorAll('.fish-card').length"), 36);
+assert.equal(await evaluate("document.querySelectorAll('.fish-card').length"), 37);
 await click('[data-action="select-fish"][data-id="barramundi"]');
-assert.match(await evaluate("document.querySelector('.fish-detail').innerText"), /尖吻鱸[\s\S]*稀有[\s\S]*季風群島印章[\s\S]*2026年8月4日/);
+assert.match(await evaluate("document.querySelector('.fish-detail').innerText"), /尖吻鱸[\s\S]*稀有[\s\S]*季風群島印章[\s\S]*FishBase 物種摘要/);
+await click('[data-action="select-fish"][data-id="narrow_barred_spanish_mackerel"]');
+assert.match(await evaluate("document.querySelector('.fish-detail').innerText"), /康氏馬加鰆[\s\S]*史詩[\s\S]*季風群島印章[\s\S]*FishBase 物種摘要/);
+assert.equal(await evaluate("document.querySelector('[data-id=\"narrow_barred_spanish_mackerel\"]').classList.contains('rarity-epic')"), true);
+await click('[data-action="select-fish"][data-id="indo_pacific_sailfish"]');
+assert.match(await evaluate("document.querySelector('.fish-detail').innerText"), /雨傘旗魚[\s\S]*傳說[\s\S]*季風群島印章[\s\S]*FAO 世界旗魚物種目錄/);
+assert.equal(await evaluate("document.querySelector('[data-id=\"indo_pacific_sailfish\"]').classList.contains('rarity-legendary')"), true);
+assert.equal(await evaluate("Boolean(document.querySelector('[data-id=\"indo_pacific_sailfish\"] .fish-svg'))"), true);
 await click('[data-action="journal-filter"][data-id="mist_cape_cold_current"]');
 assert.equal(await evaluate("document.querySelectorAll('.fish-card').length"), 34);
 await click('[data-action="select-fish"][data-id="basking_shark"]');
 assert.match(await evaluate("document.querySelector('.fish-detail').innerText"), /象鮫[\s\S]*史詩[\s\S]*霧岬寒流水道印章[\s\S]*FishBase 物種摘要/);
 await click('[data-action="journal-filter"][data-id="all"]');
-assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /探索進度[\s\S]*133 \/ 133/);
-assert.equal(await evaluate("document.querySelectorAll('.fish-card').length"), 133);
+assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /探索進度[\s\S]*134 \/ 134/);
+assert.equal(await evaluate("document.querySelectorAll('.fish-card').length"), 134);
 assert.equal(await evaluate("document.querySelectorAll('.fish-card.is-unknown').length"), 0);
 const rarityPalette = await evaluate(`(() => ({
   common: getComputedStyle(document.querySelector('.fish-card.rarity-common')).backgroundImage,
@@ -450,7 +465,7 @@ const rarityPalette = await evaluate(`(() => ({
 assert.match(rarityPalette.common, /rgb\(247, 247, 243\)/);
 assert.match(rarityPalette.uncommon, /rgb\(237, 244, 251\)/);
 assert.match(rarityPalette.rare, /rgb\(242, 234, 250\)/);
-assert.deepEqual({ epic: rarityPalette.epic, legendary: rarityPalette.legendary }, { epic: "#ad622b", legendary: "#916018" });
+assert.deepEqual({ epic: rarityPalette.epic, legendary: rarityPalette.legendary }, { epic: "#ad622b", legendary: "#a64f45" });
 assert.match(await evaluate("document.querySelector('.fish-card.rarity-common').innerText"), /常見/);
 await command("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
 assert.equal(await evaluate("document.documentElement.scrollWidth <= window.innerWidth"), true);
@@ -489,13 +504,13 @@ await click("#developer-mode-button");
 await evaluate(`document.querySelector('#developer-password').value = 'atlas-dev'; document.querySelector('#developer-login-form').requestSubmit()`);
 await waitFor(`!document.querySelector("#game-shell").classList.contains("is-hidden")`);
 await click('[data-view="journal"]');
-assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /探索進度[\s\S]*133 \/ 133/);
+assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /探索進度[\s\S]*134 \/ 134/);
 assert.equal(await evaluate("document.querySelector('[data-id=\"greater_amberjack\"] b').innerText"), "紅甘");
 await click("#menu-button");
 await click('[data-action="to-title"]');
 await waitFor(`!document.querySelector("#title-screen").classList.contains("is-hidden")`);
 const upgradedDeveloperSave = await evaluate(`JSON.parse(localStorage.getItem("atlas-of-fins.dev-save"))`);
-assert.equal(Object.keys(upgradedDeveloperSave.discovered).length, 133);
+assert.equal(Object.keys(upgradedDeveloperSave.discovered).length, 134);
 assert.ok(upgradedDeveloperSave.catchInventory.some(caught => caught.fishId === "greater_amberjack"));
 assert.ok(upgradedDeveloperSave.catchInventory.some(caught => caught.fishId === "giant_trevally"));
 assert.ok(upgradedDeveloperSave.completedMilestones.includes(30));
@@ -1264,7 +1279,7 @@ await click('[data-resident="lighthouse_keeper"] [data-action="talk-resident"]')
 assert.match(await evaluate("document.querySelector('.modal').innerText"), /燈塔守望者[\s\S]*記著回來的方向/);
 await click('[data-action="close-modal"]');
 await click('[data-view="journal"]');
-assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /探索進度[\s\S]*1 \/ 133/);
+assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /探索進度[\s\S]*1 \/ 134/);
 assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /初次相遇[\s\S]*初次：/);
 assert.match(await evaluate("document.querySelector('#content-panel').innerText"), /閃光紀錄 2 次/);
 const firstCaughtFishId = await evaluate(`Object.keys(JSON.parse(localStorage.getItem("atlas-of-fins.save")).discovered)[0]`);
@@ -1693,7 +1708,7 @@ if (process.env.SCREENSHOT) {
 console.log(JSON.stringify({
   title: "ok",
   fishing: "caught",
-  journal: `${Object.keys(saved.discovered).length}/133`,
+  journal: `${Object.keys(saved.discovered).length}/134`,
   sold: saved.totalSold,
   time: saved.timeIndex,
   tutorial: saved.completedTutorial,

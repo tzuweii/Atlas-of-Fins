@@ -1,7 +1,7 @@
 import { MONSOON_ARCHIPELAGO_ID } from "./regions.js";
 import { fishAppearanceWeight } from "./fish-probabilities.js";
 
-export const MONSOON_FISH_COUNT = 36;
+export const MONSOON_FISH_COUNT = 37;
 
 const ECOLOGY_CHECKED_AT = "2026-08-04";
 
@@ -14,7 +14,7 @@ const ecologySource = scientific => ({
 
 const monsoonFish = ({
   id, name, english, scientific, rarity, bodyClass, spot, times, weather = "any", baits,
-  behavior, length, weight, price, difficulty, shape, colors, short, detail, fact, tags = []
+  behavior, length, weight, price, difficulty, shape, colors, short, detail, fact, tags = [], source = null
 }) => ({
   id, name, english, scientific, rarity, bodyClass,
   spots: [spot], baits: [...baits], behavior,
@@ -23,7 +23,7 @@ const monsoonFish = ({
   preferredWeatherIds: weather === "any" ? [] : [weather],
   minLength: length[0], maxLength: length[1], minWeight: weight[0], maxWeight: weight[1],
   basePrice: price, difficulty, shape, colors: [...colors], short, detail, fact, tags: [...tags],
-  ecologySource: ecologySource(scientific),
+  ecologySource: source || ecologySource(scientific),
   habitats: [{ regionId: MONSOON_ARCHIPELAGO_ID, spotIds: [spot], sizeScale: 1 }]
 });
 
@@ -319,5 +319,19 @@ export const MONSOON_FISH = [
     short: "狹長深帶穿過最外側白浪，魚身借長風加速，像把航線拉成一筆。",
     detail: "康氏馬加鰆是大型高速沿岸掠食魚，會在清澈外水追逐群游小魚。",
     fact: "流線體型、深叉尾和收納鰭的凹槽共同降低高速游動阻力。", tags: ["epic", "gigantic", "windward", "sprint"]
+  }),
+  monsoonFish({
+    id: "indo_pacific_sailfish", name: "雨傘旗魚", english: "Indo-Pacific Sailfish", scientific: "Istiophorus platypterus",
+    rarity: "legendary", bodyClass: "colossal", spot: WINDWARD, times: ["dawn", "day"], weather: "sunny", baits: ["glow"], behavior: "rare",
+    length: [145, 348], weight: [18, 100.2], price: 2100, difficulty: 3, shape: "billfish", colors: ["#254e70", "#54a9c4"],
+    short: "巨大的深藍背帆在白浪外張開，長吻沿季風與表層流交會處切出一條筆直航跡。",
+    detail: "雨傘旗魚是高度洄游的表層外洋魚，常靠近島岸與礁緣；群島東北季風月份的流況會改變牠的豐度與分布。",
+    fact: "第一背鰭能高高展成帆狀；長吻有助於擾動與擊打群游獵物。", tags: ["legendary", "colossal", "windward", "sprint", "pelagic"],
+    source: {
+      label: "FAO 世界旗魚物種目錄",
+      url: "https://www.fao.org/4/ac480e/ac480e05.pdf",
+      checkedAt: "2026-08-05",
+      note: "FAO 記錄本種接近島岸與礁緣，豐度及分布與東北季風月份呈正相關；依表層洄游、最大體長與帆狀背鰭簡化為迎風外水的傳說相遇。"
+    }
   })
 ];

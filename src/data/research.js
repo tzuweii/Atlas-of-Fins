@@ -296,8 +296,8 @@ export const REGION_RESEARCH = {
     name: "季風群島風候研究主路",
     description: "從迎背風、海草遮蔽、紅樹淡水羽流與正式觀察，讀出同一地方如何隨風與晴雨重排；發現七成魚類即可完成主研究。",
     nodeIds: RESEARCH_NODES.filter(node => node.regionId === MONSOON_ARCHIPELAGO_ID).map(node => node.id),
-    mainSpeciesGoal: mainResearchSpeciesGoal(36),
-    fullSpeciesGoal: 36,
+    mainSpeciesGoal: mainResearchSpeciesGoal(37),
+    fullSpeciesGoal: 37,
     mainReward: {
       id: "monsoon_windwater_fieldbook",
       type: "research-keepsake",

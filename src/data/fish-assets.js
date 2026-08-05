@@ -42,7 +42,8 @@ export const FISH_BODY_PLANS = Object.freeze({
   winged: "extended-pectoral-fin",
   glow: "small-photophore-fish",
   box: "box-shaped",
-  needle: "needle-like"
+  needle: "needle-like",
+  billfish: "billfish-sail-fusiform"
 });
 
 export const FISH_ASSET_REPRESENTATIVES = Object.freeze([

@@ -19,7 +19,7 @@ const WEATHER_IDS = new Set(["sunny", "rain"]);
 const SIZE_TARGETS = new Set(["small", "standard", "large", "record"]);
 const ROUTE_DISTANCE_CLASSES = new Set(["short", "medium", "long"]);
 const SPOT_ACTIVITY_TYPES = new Set(["fishing", "observation"]);
-const FISH_BODY_SHAPES = new Set(["slender", "torpedo", "round", "flat", "spiky", "ribbon", "cephalopod", "mahi", "winged", "glow", "box", "needle"]);
+const FISH_BODY_SHAPES = new Set(["slender", "torpedo", "round", "flat", "spiky", "ribbon", "cephalopod", "mahi", "winged", "glow", "box", "needle", "billfish"]);
 const FISH_BODY_CLASS_IDS = new Set(Object.keys(FISH_BODY_CLASSES));
 const SHIP_INTERIOR_SLOT_TYPES = new Set(["sleep", "wall", "table", "light", "corner"]);
 const isChartPosition = value => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100;

@@ -183,7 +183,8 @@ export const FISH_APPEARANCE_WEIGHTS = Object.freeze({
   fourfinger_threadfin: 92,
   bluespotted_ribbontail_ray: 100,
   cobia: 84,
-  narrow_barred_spanish_mackerel: 80
+  narrow_barred_spanish_mackerel: 80,
+  indo_pacific_sailfish: 80
 });
 
 export function fishAppearanceWeight(fishId) {

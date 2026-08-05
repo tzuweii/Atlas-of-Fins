@@ -37,6 +37,17 @@ test("three representative silhouettes keep distinct body plans across every UI 
   }
 });
 
+test("the legendary sailfish keeps its bill and sail body plan across every UI purpose", () => {
+  const fish = FISH.find(item => item.id === "indo_pacific_sailfish");
+  assert.ok(fish);
+  for (const purpose of FISH_ASSET_PURPOSES) {
+    const asset = resolveFishAsset(fish, { purpose });
+    assert.equal(asset.source, "svg-fallback");
+    assert.equal(asset.bodyPlan, "billfish-sail-fusiform");
+    assert.equal(asset.silhouette, purpose === "silhouette");
+  }
+});
+
 test("future complete raster metadata can enter through the resolver without changing callers", () => {
   const fish = {
     id: "future_fish",
